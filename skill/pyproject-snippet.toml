@@ -1,0 +1,59 @@
+[tool.ruff]
+line-length = 120
+target-version = 'py310'
+
+[tool.ruff.lint]
+select = [
+    'F', 'E', 'W',        # pyflakes + pycodestyle
+    'I',                  # isort
+    'N',                  # pep8-naming
+    'ANN',                # missing annotations
+    'B',                  # bugbear (B006 mutable default)
+    'COM',                # trailing commas
+    'Q',                  # quotes
+    'TID',                # tidy-imports (relative import ban)
+    'UP', 'SIM', 'RET', 'PTH', 'LOG', 'G',
+]
+ignore = [
+    'N802',               # function name should be lowercase -- we require mixedCase instead
+    'ISC001',             # conflicts with the formatter
+    'SIM114',            # autofix loses type narrowing (R2b-B5)
+    'SIM103',            # demands the last of a run of parallel guards read differently (R4-06)
+    'N806',              # a constant moved into its function keeps ALL_CAPS (R3a-12)
+]
+
+[tool.ruff.lint.flake8-quotes]
+inline-quotes = 'single'
+multiline-quotes = 'double'
+docstring-quotes = 'double'
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = 'all'
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+'pydantic'.msg = 'Runtime validation belongs at one boundary gate, not in the type layer. Use a frozen dataclass.'
+'sqlalchemy.orm'.msg = 'No ORM. Use sqlite3 / SQL directly.'
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2   # R3a-09 -- isort collapses to 1 without this
+
+[tool.ruff.format]
+quote-style = 'single'
+
+[tool.pylint.basic]
+function-naming-style = 'camelCase'
+method-naming-style = 'camelCase'
+class-naming-style = 'PascalCase'
+const-naming-style = 'UPPER_CASE'
+# locals may be snake_case OR ALL_CAPS (R3a-12); arguments and attributes stay strict
+variable-rgx = '^([a-z_][a-z0-9_]*|[A-Z][A-Z0-9_]*)$'
+argument-naming-style = 'snake_case'
+attr-naming-style = 'snake_case'
+
+[tool.pylint.'messages control']
+disable = ['all']
+enable = ['invalid-name', 'attribute-defined-outside-init']
+
+[tool.mypy]
+strict = true
+disallow_any_explicit = false

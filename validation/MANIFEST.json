@@ -1,0 +1,8 @@
+{
+  "v1_log_triage/1.py": "doc",
+  "v1_log_triage/2.py": "skill",
+  "v1_log_triage/3.py": "base",
+  "v2_drift_checker/1.py": "skill",
+  "v2_drift_checker/2.py": "doc",
+  "v2_drift_checker/3.py": "base"
+}

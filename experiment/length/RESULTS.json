@@ -1,0 +1,58 @@
+{
+  "t1/base": {
+    "code": 204,
+    "docstring": 33,
+    "comment": 1,
+    "blank": 44,
+    "total": 282
+  },
+  "t1/narrative": {
+    "code": 210,
+    "docstring": 63,
+    "comment": 30,
+    "blank": 83,
+    "total": 386
+  },
+  "t2/base": {
+    "code": 101,
+    "docstring": 30,
+    "comment": 1,
+    "blank": 25,
+    "total": 157
+  },
+  "t2/narrative": {
+    "code": 107,
+    "docstring": 28,
+    "comment": 14,
+    "blank": 41,
+    "total": 190
+  },
+  "t3/base": {
+    "code": 166,
+    "docstring": 28,
+    "comment": 2,
+    "blank": 38,
+    "total": 234
+  },
+  "t3/narrative": {
+    "code": 129,
+    "docstring": 30,
+    "comment": 8,
+    "blank": 49,
+    "total": 216
+  },
+  "t4/base": {
+    "code": 141,
+    "docstring": 49,
+    "comment": 1,
+    "blank": 35,
+    "total": 226
+  },
+  "t4/narrative": {
+    "code": 126,
+    "docstring": 41,
+    "comment": 14,
+    "blank": 54,
+    "total": 235
+  }
+}
