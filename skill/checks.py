@@ -1,10 +1,27 @@
+"""Report Narrative style violations that ruff, pylint and mypy do not implement.
+
+Each rule is one check. NAR001 and NAR006 cover module state; NAR002 covers class attributes;
+NAR003, NAR008 and NAR009 cover layout; NAR004 and NAR009 cover documentation; NAR005 covers
+annotation depth; NAR007 covers boolean grouping. See tooling.md for what the other tools own.
+
+Usage:
+    $ python3 checks.py src/
+    $ python3 checks.py src/loader.py src/report.py
+    $ python3 checks.py src/ --select NAR001 --select NAR006
+
+Exit codes:
+    0  nothing found
+    1  at least one finding
+"""
+
 import argparse
 import ast
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 
-### The six rules that no off-the-shelf tool implements. Everything else is ruff, pylint or mypy;
+### The nine rules that no off-the-shelf tool implements. Everything else is ruff, pylint or mypy;
 ### see tooling.md for the split and for the evidence that each of those actually fires.
 ### Stdlib only, so this runs anywhere python3 does.
 
@@ -17,26 +34,22 @@ RULES = {
     'NAR001': 'module-level object mutated in a function without a `global` declaration',
     'NAR006': 'assignment shadows a module-level name -- add `global`, or rename the local',
     'NAR002': 'hasattr(self, ...) -- attributes must not be conditionally defined',
-    'NAR003': f'def signature with more than {MAX_ARGS_ON_ONE_LINE} arguments on one line',
-    'NAR004': f'function body over {MAX_BODY_LINES_WITHOUT_DOCSTRING} lines without a docstring',
+    'NAR003': f'def signature with more than {MAX_ARGS_ON_ONE_LINE} POSITIONAL args on one line',
+    'NAR004': 'no docstring on a function that raises, takes >3 parameters, or runs long',
     'NAR005': f'annotation nested deeper than {MAX_ANNOTATION_DEPTH} -- promote it to a dataclass',
     'NAR007': '`and` inside `or` without parentheses -- do not make the reader apply precedence',
     'NAR008': f'no blank line after a statement spanning {MIN_LINES_BEFORE_BLANK}+ lines',
+    'NAR009': 'module docstring missing, or runnable module without a usage example',
+    'NAR000': 'file could not be read or parsed',
 }
 
 
+@dataclass(frozen=True)
 class Finding:
-    def __init__(
-        self,
-        path: Path,
-        line: int,
-        code: str,
-        detail: str,
-    ) -> None:
-        self.path = path
-        self.line = line
-        self.code = code
-        self.detail = detail
+    path: Path
+    line: int
+    code: str
+    detail: str
 
     def __str__(self) -> str:
         return f'{self.path}:{self.line}: {self.code} {self.detail}'
@@ -256,6 +269,10 @@ def checkArgsPerLine(tree: ast.Module, path: Path) -> list[Finding]:
 
     The formatter cannot do this. `ruff format` leaves a four-argument signature alone while it
     fits in 120 columns, and COM812 only fires once a construct has already been split.
+
+    Only positional parameters count. Keyword-only parameters — anything after `*` — do not, so a
+    function may carry as many of those as it needs. That is also the escape hatch: marking the
+    optional parameters keyword-only both documents them and stops them counting.
     """
     findings: list[Finding] = []
 
@@ -264,19 +281,31 @@ def checkArgsPerLine(tree: ast.Module, path: Path) -> list[Finding]:
             continue
 
         args = node.args
-        every_arg = args.posonlyargs + args.args + args.kwonlyargs
-        count = len(every_arg) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
-        end_line = max((a.lineno for a in every_arg), default=node.lineno)
+        positional = args.posonlyargs + args.args
+        count = len(positional) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
+        end_line = max((a.lineno for a in positional + args.kwonlyargs), default=node.lineno)
 
         if count > MAX_ARGS_ON_ONE_LINE and end_line == node.lineno:
-            detail = f'def {node.name} has {count} args on one line'
+            detail = f'def {node.name} has {count} positional args on one line'
             findings.append(Finding(path, node.lineno, 'NAR003', detail))
 
     return findings
 
 
 def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
+    """Require a docstring wherever the contract is complex, not merely where the body is long.
+
+    A pure line threshold is gameable in the wrong direction: splitting a 21-line function into two
+    12-line ones deletes the obligation, so the rule would reward fragmentation. Contract
+    complexity does not shrink when you split a function — the pieces still raise, and still take
+    their parameters.
+
+    Triggers: the function raises, or takes more than three parameters, or exceeds the line
+    threshold. Keyword-only parameters count here, unlike NAR003 — every parameter is part of the
+    contract even when the caller may omit it.
+    """
     findings: list[Finding] = []
+
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -286,8 +315,22 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
         body_start = node.body[0].lineno
         body_end = max((getattr(n, 'end_lineno', None) or 0) for n in ast.walk(node))
         body_lines = body_end - body_start + 1
+
+        args = node.args
+        every_arg = args.posonlyargs + args.args + args.kwonlyargs
+        arity = len(every_arg) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
+        raises = any(isinstance(n, ast.Raise) for n in ast.walk(node))
+
+        reasons = []
         if body_lines > MAX_BODY_LINES_WITHOUT_DOCSTRING:
-            findings.append(Finding(path, node.lineno, 'NAR004', f'{node.name} is {body_lines} body lines'))
+            reasons.append(f'{body_lines} body lines')
+        if arity > MAX_ARGS_ON_ONE_LINE:
+            reasons.append(f'{arity} parameters')
+        if raises:
+            reasons.append('raises')
+
+        if reasons:
+            findings.append(Finding(path, node.lineno, 'NAR004', f'{node.name}: {", ".join(reasons)}'))
 
     return findings
 
@@ -398,15 +441,74 @@ def checkBlankLineBlocks(tree: ast.Module, path: Path) -> list[Finding]:
                     and isinstance(first.value.value, str)
                 )
 
-                if span >= MIN_LINES_BEFORE_BLANK and touching and not is_docstring:
+                if span >= MIN_LINES_BEFORE_BLANK and touching and not (is_docstring or sameCallee(first, second)):
                     detail = f'{span}-line statement is followed immediately by another'
                     findings.append(Finding(path, second.lineno, 'NAR008', detail))
 
     return findings
 
 
+def calleeName(node: ast.stmt) -> str | None:
+    if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+        return None
+
+    func = node.value.func
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return func.id if isinstance(func, ast.Name) else None
+
+
+def sameCallee(first: ast.stmt, second: ast.stmt) -> bool:
+    # Repeated calls to one callee are a group by construction -- a run of `parser.add_argument(...)`
+    # is one block however long any single call wraps to. Splitting it would break exactly the
+    # grouping this rule exists to protect.
+    name = calleeName(first)
+    return name is not None and name == calleeName(second)
+
+
+def checkModuleDocstring(tree: ast.Module, path: Path) -> list[Finding]:
+    """Require a module docstring, and a usage example on anything runnable.
+
+    The docstring is the first thing a reader meets, before `main()`. A module that can be executed
+    has to show how — semantics vary per program, and a reader should not have to reconstruct the
+    invocation from `argparse` calls further down.
+
+    Returns:
+        One finding for a missing docstring, or one for a runnable module whose docstring shows no
+        example invocation.
+    """
+    docstring = ast.get_docstring(tree)
+    if docstring is None:
+        return [Finding(path, 1, 'NAR009', 'module has no docstring')]
+
+    runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
+
+    if not runnable:
+        return []
+
+    shows_usage = any(line.lstrip().startswith(('$', '>>>', 'python3 ', 'python ')) for line in docstring.splitlines())
+    if not shows_usage:
+        return [Finding(path, 1, 'NAR009', 'runnable module: docstring shows no example invocation')]
+
+    return []
+
+
 def checkFile(path: Path) -> list[Finding]:
-    source = path.read_text(encoding='utf-8')
+    """Run every check against one file.
+
+    An unreadable file is reported like any other finding rather than aborting the run: a linter
+    invoked over a directory must not stop at the first bad path (Q24).
+
+    Returns:
+        Every finding for this file, or a single NAR000 if it could not be read or parsed.
+    """
+    try:
+        source = path.read_text(encoding='utf-8')
+    except OSError as exc:
+        return [Finding(path, 0, 'NAR000', f'unreadable: {exc.strerror}')]
+    except UnicodeDecodeError as exc:
+        return [Finding(path, 0, 'NAR000', f'not UTF-8: {exc.reason}')]
+
     try:
         tree = ast.parse(source, filename=str(path))
     except SyntaxError as exc:
@@ -420,6 +522,7 @@ def checkFile(path: Path) -> list[Finding]:
         *checkAnnotationDepth(tree, path),
         *checkBoolOpParens(tree, source, path),
         *checkBlankLineBlocks(tree, path),
+        *checkModuleDocstring(tree, path),
     ]
 
 
@@ -448,7 +551,15 @@ def main() -> int:
         print(f'{finding} -- {RULES.get(finding.code, "")}')
 
     if targets:
-        rate = len(findings) / max(sum(len(p.read_text().splitlines()) for p in targets), 1) * 100
+        # A file already reported as unreadable must not be re-read here just to size the report.
+        scanned = 0
+        for path in targets:
+            try:
+                scanned += len(path.read_text(encoding='utf-8').splitlines())
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        rate = len(findings) / max(scanned, 1) * 100
         print(f'\n{len(findings)} findings over {len(targets)} files ({rate:.2f} per 100 lines)')
 
     return 1 if findings else 0

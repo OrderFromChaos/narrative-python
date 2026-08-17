@@ -78,8 +78,12 @@ class ScanHeader: ...
   `reject*()` helper that logs and returns the exception. The guards are two lines again, they
   group, `NAR008` is silent, and the raise-site rule is still honoured. Neither rule yields.
   (R4-05)
-- A `def` with >3 arguments puts each on its own line with a trailing comma, even under 120
-  columns. **Calls are exempt** — applying it to calls costs +19% lines. (R2b-B1)
+- A `def` with >3 **positional** arguments puts each on its own line with a trailing comma, even
+  under 120 columns. **Calls are exempt** — applying it to calls costs +19% lines. (R2b-B1)
+- **Keyword-only parameters do not count**, so a function may carry as many as it needs. That is
+  also the escape hatch at exactly four: put `*` before the optional ones and they stop counting,
+  which documents them as optional anyway. Note `NAR004` counts *every* parameter — each one is
+  part of the contract even when the caller may omit it. (R5-06)
 - Long strings: implicit concatenation in parens. Never `"""` for data — its whitespace ends up in
   the value. (Q03)
 
@@ -228,10 +232,44 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
   in-place mutation: `CONFIG.clear()`, `CONFIG['k'] = v`, `CONFIG.attr = v`. That is `NAR001`.
 - Every attribute declared in `__init__`. `hasattr(self, ...)` is a red flag. (Q04)
 
-## Comments and docstrings
+## The module docstring
 
-- A function whose body exceeds 20 lines gets a full structured docstring (summary, Args, Returns,
-  Raises). At or under 20 lines, `#` comments carry the contract. (Q05, R2-03, R2-05)
+**Every module opens with a docstring. Anything runnable shows how to run it.** It is the first
+thing a reader meets — before `main()` — so it carries what the program is *for*, not how it works.
+(R5-02, NAR009)
+
+Write it in **STE**: one idea per sentence, active voice, one word for one thing, no synonyms. It
+is the one place in the file where prose quality is load-bearing.
+
+```python
+"""Load a CSV file into a SQLite table.
+
+Each column is typed from its values as INTEGER, REAL or TEXT. A row that does not fit the
+inferred types is skipped and reported. The program does not modify an existing table.
+
+Usage:
+    $ python3 loadCsv.py readings.csv readings.db measurements
+    $ python3 loadCsv.py readings.csv readings.db measurements --sample-rows 200
+
+Exit codes:
+    0  every row loaded
+    1  one or more rows skipped
+    2  the file, the database or the arguments were unusable
+"""
+```
+
+Required: what it does; an example invocation per meaningful mode; exit codes when there are more
+than two; the shape of input and output where it is not obvious from the arguments. `NAR009`
+enforces the docstring and, for a module with a `__main__` block, the presence of an example.
+
+- A function gets a full structured docstring (summary, Args, Returns, Raises) when its **contract
+  is complex**: it raises, or takes more than three parameters, or exceeds 20 lines. Below all
+  three, `#` comments carry the contract. (Q05, R2-03, R2-05, R5-05)
+
+  A bare line threshold is gameable in the wrong direction — splitting a 21-line function into two
+  12-line ones would delete the obligation, so the rule would reward fragmentation. Contract
+  complexity does not shrink when you split: the pieces still raise, and still take their
+  parameters.
 - A docstring must not assert anything the code does not do, and must not state a consequence it
   already implied. (Q05)
 - Where semantics vary by implementation — file moves, copies, path manipulation — **show a
@@ -241,8 +279,18 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
 
 ## Logging
 
-JSONL. One stable event name plus structured `extra={...}` fields — never an f-string of prose.
-The message is a queryable key. (Q08)
+One stable event name plus structured `extra={...}` fields — never an f-string of prose. The
+message is a queryable key. (Q08)
+
+**JSONL output is for a service, not for every script.** The stdlib has no JSONL formatter, so a
+self-contained program hand-rolls `JsonlFormatter` + `configureLogging` — measured at **21 lines
+per file, byte-identical every time, 8% of a four-program sample** — so that a one-shot CLI emits
+machine-parseable stderr no machine will read. Decide by who reads the logs: (R5-03)
+
+- **A service, or anything whose logs are collected** — JSONL, from a shared module. In a monorepo
+  it is imported, never re-pasted; that is what makes it worth having.
+- **A single-file tool run by hand** — `logging.basicConfig(format=...)` and one line. The event
+  name and `extra` discipline still applies; only the formatter goes.
 
 ## Configuration
 
