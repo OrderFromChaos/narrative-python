@@ -1,3 +1,15 @@
+"""Split each program in the length experiment into logic, docstring, comment and blank lines.
+
+"Longer" is not one thing. A style that adds documentation and whitespace costs a reader little. A
+style that adds branches and helpers costs a reader a lot. This separates the two.
+
+Reads `<task>/base.py` and `<task>/narrative.py` under this directory, prints a per-file table and
+an arm total, and writes `RESULTS.json`.
+
+Usage:
+    $ python3 measure.py
+"""
+
 import ast
 import json
 import sys

@@ -1,3 +1,19 @@
+"""Load a CSV file into a new SQLite table.
+
+The program reads the header row, then types every column INTEGER, REAL or TEXT from the first
+TYPE_SAMPLE_ROWS data rows. An empty field becomes NULL in any column. A row that does not fit those
+types is skipped and reported with its line number. The table must not already exist, and a load
+that cannot finish drops the table it created, so the same command can run again.
+
+The program exits 1 if it skipped a row or could not start, and 0 otherwise. Each log record is one
+JSON object on stderr. Without --verbose, stderr carries the tally and any error. With it, each
+skipped row also gets a record of its own.
+
+Usage:
+    $ python3 narrative.py readings.csv readings.db measurements
+    $ python3 narrative.py readings.csv readings.db measurements --verbose
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -271,6 +287,17 @@ def validIdentifier(name: str) -> bool:
 
 
 def openCsv(csv_path: Path) -> TextIO:
+    """Open a CSV file in the mode the csv module needs.
+
+    Args:
+        csv_path: File to read. Both passes over the file come through here, so both see one mode.
+
+    Returns:
+        The open handle. The caller closes it.
+
+    Raises:
+        LoadError: The file is missing, or the operating system refused to open it.
+    """
     # newline='' is required by csv: the reader has to see the line endings inside quoted fields.
     # errors='replace' keeps one bad byte from aborting a whole load -- the row it lands in is
     # rejected on its own merits instead, and the other rows still arrive.

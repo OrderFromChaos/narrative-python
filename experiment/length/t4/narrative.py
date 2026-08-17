@@ -1,3 +1,18 @@
+"""Limit how fast each caller may spend, with one token bucket per caller.
+
+A call to consume() answers ALLOWED with the balance left, or THROTTLED with the seconds to wait. A
+throttled call spends nothing, so the wait it is quoted stays true for the request it made. A bucket
+refills from elapsed time on the next call, not from a background thread. A bucket that no caller
+touches for idle_expiry_s is dropped, and that sweep runs only when a new caller arrives.
+
+Running the module shows a burst that empties one bucket, the wait the limiter quotes, the recovery
+after that wait, and the idle sweep. The program exits 1 if any step did not behave as described
+here, and 0 otherwise. Each log record is one JSON object on stderr.
+
+Usage:
+    $ python3 narrative.py
+"""
+
 from __future__ import annotations
 
 import json
@@ -105,6 +120,12 @@ class BucketConfig:
     idle_expiry_s: float
 
     def __post_init__(self) -> None:
+        """Refuse a configuration that cannot be honoured, at construction.
+
+        Raises:
+            RateLimitError: capacity_tokens or refill_per_second is not positive, or idle_expiry_s
+                is shorter than the time one bucket needs to refill from empty.
+        """
         if self.capacity_tokens <= 0:
             raise rejectRequest(f'capacity_tokens must be positive, got {self.capacity_tokens}')
         if self.refill_per_second <= 0:

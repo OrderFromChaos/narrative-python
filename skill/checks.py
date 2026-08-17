@@ -1,8 +1,10 @@
 """Report Narrative style violations that ruff, pylint and mypy do not implement.
 
-Each rule is one check. NAR001 and NAR006 cover module state; NAR002 covers class attributes;
-NAR003, NAR008 and NAR009 cover layout; NAR004 and NAR009 cover documentation; NAR005 covers
-annotation depth; NAR007 covers boolean grouping. See tooling.md for what the other tools own.
+Each rule is one check. NAR001 and NAR006 cover module state. NAR002 covers class attributes.
+NAR003 and NAR008 cover layout. NAR004 and NAR009 cover documentation. NAR005 covers annotation
+complexity. NAR007 covers boolean grouping. NAR010 covers FIXME reachability.
+
+See tooling.md for what the other tools own.
 
 Usage:
     $ python3 checks.py src/
@@ -16,18 +18,20 @@ Exit codes:
 
 import argparse
 import ast
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 
-### The nine rules that no off-the-shelf tool implements. Everything else is ruff, pylint or mypy;
+### The ten rules that no off-the-shelf tool implements. Everything else is ruff, pylint or mypy;
 ### see tooling.md for the split and for the evidence that each of those actually fires.
 ### Stdlib only, so this runs anywhere python3 does.
 
 MAX_BODY_LINES_WITHOUT_DOCSTRING = 20
 MAX_ARGS_ON_ONE_LINE = 3
 MAX_ANNOTATION_DEPTH = 2
+MAX_ANNOTATION_WIDTH = 3
 MIN_LINES_BEFORE_BLANK = 3
 
 RULES = {
@@ -36,10 +40,11 @@ RULES = {
     'NAR002': 'hasattr(self, ...) -- attributes must not be conditionally defined',
     'NAR003': f'def signature with more than {MAX_ARGS_ON_ONE_LINE} POSITIONAL args on one line',
     'NAR004': 'no docstring on a function that raises, takes >3 parameters, or runs long',
-    'NAR005': f'annotation nested deeper than {MAX_ANNOTATION_DEPTH} -- promote it to a dataclass',
+    'NAR005': f'annotation deeper than {MAX_ANNOTATION_DEPTH} or wider than {MAX_ANNOTATION_WIDTH}: give it a name',
     'NAR007': '`and` inside `or` without parentheses -- do not make the reader apply precedence',
     'NAR008': f'no blank line after a statement spanning {MIN_LINES_BEFORE_BLANK}+ lines',
     'NAR009': 'module docstring missing, or runnable module without a usage example',
+    'NAR010': 'FIXME in reachable code -- a merge blocker, not a danger sign',
     'NAR000': 'file could not be read or parsed',
 }
 
@@ -94,9 +99,12 @@ MUTATING_METHODS = frozenset({
 })
 # Configuration calls mutate module state just as container methods do -- `LOG.addHandler(...)`
 # changes what every later caller of LOG does. The marker tracks side effects, not containers.
+# Deliberately excludes 'write' and 'load'. `LOG_PATH.write_text(...)` writes a file and mutates
+# no module state, because a Path is a value. Including it made the flagship check fire on the
+# documented pattern, with no way to silence it but a `global` that lied about a side effect.
 MUTATING_PREFIXES = (
     'set', 'add', 'remove', 'register', 'unregister', 'reset', 'delete', 'insert',
-    'write', 'load', 'enable', 'disable', 'configure', 'install', 'attach', 'detach',
+    'enable', 'disable', 'configure', 'install', 'attach', 'detach',
     'bind', 'unbind', 'truncate', 'flush', 'commit', 'rollback', 'execute', 'close',
 )
 # fmt: on
@@ -336,15 +344,59 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
 
 
 def annotationDepth(node: ast.expr) -> int:
+    """Measure how deeply an annotation nests.
+
+    Walks `ast.List` without charging a level, because a callable's parameter list is a list rather
+    than a subscript. Without that clause the same type is flagged as a parameter and invisible
+    inside `Callable[[...], None]`, so the rule depended on where the type appeared.
+    """
     if isinstance(node, ast.Subscript):
         inner = node.slice
         parts = inner.elts if isinstance(inner, ast.Tuple) else [inner]
         return 1 + max((annotationDepth(p) for p in parts), default=0)
 
+    if isinstance(node, ast.List):
+        return max((annotationDepth(p) for p in node.elts), default=0)
+
     return 0
 
 
+def annotationWidth(node: ast.expr) -> int:
+    """Measure the most elements an annotation carries at any one level.
+
+    Depth is not the only measure of complexity. `tuple[a, b, c, d, e, f, g, h, i, j]` is one level
+    deep and still wants a name. Walks `ast.List` too, so a callable's parameter list counts.
+
+    Args:
+        node: The annotation to measure.
+
+    Returns:
+        The largest element count found at any single level.
+    """
+    if isinstance(node, ast.Subscript):
+        inner = node.slice
+        parts = inner.elts if isinstance(inner, ast.Tuple) else [inner]
+    elif isinstance(node, ast.List):
+        parts = node.elts
+    else:
+        return 0
+
+    return max([len(parts), *(annotationWidth(part) for part in parts)])
+
+
 def checkAnnotationDepth(tree: ast.Module, path: Path) -> list[Finding]:
+    """Flag an annotation too complex to say out loud.
+
+    Complexity arrives two ways. Depth over 2 catches `dict[str, list[tuple[float, float]]]`. Width
+    over 3 at any one level catches `tuple[a, b, c, d, e, f, g, h, i, j]`, which is one level deep
+    and still unnameable.
+
+    The type decides the remedy. A callable becomes a Protocol, and anything else becomes a
+    dataclass.
+
+    Returns:
+        One finding per annotation over either threshold.
+    """
     findings: list[Finding] = []
     for node in ast.walk(tree):
         annotations: list[ast.expr] = []
@@ -357,9 +409,16 @@ def checkAnnotationDepth(tree: ast.Module, path: Path) -> list[Finding]:
 
         for annotation in annotations:
             depth = annotationDepth(annotation)
-            if depth > MAX_ANNOTATION_DEPTH:
-                rendered = ast.unparse(annotation)
-                findings.append(Finding(path, annotation.lineno, 'NAR005', f'depth {depth}: {rendered}'))
+            width = annotationWidth(annotation)
+            if depth <= MAX_ANNOTATION_DEPTH and width <= MAX_ANNOTATION_WIDTH:
+                continue
+
+            rendered = ast.unparse(annotation)
+            # The trigger says the thing is too complex to name in conversation. The type says what
+            # to replace it with: a callable becomes a Protocol, anything else becomes a dataclass.
+            remedy = 'a Protocol' if 'Callable' in rendered else 'a dataclass'
+            measure = f'depth {depth}' if depth > MAX_ANNOTATION_DEPTH else f'width {width}'
+            findings.append(Finding(path, annotation.lineno, 'NAR005', f'{measure}: {rendered} -> {remedy}'))
 
     return findings
 
@@ -493,6 +552,137 @@ def checkModuleDocstring(tree: ast.Module, path: Path) -> list[Finding]:
     return []
 
 
+# fmt: off
+SKIPPED_DIRECTORIES = frozenset({
+    '.venv', 'venv', '.lintenv', '.git', '.tox', 'build', 'dist',
+    '__pycache__', 'node_modules', '.mypy_cache', '.ruff_cache',
+})
+# fmt: on
+
+
+def discoverPython(root: Path) -> list[Path]:
+    """Find every Python file under a directory, skipping the trees no linter should read.
+
+    Ruff already excludes a virtual environment. Without the same exclusion here, `checks.py .`
+    reports findings from installed third-party code.
+
+    Args:
+        root: Directory to walk.
+
+    Returns:
+        Every `.py` file outside a skipped directory.
+    """
+    return [found for found in root.rglob('*.py') if not SKIPPED_DIRECTORIES & set(found.parts)]
+
+
+def calledNames(node: ast.AST) -> set[str]:
+    called: set[str] = set()
+    for inner in ast.walk(node):
+        if not isinstance(inner, ast.Call):
+            continue
+
+        target = inner.func
+        if isinstance(target, ast.Name):
+            called.add(target.id)
+        elif isinstance(target, ast.Attribute):
+            called.add(target.attr)
+
+    return called
+
+
+def reachableFunctions(tree: ast.Module) -> set[str]:
+    """Find every function reachable from module level or from `main`.
+
+    Names are matched without scope analysis, so a method and a function that share a name are one
+    node. That over-approximates reachability, which is the safe direction: NAR010 would rather
+    call an orphan reachable than let a live FIXME through.
+
+    Args:
+        tree: The parsed module.
+
+    Returns:
+        Names of the functions reachable from an entry point.
+    """
+    defined = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    frontier = {name for name in defined if name == 'main'}
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            frontier |= calledNames(node) & set(defined)
+
+    reachable: set[str] = set()
+    while frontier:
+        name = frontier.pop()
+        if name in reachable:
+            continue
+
+        reachable.add(name)
+        frontier |= calledNames(defined[name]) & set(defined)
+
+    return reachable
+
+
+def enclosingFunction(tree: ast.Module, line: int) -> str | None:
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.lineno <= line <= (node.end_lineno or node.lineno):
+            return node.name
+
+    return None
+
+
+def checkFixmeReachability(tree: ast.Module, source: str, path: Path) -> list[Finding]:
+    """Flag a FIXME sitting in code that runs.
+
+    The two markers mean different things. A TODO is deferred work and never blocks. A FIXME is
+    either a merge blocker, or a known correctness problem parked in code nothing calls, left as a
+    danger sign for whoever next considers wiring it into the hot loop.
+
+    Only the first kind is a defect, and reachability is what separates them.
+
+    Returns:
+        One finding per FIXME inside a function reachable from an entry point.
+    """
+    reachable = reachableFunctions(tree)
+    findings: list[Finding] = []
+
+    for number, text in enumerate(source.splitlines(), start=1):
+        if 'FIXME' not in text or not text.lstrip().startswith('#'):
+            continue
+
+        owner = enclosingFunction(tree, number)
+        if owner is None or owner in reachable:
+            where = f'in {owner}' if owner else 'at module level'
+            findings.append(Finding(path, number, 'NAR010', f'FIXME {where}, which runs'))
+
+    return findings
+
+
+def suppressedLines(source: str) -> dict[int, set[str]]:
+    """Map each line carrying a `# noqa: NARxxx` comment to the codes it silences.
+
+    Every check here is a heuristic over syntax, so each one can be wrong. Without a suppression
+    the only way to clear a false positive is to change correct code into incorrect code.
+
+    Args:
+        source: Full text of the module.
+
+    Returns:
+        Line number to the set of codes suppressed on that line, or `{'ALL'}` for a bare `# noqa`.
+    """
+    suppressed: dict[int, set[str]] = {}
+    for number, text in enumerate(source.splitlines(), start=1):
+        found = re.search(r'#\s*noqa(?::\s*(?P<codes>[A-Z0-9, ]+))?', text)
+        if not found:
+            continue
+
+        codes = found.group('codes')
+        suppressed[number] = {c.strip() for c in codes.split(',') if c.strip()} if codes else {'ALL'}
+
+    return suppressed
+
+
 def checkFile(path: Path) -> list[Finding]:
     """Run every check against one file.
 
@@ -514,7 +704,8 @@ def checkFile(path: Path) -> list[Finding]:
     except SyntaxError as exc:
         return [Finding(path, exc.lineno or 0, 'NAR000', f'syntax error: {exc.msg}')]
 
-    return [
+    suppressed = suppressedLines(source)
+    findings = [
         *checkGlobalDeclarations(tree, path),
         *checkHasattrSelf(tree, path),
         *checkArgsPerLine(tree, path),
@@ -523,7 +714,10 @@ def checkFile(path: Path) -> list[Finding]:
         *checkBoolOpParens(tree, source, path),
         *checkBlankLineBlocks(tree, path),
         *checkModuleDocstring(tree, path),
+        *checkFixmeReachability(tree, source, path),
     ]
+
+    return [f for f in findings if not (suppressed.get(f.line, set()) & {f.code, 'ALL'})]
 
 
 def main() -> int:
@@ -539,7 +733,7 @@ def main() -> int:
 
     targets: list[Path] = []
     for target in args.paths:
-        targets.extend(sorted(target.rglob('*.py')) if target.is_dir() else [target])
+        targets.extend(sorted(discoverPython(target)) if target.is_dir() else [target])
 
     findings: list[Finding] = []
     for path in targets:

@@ -88,6 +88,11 @@ class ScanHeader: ...
   `reject*()` helper that logs and returns the exception. The guards are two lines again, they
   group, `NAR008` is silent, and the raise-site rule still holds. Neither rule yields. (R4-05)
 
+- `NAR008` also fires when `ruff format` explodes a large dict literal and the next line consumes
+  it. **The blank line is correct there.** Defining a record and serialising it are two operations,
+  not one. The deeper answer is that a large dict passed between functions should be a frozen
+  dataclass, and then the literal never appears. (R6-10)
+
 - A `def` with >3 **positional** arguments puts each on its own line with a trailing comma, even
   under 120 columns. **Calls are exempt**, because the same rule applied to calls costs +19% lines.
   (R2b-B1)
@@ -132,9 +137,9 @@ class ScanHeader: ...
 
 ## Naming
 
-- Functions and methods `mixedCase`. Classes and types `PascalCase`. Variables and arguments
-  `snake_case`. Module constants `ALL_CAPS`. **In a `snake_case` codebase that you did not write,
-  match local convention.** Detect before you write.
+- Module filenames `snake_case`. Functions and methods `mixedCase`. Classes and types
+  `PascalCase`. Variables and arguments `snake_case`. Module constants `ALL_CAPS`. **In a
+  `snake_case` codebase that you did not write, match local convention.** Detect before you write.
 
 - Spell names out. No `img_arr`, `cfg`, `idx`. (Q11)
 
@@ -177,7 +182,24 @@ the ones that should stay out. This is review judgement.*
 - `Protocol` for a seam with more than one real implementation. Never `ABC`, because that is
   inheritance. (R2-01)
 
-- Annotations nest at most 2 deep. Deeper means the code needs a dataclass. (NAR005)
+- **An annotation you cannot say out loud needs a name.** The test is conversational: could you
+  refer to this type in a normal discussion with another programmer? `park(car: Car)` reads and
+  discusses. `park(car: dict[str, list[tuple[float, float]]])` does neither. (NAR005, R6-09)
+
+  Two thresholds measure that, because complexity arrives two ways:
+
+  | trigger | example |
+  |---|---|
+  | **depth** over 2 | `dict[str, list[tuple[float, float]]]` |
+  | **width** over 3 at any one level | `tuple[a, b, c, d, e, f, g, h, i, j]`, which is depth 1 |
+
+  The type then decides the fix. **A callable becomes a `Protocol`.** **Anything else — any kind of
+  iterable — becomes a dataclass.**
+
+  The reason is comprehension and shared vocabulary, not type safety. Measured: neither
+  `tuple[float, float]` nor a `Point` dataclass makes `mypy --strict` catch swapped coordinates.
+  Only `NewType` does that, and it is a separate rule (Q15). Do not expect the dataclass to find a
+  bug. Expect it to give the thing a name.
 
 - Composition over inheritance, always.
 
@@ -238,11 +260,19 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
   - `frozen=True` plus a mapping field is **not hashable**. `set(entries)` raises `TypeError` at
     runtime with no linter warning. Fine until someone dedupes.
 
-- No ORM. SQL directly.
+- **No ORM on a hot path.** A request handler that returns database values must not pay run-time
+  validation for information the database and Python both already know. Use `sqlite3` and SQL.
+  (Q17, R6-03)
+- **An ORM is a fine tool off the hot path.** A healing script, a migration or a one-off backfill
+  runs once, so developer time outweighs per-request cost. The config lifts the ban under
+  `maintenance/`, `scripts/` and `migrations/`. Add your own directory to `per-file-ignores` if you
+  keep such work elsewhere. (R6-07)
 
 ## Errors
 
 - Custom exception types subclassing `RuntimeError`, not `Exception`. (Q20)
+- **The name ends in `Error`.** Ruff `N818` enforces this and rejects `SourceRejected`. Use
+  `RejectedSourceError`.
 
 - Handle each failure mode narrowly and separately. Never one `try` around the whole operation with
   a tuple of unrelated exception types. (Q19)
@@ -298,8 +328,8 @@ Each column is typed from its values as INTEGER, REAL or TEXT. A row that does n
 inferred types is skipped and reported. The program does not modify an existing table.
 
 Usage:
-    $ python3 loadCsv.py readings.csv readings.db measurements
-    $ python3 loadCsv.py readings.csv readings.db measurements --sample-rows 200
+    $ python3 load_csv.py readings.csv readings.db measurements
+    $ python3 load_csv.py readings.csv readings.db measurements --sample-rows 200
 
 Exit codes:
     0  every row loaded
@@ -335,7 +365,17 @@ example.
 
 - Comments carry the why, the tribal knowledge, the link to the source. Never restate the line.
 
-- `FIXME:` marks a failure to meet standards. `TODO:` marks non-urgent debt.
+- **`TODO:` marks deferred work.** It never blocks a merge.
+
+- **`FIXME:` means one of two things, and only one of them may merge.** (R6-12, NAR010)
+  - In code that runs, a `FIXME` is a **merge blocker**. `NAR010` fails the gate on it.
+  - In code that nothing calls, a `FIXME` is a **danger sign**. It marks a known correctness
+    problem parked in an orphaned section, for whoever next considers wiring that section into the
+    hot loop. This use is allowed, and it is the reason the marker exists.
+
+  Reachability separates the two, so `NAR010` walks the call graph from `main` and from module
+  level. It over-approximates reachability on purpose. The check would rather call an orphan live
+  than let a running `FIXME` through.
 
 ## Logging
 
@@ -350,8 +390,27 @@ machine-parseable stderr that no machine will read. Decide by who reads the logs
 - **A service, or any program whose logs someone collects**: JSONL, from a shared module. In a
   monorepo each program imports it and never re-pastes it. That is what makes it worth having.
 
-- **A single-file tool run by hand**: `logging.basicConfig(format=...)` and one line. The event
-  name and `extra` discipline still applies. Only the formatter goes.
+- **A single-file tool run by hand**: a 7-line formatter that renders the fields.
+
+**Do not use `basicConfig(format='%(levelname)s %(message)s')`.** The standard formatter discards
+everything in `extra`. `LOG.warning('merge.rejected', extra={'rejected': 4812, 'total': 10000})`
+then prints `WARNING merge.rejected`, and the operator never sees the number the tally rule exists
+to give them. A cold-start reader followed both rules as written and shipped worse logs than an
+f-string. (R5-09)
+
+```python
+_STANDARD = frozenset(logging.LogRecord('', 0, '', 0, '', None, None).__dict__) | {'message', 'asctime'}
+
+
+class FieldFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        extra = {k: v for k, v in record.__dict__.items() if k not in _STANDARD}
+        fields = ' '.join(f'{k}={v}' for k, v in sorted(extra.items()))
+        return f'{record.levelname} {record.getMessage()}{" " + fields if fields else ""}'
+```
+
+That prints `WARNING merge.rejected rejected=4812 total=10000`, in 7 lines against the 21 that the
+JSONL formatter costs.
 
 ## Configuration
 
@@ -412,15 +471,28 @@ Bare `except:`. Mutable default arguments. See `wtfpython` for the rest.
 
 ## Verify
 
-Never claim conformance without running these. Config: `pyproject-snippet.toml`.
+Run `verify.py`. Do not call the tools by hand.
 
 ```
-ruff check --fix    &&  ruff format    # order matters
-pylint --rcfile=pyproject.toml         # the only thing that enforces mixedCase
-mypy --strict
-python3 checks.py <paths>              # NAR001-NAR009, which no other tool implements
-vermin --no-tips -t=3.10- --violations
+python3 verify.py .
 ```
+
+Give it any path. It sorts Python files from prose and runs the right checks on each, so nothing
+has to decide a workflow at run time. There is one command, not a sequence to remember.
+
+It resolves every tool to an absolute path and exits 2 if one is missing or if `pyproject.toml` is
+absent. A hand-rolled loop counts findings by grepping tool output, so a missing binary or a
+missing config produces empty output and reads as a pass. That mistake has happened twice in this
+project.
+
+It runs, in the order that converges: `ruff check --fix`, `ruff format`, `pylint`, `mypy --strict`,
+`checks.py`, `vermin`.
+
+| exit | meaning |
+|---|---|
+| 0 | every tool passed |
+| 1 | at least one tool reported a finding |
+| 2 | the toolchain or the config is missing, so nothing was checked |
 
 `tooling.md` explains what each layer owns and documents the gotchas. A tool default silently
 undoes several rules here. `ruff check --fix` collapses blank lines after imports, and `SIM114`

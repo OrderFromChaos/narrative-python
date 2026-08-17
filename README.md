@@ -9,16 +9,18 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 86 forced choices between
+Every rule cites the decision that produced it. The decisions came from 105 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
 
-The skill is four files in one directory.
+The skill is seven files in one directory.
 
 ```bash
 mkdir -p ~/.claude/skills/narrative
-cp skill/SKILL.md skill/tooling.md skill/checks.py skill/pyproject-snippet.toml \
+cp skill/SKILL.md skill/tooling.md skill/GAPS.md skill/checks.py skill/verify.py \
+   skill/requirements-lock.txt \
+   skill/pyproject-snippet.toml \
    ~/.claude/skills/narrative/
 ```
 
@@ -42,16 +44,19 @@ Four tools do the work `checks.py` does not. Install them into a project-local e
 
 ```bash
 uv venv .lintenv
-uv pip install --python .lintenv/bin/python ruff pylint mypy vermin
+uv pip install --python .lintenv/bin/python -r ~/.claude/skills/narrative/requirements-lock.txt
 echo '.lintenv/' >> .gitignore
 ```
 
-| tool | version verified | what it owns |
+| tool | pinned version | what it owns |
 |---|---|---|
 | `ruff` | 0.16.3 | formatting, imports, annotations, bugbear, quotes, banned APIs |
 | `pylint` | 4.0.7 | `mixedCase` function names — **no other linter can require this** |
 | `mypy` | 2.3.1 | type correctness under `--strict` |
 | `vermin` | 1.8.0 | the Python 3.10 floor |
+
+The versions are pinned in `requirements-lock.txt`. An unpinned install can change what the config
+means, because ruff moved `[tool.ruff.lint]` in 0.2.
 
 Copy `pyproject-snippet.toml` into the `pyproject.toml` of your project. The settings are not
 defaults and several are load-bearing. `tooling.md` records why each one is there and what breaks
@@ -93,21 +98,43 @@ fallback arm instead, see `SKILL.md`). Also unavailable: `enum.StrEnum`, `asynci
 
 ## Verify
 
-Order matters. `ruff check --fix` and `ruff format` disagree in one direction and converge in the
-other. If you run format first, it leaves findings that the next check re-introduces.
+Run `verify.py`. Do not call the tools by hand.
 
 ```bash
-.lintenv/bin/ruff check --fix src/ && .lintenv/bin/ruff format src/
-.lintenv/bin/pylint --rcfile=pyproject.toml src/
-.lintenv/bin/mypy --strict src/
-python3 ~/.claude/skills/narrative/checks.py src/
-.lintenv/bin/vermin --no-tips -t=3.10- --violations src/
+cd your-project                                          # both defaults are relative
+python3 ~/.claude/skills/narrative/verify.py .           # rewrites files: runs --fix and format
+python3 ~/.claude/skills/narrative/verify.py . --no-fix  # reports only, changes nothing
 ```
 
-The trailing hyphen in `-t=3.10-` is required. Without it `vermin` asserts an exact match and fails
-any file that happens to use no 3.10-only feature.
+One command covers the project. It sorts Python files from prose, runs the six code checks on the
+first and the STE linter on the second, so nothing has to choose a workflow.
 
-## The nine custom rules
+**Run it from your project root.** `--venv .lintenv` and `--config pyproject.toml` are relative to
+the working directory, not to the script. Invoking it by absolute path from elsewhere exits 2.
+
+**The plain form rewrites your files.** It runs `ruff check --fix` and `ruff format` before
+reporting, which is what makes the run converge. Use `--no-fix` when you want a report only.
+
+When a tool fails, `verify.py` prints that tool's own output, so you never need to re-run it by
+hand.
+
+It resolves every tool to an absolute path, and exits 2 if a tool is missing or if
+`pyproject.toml` is absent. Both of those states otherwise produce empty tool output, which a
+hand-rolled loop reads as a pass. That mistake happened twice while building this.
+
+It runs the tools in the order that converges: `ruff check --fix`, `ruff format`, `pylint`,
+`mypy --strict`, `checks.py`, `vermin`.
+
+| exit | meaning |
+|---|---|
+| 0 | every tool passed |
+| 1 | at least one tool reported a finding |
+| 2 | the toolchain or the config is missing, so nothing was checked |
+
+The `vermin` call uses `-t=3.10-` with a trailing hyphen. Without it `vermin` asserts an exact
+match and fails any file that uses no 3.10-only feature.
+
+## The ten custom rules
 
 `checks.py` implements what no off-the-shelf tool does.
 
@@ -117,19 +144,22 @@ any file that happens to use no 3.10-only feature.
 | `NAR002` | `hasattr(self, ...)`, meaning an attribute is conditionally defined |
 | `NAR003` | more than three *positional* arguments on one `def` line |
 | `NAR004` | no docstring where the contract is complex: raises, >3 parameters, or long |
-| `NAR005` | an annotation nested deeper than 2, which means the code needs a dataclass |
+| `NAR005` | an annotation deeper than 2 or wider than 3: a callable needs a `Protocol`, anything else a dataclass |
 | `NAR006` | an assignment that shadows a module name, so the module value silently never changes |
 | `NAR007` | `and` inside `or` without parentheses |
 | `NAR008` | a multi-line statement butted against the next with no blank line |
 | `NAR009` | a missing module docstring, or a runnable module with no usage example |
+| `NAR010` | a `FIXME` in code that runs, which is a merge blocker rather than a danger sign |
+
+`NAR000` is not a style rule. It reports a file that could not be read or parsed.
 
 ## What is in this repository
 
 | path | contents |
 |---|---|
-| `skill/` | the deliverable — `SKILL.md`, `tooling.md`, `checks.py`, `pyproject-snippet.toml` |
+| `skill/` | the deliverable: `SKILL.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml` |
 | `skill/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
-| `benchmark/decisions.jsonl` | all 86 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 105 decisions, each with its reasoning and evidence |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |
 | `benchmark/round3/` | two problems in three architectures each, style held constant |
@@ -146,14 +176,33 @@ the reported line counts compromised the blinding. The counts went out before th
 makes each arm identifiable. No one judged the comparison that matters: skill against the prior
 style doc.
 
-**Does the style make code longer?** Measured over four tasks against unguided Claude: 14% more
-total lines, and **6.5% less actual logic**. The extra is documentation and blank lines. On one of
-the four the styled version had 22% less logic than the unguided one.
+**Does the style make code longer?** Measured over four tasks against unguided Claude. Both arms
+got identical instructions and neither was asked for tests.
 
 | | unguided | Narrative |
 |---|---|---|
-| total | 899 | 1027 |
-| code | 612 | **572** |
-| docstring | 140 | 162 |
+| total | 899 | 1144 |
+| **code** | **612** | **572** |
+| docstring | 140 | 274 |
 | comment | 5 | 66 |
-| blank | 142 | 227 |
+| blank | 142 | 232 |
+
+Read that aggregate with three caveats, because it is weaker than it looks.
+
+**The sign flips per task.** Narrative wrote *more* logic on two of the four:
+
+| | t1 | t2 | t3 | t4 |
+|---|---|---|---|---|
+| code, unguided → Narrative | 204 → 210 | 101 → 107 | 166 → **129** | 141 → **126** |
+
+The 6.5% aggregate rests entirely on t3 and t4.
+
+**The sample is four, one run per cell, no repeats and no variance measured.** It is a direction,
+not a number.
+
+**The Narrative arm was edited after the run.** The module-docstring rule landed later, and
+retrofitting it added 117 lines to these four files. So 1144 is a post-hoc artefact rather than a
+one-pass result. The `code` count did not move, which is the reason to trust that figure and not
+the total.
+
+What survives all three caveats: **the style adds documentation and whitespace, not logic.**

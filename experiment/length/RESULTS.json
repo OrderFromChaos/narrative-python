@@ -8,10 +8,10 @@
   },
   "t1/narrative": {
     "code": 210,
-    "docstring": 63,
+    "docstring": 89,
     "comment": 30,
-    "blank": 83,
-    "total": 386
+    "blank": 84,
+    "total": 413
   },
   "t2/base": {
     "code": 101,
@@ -22,10 +22,10 @@
   },
   "t2/narrative": {
     "code": 107,
-    "docstring": 28,
+    "docstring": 78,
     "comment": 14,
-    "blank": 41,
-    "total": 190
+    "blank": 43,
+    "total": 242
   },
   "t3/base": {
     "code": 166,
@@ -36,10 +36,10 @@
   },
   "t3/narrative": {
     "code": 129,
-    "docstring": 30,
+    "docstring": 46,
     "comment": 8,
-    "blank": 49,
-    "total": 216
+    "blank": 50,
+    "total": 233
   },
   "t4/base": {
     "code": 141,
@@ -50,9 +50,9 @@
   },
   "t4/narrative": {
     "code": 126,
-    "docstring": 41,
+    "docstring": 61,
     "comment": 14,
-    "blank": 54,
-    "total": 235
+    "blank": 55,
+    "total": 256
   }
 }

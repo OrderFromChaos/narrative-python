@@ -1,3 +1,17 @@
+"""Stage a blinded, shuffled copy of every validation arm and score each arm mechanically.
+
+Each task holds three implementations of one problem: one written with no guidance, one with the
+prior style document, one with the skill. This copies them to `blind/1.py`, `blind/2.py` and
+`blind/3.py` in an order derived from a salt, and redacts the strings that would name the arm.
+
+The mapping goes to `MANIFEST.json` and the tool scores to `SCORES.json`, both separate from the
+staged files, so reading a candidate cannot reveal which arm produced it.
+
+Usage:
+    $ python3 prepare_blind.py --scratch /tmp/blind-scoring
+    $ python3 prepare_blind.py --scratch /tmp/blind-scoring --salt second-pass
+"""
+
 import argparse
 import hashlib
 import json
@@ -12,7 +26,7 @@ SKILL_DIR = Path(__file__).resolve().parent.parent / 'skill'
 ARMS = ('base', 'doc', 'skill')
 # Anything naming the arm would unblind the rating, so it is stripped before shuffling.
 TELLTALES = re.compile(
-    r'\b(SKILL\.md|rules-so-far|narrative|R[0-9]a?-[0-9]+|R2b-[A-Z0-9]+|Q[0-9]{2})\b'
+    r'\b(SKILL\.md|rules-so-far|narrative|R[0-9]a?-[0-9]+|R2b-[A-Z0-9]+|Q[0-9]{2})\b',
 )
 
 
@@ -31,6 +45,7 @@ def shuffleOrder(task: str, salt: str) -> list[str]:
     for index in range(len(order) - 1, 0, -1):
         swap = digest[index] % (index + 1)
         order[index], order[swap] = order[swap], order[index]
+
     return order
 
 
@@ -55,6 +70,7 @@ def runTool(command: list[str], target: Path) -> tuple[bool, str]:
         cwd=target.parent,
         check=False,
     )
+
     return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 
@@ -75,7 +91,7 @@ def scoreOne(source: Path, scratch: Path, lint_bin: Path | None) -> dict[str, ob
     mypy_cmd = [toolPath(lint_bin, 'mypy'), '--strict', '--no-error-summary']
     mypy_ok, mypy_out = runTool(mypy_cmd, staged)
     checks_ok, checks_out = runTool([sys.executable, str(SKILL_DIR / 'checks.py')], staged)
-    _, vermin_out = runTool([toolPath(lint_bin, 'vermin'), '--no-tips', '-t=3.10'], staged)
+    _, vermin_out = runTool([toolPath(lint_bin, 'vermin'), '--no-tips', '-t=3.10-'], staged)
 
     version = re.search(r'([0-9]+\.[0-9]+)', vermin_out.split('Minimum required versions:')[-1])
     return {
@@ -84,19 +100,24 @@ def scoreOne(source: Path, scratch: Path, lint_bin: Path | None) -> dict[str, ob
         'format_clean': fmt_ok,
         'pylint': 0 if pylint_ok else len(re.findall(r'^\S+\.py:', pylint_out, re.M)),
         'mypy': 0 if mypy_ok else len(re.findall(r'^\S+\.py:', mypy_out, re.M)),
-        'checks': 0 if checks_ok else int(re.search(r'(\d+) findings', checks_out).group(1)),
+        'checks': 0 if checks_ok else countReportedFindings(checks_out),
         'min_python': version.group(1) if version else '?',
     }
+
+
+def countReportedFindings(output: str) -> int:
+    found = re.search(r'(\d+) findings', output)
+    return int(found.group(1)) if found else 0
 
 
 def main() -> int:
     """Stage a blinded copy of each arm and score every arm mechanically.
 
-    The scores are written to a separate file from the blinded sources so that reading the
-    candidates cannot reveal which arm produced them.
+    The scores go to a separate file from the blinded sources, so reading a candidate cannot
+    reveal which arm produced it.
 
     Returns:
-        0 always; failures surface as missing files rather than exit codes.
+        0 always. Failures surface as missing files rather than exit codes.
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--salt', default='v1')
@@ -107,6 +128,7 @@ def main() -> int:
         default=None,
         help='Directory holding ruff, pylint, mypy and vermin. Defaults to PATH.',
     )
+
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parent
@@ -130,7 +152,9 @@ def main() -> int:
             (blind_dir / f'{position}.py').write_text(text)
             manifest[f'{task_dir.name}/{position}.py'] = arm
             scores[f'{task_dir.name}/{arm}'] = scoreOne(
-                source, args.scratch / task_dir.name / arm, args.lint_bin
+                source,
+                args.scratch / task_dir.name / arm,
+                args.lint_bin,
             )
 
         print(f'{task_dir.name}: staged {len(order)} candidates')

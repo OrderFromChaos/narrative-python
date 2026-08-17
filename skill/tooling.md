@@ -14,8 +14,10 @@ Verified with ruff 0.16.3, pylint 4.0.7, mypy 2.3.1, vermin 1.8.0, Python 3.14.
 | `pylint` (naming only) | `mixedCase` functions — **no other linter can require this** |
 | `mypy --strict` | type correctness |
 | `checks.py` | the nine residual rules no tool implements |
+| `verify.py` | running all of the above correctly, with the toolchain and config guards |
 
 Run order matters: `ruff check --fix`, then `ruff format`, then `pylint`, `mypy`, `checks.py`.
+`verify.py` runs them in that order, so use it rather than reproducing the sequence.
 
 ## The config
 
@@ -58,8 +60,9 @@ def loadConfig(data: dict[str, int]) -> None:
 ```
 
 No `global`, no error, module state mutated. Verified that **`ruff check --select ALL` and
-`pylint --enable=all` both report nothing** on this file. That gap is `NAR001`, and it is the
-highest-value check in the set.
+`pylint --enable=all` both report the undeclared mutation nowhere.** Each tool does report other
+things about the file, such as a missing docstring and a non-conforming function name. Neither
+reports the mutation. That gap is `NAR001`, and it is the highest-value check in the set.
 
 `NAR006` covers the adjacent bug: a bare `NAME = x` that shadows a module-level name creates a
 local, so the module value silently never changes.

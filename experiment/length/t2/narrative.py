@@ -1,3 +1,18 @@
+"""Retry a call with exponential backoff.
+
+retrying(policy) returns a decorator. The decorated function keeps its own signature for the type
+checker, because a ParamSpec types the wrapper. The decorator retries only the exception types the
+policy names, and any other type propagates at once. The exception from the final attempt propagates
+unchanged, with its own traceback and inside no wrapper.
+
+Running the module shows both paths against a stand-in call: one that fails twice and then
+succeeds, and one that never succeeds. The program exits 1 if either demonstration did not behave as
+described here, and 0 otherwise. Each log record is one JSON object on stderr.
+
+Usage:
+    $ python3 narrative.py
+"""
+
 from __future__ import annotations
 
 import json
@@ -76,8 +91,31 @@ def retrying(policy: RetryPolicy) -> Callable[[Callable[P, T]], Callable[P, T]]:
     """
 
     def decorate(function: Callable[P, T]) -> Callable[P, T]:
+        """Wrap one function so that calling it retries under the enclosing policy.
+
+        Args:
+            function: The call to retry. Each attempt calls it again with the same arguments.
+
+        Returns:
+            A stand-in with the same signature, which raises whatever its last attempt raised.
+        """
+
         @wraps(function)
         def attempt(*args: P.args, **kwargs: P.kwargs) -> T:
+            """Call the wrapped function, waiting out a backoff between retryable failures.
+
+            Args:
+                args: Positional arguments, passed to the wrapped function unchanged.
+                kwargs: Keyword arguments, passed to the wrapped function unchanged.
+
+            Returns:
+                Whatever the first successful attempt returned.
+
+            Raises:
+                Exception: The exception from the final attempt, re-raised as it stands. A type
+                    outside policy.retryable leaves the attempt that raised it at once, with no
+                    wait and no further call.
+            """
             # The last attempt is deliberately outside the loop. It has nothing to wait for and
             # nothing to fall back to, which is also why there is no unreachable line after it.
             for number in range(1, policy.max_attempts):
@@ -112,6 +150,14 @@ def reportAttempt(
     delay: float,
     exc: Exception,
 ) -> None:
+    """Record one failed attempt that the wrapper is about to retry.
+
+    Args:
+        call: Name of the function that failed, recorded as the log field 'call'.
+        number: Which attempt failed, counting the first call as 1.
+        delay: How long the wrapper waits before the next attempt, in seconds.
+        exc: The failure that is being retried. Only its message reaches the record.
+    """
     # An operator cannot act on one failed attempt that a later one repaired, so this is DEBUG. The
     # record that is actionable is retry_exhausted, which is where the call finally gave up.
     fields = {'call': call, 'attempt': number, 'delay_s': round(delay, 3), 'error': str(exc)}
@@ -159,6 +205,12 @@ class RetryPolicy:
     retryable: tuple[type[Exception], ...]
 
     def __post_init__(self) -> None:
+        """Refuse a policy that cannot be honoured, at construction rather than mid-backoff.
+
+        Raises:
+            RetryConfigError: max_attempts is below 1, base_delay_s is not positive, max_delay_s is
+                below base_delay_s, or retryable is empty and would therefore retry nothing.
+        """
         if self.max_attempts < 1:
             raise rejectPolicy(f'max_attempts must be at least 1, got {self.max_attempts}')
         if self.base_delay_s <= 0:

@@ -1,3 +1,20 @@
+"""Find the files under a directory tree that hold identical content.
+
+The program groups every file by size, then hashes only inside a group that holds more than one
+file. It reports each group of duplicates, the group that wastes the most space first, and the total
+recoverable bytes. It counts a path it cannot read and then continues. A symlink is never a
+candidate, because deleting one recovers no space.
+
+The program exits 1 if it skipped any path, and it still prints the answer it reached. It also exits
+1 if the root is not a directory, and then prints no answer at all. Each log record is one JSON
+object on stderr. Without --verbose, stderr carries the tally alone. With it, each skipped path also
+gets a record of its own.
+
+Usage:
+    $ python3 narrative.py /var/data
+    $ python3 narrative.py /var/data --min-size 4096 --verbose
+"""
+
 from __future__ import annotations
 
 import argparse

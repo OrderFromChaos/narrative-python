@@ -12,13 +12,18 @@ select = [
     'COM',                # trailing commas
     'Q',                  # quotes
     'TID',                # tidy-imports (relative import ban)
-    'UP', 'SIM', 'RET', 'PTH', 'LOG', 'G',
+    'UP',                 # pyupgrade: modern syntax for the target version
+    'SIM',                # flake8-simplify
+    'RET',                # flake8-return -- NOTE RET504 forbids a named value before `return`
+    'PTH',                # flake8-use-pathlib -- NOTE PTH123 bans open(), PTH118 bans os.path.join
+    'LOG', 'G',           # logging-format: no f-strings in log calls
 ]
 ignore = [
     'N802',               # function name should be lowercase -- we require mixedCase instead
     'ISC001',             # conflicts with the formatter
     'SIM114',            # autofix loses type narrowing (R2b-B5)
     'SIM103',            # demands the last of a run of parallel guards read differently (R4-06)
+    'RET504',            # forbids a named value before `return`, which often names the result (R6-06)
     'N806',              # a constant moved into its function keeps ALL_CAPS (R3a-12)
 ]
 
@@ -31,8 +36,26 @@ docstring-quotes = 'double'
 ban-relative-imports = 'all'
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-'pydantic'.msg = 'Runtime validation belongs at one boundary gate, not in the type layer. Use a frozen dataclass.'
-'sqlalchemy.orm'.msg = 'No ORM. Use sqlite3 / SQL directly.'
+# An ORM is the wrong tool on a hot path: it re-validates at run time what the database and Python
+# both already know. It is a fine tool for a one-off healing or maintenance script, where developer
+# time matters more than per-request cost. The ban is therefore lifted per directory, below.
+'pydantic'.msg = 'Validate once at a boundary gate. Use a frozen dataclass.'
+'sqlalchemy.orm'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'sqlmodel'.msg = 'No ORM, and it is pydantic-backed. Use sqlite3 and SQL directly.'
+'peewee'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'tortoise'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'pony'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'ormar'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'piccolo'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'sqlobject'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'django.db.models'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+
+[tool.ruff.lint.per-file-ignores]
+# ORMs are allowed off the hot path. A healing script, a migration or a one-off backfill runs once
+# and is not a request handler, so developer time outweighs the runtime validation cost (R6-07).
+'**/maintenance/**' = ['TID251']
+'**/scripts/**' = ['TID251']
+'**/migrations/**' = ['TID251']
 
 [tool.ruff.lint.isort]
 lines-after-imports = 2   # R3a-09 -- isort collapses to 1 without this
@@ -41,6 +64,7 @@ lines-after-imports = 2   # R3a-09 -- isort collapses to 1 without this
 quote-style = 'single'
 
 [tool.pylint.basic]
+module-naming-style = 'snake_case'
 function-naming-style = 'camelCase'
 method-naming-style = 'camelCase'
 class-naming-style = 'PascalCase'

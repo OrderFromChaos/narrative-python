@@ -1,0 +1,6 @@
+# Pinned so a verification result is reproducible. Ruff moved [tool.ruff.lint] in 0.2, so an
+# unpinned install can change what the config means.
+ruff==0.16.3
+pylint==4.0.7
+mypy==2.3.1
+vermin==1.8.0

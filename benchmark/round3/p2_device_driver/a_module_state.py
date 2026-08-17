@@ -1,3 +1,22 @@
+"""Drive a lab instrument over a line-oriented socket protocol, with asyncio.
+
+The driver sends HELLO and expects the READY banner. It then sends STATUS every POLL_INTERVAL_S
+seconds and parses each OK reply into the latest reading. Two failed polls in a row drop the session
+and run the connect sequence again. Four failed connect attempts leave the driver FAULTED. The
+caller can read the current state and the latest reading at any point.
+
+This is one of three implementations of the same driver. This one keeps the runtime state in
+module-level variables.
+
+Running the module needs no hardware. It starts a fake instrument on loopback, drives the driver
+against it for OBSERVATION_COUNT observations, and prints the state and the latest reading each time
+on stdout. The fake drops the link partway through, so every run exercises the reconnect path. The
+program exits 1 if the driver never connected or ended FAULTED, and 0 otherwise.
+
+Usage:
+    $ python3 a_module_state.py
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -138,6 +157,15 @@ async def openSession() -> None:
 
 
 async def openStreams() -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    """Open a connection to the remembered endpoint, with a deadline.
+
+    Returns:
+        the reader and the writer of the new connection.
+
+    Raises:
+        LinkError: the instrument did not accept a connection within REPLY_TIMEOUT_S, or the
+            operating system refused the connection outright.
+    """
     # DEVICE_HOST and DEVICE_PORT are read, not written, so no `global` here. asyncio.TimeoutError
     # rather than the builtin: the two are only the same class from 3.11 on, and the floor is 3.10.
     try:
@@ -161,6 +189,15 @@ async def shutdownRequested(timeout_s: float) -> bool:
 
 
 def transitionTo(new_state: DeviceState) -> None:
+    """Move the state machine on, and refuse a move the transition table does not allow.
+
+    Args:
+        new_state: where to go. It has to be one of legalTargetsFrom() the state held now.
+
+    Raises:
+        IllegalTransitionError: no edge runs from the current state to new_state. That is always a
+            bug in the caller, never something the instrument can cause.
+    """
     global DEVICE_STATE
     if new_state not in legalTargetsFrom(DEVICE_STATE):
         LOG.error('illegal_transition', extra={'from_state': DEVICE_STATE.value, 'to_state': new_state.value})
@@ -209,6 +246,16 @@ async def pollLoop() -> None:
 
 
 async def pollOnce() -> Reading:
+    """Send one STATUS request and turn the reply into a reading.
+
+    Returns:
+        what the instrument reported, stamped with the monotonic time of the parse.
+
+    Raises:
+        LinkError: there is no open session, the request could not go out, or no reply arrived
+            before the deadline.
+        ProtocolError: the instrument answered, but not with a well-formed status line.
+    """
     # LBYL: the session is torn down before every reconnect, so no session here means a real bug.
     if READER is None or WRITER is None:
         LOG.error('poll_without_session', extra={'device_state': DEVICE_STATE.value})
@@ -305,6 +352,15 @@ async def serveInstrument(reader: asyncio.StreamReader, writer: asyncio.StreamWr
 
 
 async def sendRequest(writer: asyncio.StreamWriter, request: bytes) -> None:
+    """Send one request and wait until it has left for the instrument.
+
+    Args:
+        writer: the open session's writer.
+        request: one whole request, its trailing newline included.
+
+    Raises:
+        LinkError: the link failed while the request was going out.
+    """
     # Every request in this protocol is one line, so a write plus a drain is the whole of sending.
     try:
         writer.write(request)

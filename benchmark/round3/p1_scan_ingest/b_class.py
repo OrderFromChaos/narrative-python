@@ -1,3 +1,32 @@
+"""Ingest a directory of scanner files into a SQLite table.
+
+Each file starts with a 32-byte binary header. The program checks that header against a JSON config
+that gives the expected pixel count and the site code for every sample reference. A file that passes
+every check becomes one row and moves to archive/. A file that breaks a rule moves to quarantine/. A
+file the program cannot read stays where it is, so the next run can try it again. A scan_id already
+in the table does not insert a second row, so a rerun is safe.
+
+This is one of three implementations of the same program. This one gives one ScanIngestor object the
+database connection, the sample config and the running counts.
+
+Usage:
+    $ python3 b_class.py incoming/ samples.json
+    $ python3 b_class.py incoming/ samples.json --db scans-2026.db
+
+Input:
+    incoming/     the .scan files to read, and the parent of archive/ and quarantine/
+    samples.json  {"<sample_ref>": {"pixel_count": <int>, "site_code": "<str>"}, ...}
+
+Output:
+    one line per outcome on stdout, one row per newly ingested file in the scans table, and one
+    JSON object per event in jsonl_logs/scan_ingest.jsonl
+
+Exit codes:
+    0  every file was ingested, or carried a scan_id the table already held
+    1  the batch finished, but it rejected a file or could not read one
+    2  the config or the database stopped the batch before it started
+"""
+
 from __future__ import annotations
 
 import json
@@ -278,6 +307,20 @@ class ScanIngestor:
         return header, raw[HEADER_SIZE:]
 
     def validateHeader(self, header: ScanHeader, payload: bytes) -> SiteCode:
+        """Check the parsed header against the sample config and against the payload it arrived with.
+
+        Args:
+            header: The parsed header, checked so far only against the rules the file carries
+                itself.
+            payload: Everything after the header, whose byte sum the header's checksum must match.
+
+        Returns:
+            The site code the config gives for this sample reference.
+
+        Raises:
+            ScanRejectedError: The sample reference is missing from the config, the pixel count
+                disagrees with the config, or the recomputed checksum disagrees with the header.
+        """
         CHECKSUM_MASK = 0xFFFFFFFF
 
         entry = self.sample_config.get(header.sample_ref)
