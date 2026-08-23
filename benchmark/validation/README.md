@@ -54,3 +54,20 @@ property-based test on the rolling-mean invariant.
 
 Neither task mentions a device driver or a scan file, so P1 and P2 do not leak into them. V2
 deliberately has a pure numeric core, which is where the R2-12 answer will show up if it is real.
+
+## A known violation, kept on purpose
+
+`validation/v1_log_triage/skill.py` carries five comments citing benchmark decision ids — `Q08`,
+`Q22`, `Q23`, `Q18` and `R2-08` — in code the skill wrote as if for a user. `R7-D04-comments` and
+`R7-D04-comments-scope` forbid exactly that: a file the skill generates is user code wherever it
+sits, and an id nobody outside this repository can look up is not a comment, it is negotiation
+residue.
+
+The file is **not** edited. It is the evidence that produced the rule, and changing it to conform
+would erase the only demonstration of the defect. `SKILL.md` gains the prohibition instead.
+
+Two things worth knowing. `SKILL.md`'s own python blocks contain no such citations, so the skill
+never taught this — the agent mirrored the register of a rule document dense with them, which is why
+the prohibition has to be explicit rather than implied. And `prepare_blind.py` had already classified
+citations as telltales: its `TELLTALES` regex redacts them before rating, so `blind/1.py`,
+`blind/2.py` and `blind/3.py` carry none and `SCORES.json` was never affected.

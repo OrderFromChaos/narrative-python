@@ -8,6 +8,9 @@ description: Write or review Python in the Narrative house style — mixedCase f
 Rules cite the benchmark decision behind them (`benchmark/decisions.jsonl`). A rule with no
 citation and no linter behind it does not belong here.
 
+**This document governs one file.** When the program spans several modules or imports a third-party
+package, read `architecture.md` beside it. Do not read it for a single-file program.
+
 ## The principle everything else serves
 
 **0% of reader effort on rote diffing, 100% on design.** (R2b-P0)
@@ -117,8 +120,11 @@ class ScanHeader: ...
   `openDatabase` do not extract, even though each is nameable. A one-line helper called once is
   residue. (R2-09, R2b-E1, R2b-E2)
 
-- If extraction would need 5+ parameters, that is a **missing state dataclass**, not a reason to
-  leave the code inline. (R2b-E3)
+- If extraction would need 5+ parameters, that is a **missing owner**, not a reason to leave the
+  code inline. Find what owns the values. That owner is a **class** when the program could hold two
+  of it, and a **module** otherwise. A frozen record is the answer only when nothing has behaviour
+  over the values. If a general name for the group is hard to pick, it is not a real grouping.
+  (R7-C05-resolved, R7-C05-naming)
 
 - Always collapse duplicated-but-drifting code, even when the shared version needs a parameter. To
   localise the difference is the whole point. (R2b-E4)

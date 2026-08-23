@@ -17,12 +17,110 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
+### The schema that benchmark/README.md documents. Kept here rather than parsed out of the table,
+### because a checker that reads its rule from the document it checks proves nothing. The two are
+### compared by a human when either changes; that is cheap, and it already drifted three ways
+### without one.
+
+DECISION_FIELDS = ('id', 'dimension', 'round', 'kind', 'options', 'choice', 'strength', 'condition', 'note', 'date')
+DECISION_ROUNDS = frozenset({'1', '2', '2b', '3', '3a', '4', '5', '6', '7', 'validation'})
+DECISION_KINDS = frozenset({'control', 'gap', 'provocation', 'derived'})
+DECISION_STRENGTHS = frozenset({'strong', 'weak'})
+NULLABLE_FIELDS = frozenset({'condition', 'note', 'strength'})
+LIST_FIELDS = frozenset({'options', 'supersedes'})
+OPTIONAL_FIELDS = ('supersedes',)
+MIN_ROUND_PATH_PARTS = 2
+
+
+def schemaProblems(decisions: list[dict[str, object]]) -> list[str]:
+    """Report every decision record that does not match the schema in benchmark/README.md.
+
+    The evidence base gets the same treatment as a pyproject.toml: present and unchecked is how a
+    document becomes wrong. The `round` field held both ints and strings before this ran.
+    """
+    problems: list[str] = []
+    known = {record['id'] for record in decisions}
+
+    for record in decisions:
+        name = record.get('id', '<no id>')
+        fields = tuple(record)
+
+        if fields[: len(DECISION_FIELDS)] != DECISION_FIELDS:
+            problems.append(f'decisions.jsonl {name}: fields are {fields}, schema says {DECISION_FIELDS}')
+            continue
+
+        for extra in fields[len(DECISION_FIELDS) :]:
+            if extra not in OPTIONAL_FIELDS:
+                problems.append(f'decisions.jsonl {name}: unknown field {extra}, optional fields are {OPTIONAL_FIELDS}')
+
+        for field, value in record.items():
+            if value is None and field not in NULLABLE_FIELDS:
+                problems.append(f'decisions.jsonl {name}: {field} is null and the schema does not allow it')
+            elif field in LIST_FIELDS and not (isinstance(value, list) and all(isinstance(o, str) for o in value)):
+                problems.append(f'decisions.jsonl {name}: {field} is not a list of strings')
+            elif field not in LIST_FIELDS and value is not None and not isinstance(value, str):
+                problems.append(f'decisions.jsonl {name}: {field} is {type(value).__name__}, schema says str')
+
+        for field, allowed in (('round', DECISION_ROUNDS), ('kind', DECISION_KINDS), ('strength', DECISION_STRENGTHS)):
+            value = record[field]
+            if value is not None and value not in allowed:
+                problems.append(f'decisions.jsonl {name}: {field} is {value!r}, not one of {sorted(allowed)}')
+
+        for old in record.get('supersedes', []):
+            if old not in known:
+                problems.append(f'decisions.jsonl {name}: supersedes unknown decision {old}')
+            elif old == name:
+                problems.append(f'decisions.jsonl {name}: supersedes itself')
+
+    return problems
+
+
+def supersessions(decisions: list[dict[str, object]]) -> dict[str, str]:
+    """Map every superseded decision id to the id that replaced it.
+
+    Declared in a field rather than parsed out of the reasoning. A marker read from free prose is
+    the kind of check that silently stops matching and then reports nothing, which is the failure
+    this whole script exists to prevent.
+    """
+    replaced: dict[str, str] = {}
+    for record in decisions:
+        for old in record.get('supersedes', []):
+            replaced[old] = record['id']
+
+    return replaced
+
+
+def statesCurrentRules(relative: Path) -> bool:
+    """Report whether a document claims to describe the rules as they stand now.
+
+    The skill and the top-level README do. A round writeup does not: it records what was decided
+    then, so naming a decision that a later round replaced is the point rather than a defect.
+    """
+    return relative.parts[0] == 'skill' or str(relative) == 'README.md'
+
+
+def declarationPrefix(relative: Path) -> str:
+    """Return the decision-id prefix a round directory is allowed to name before any answer exists.
+
+    A `benchmark/round7/` document declares `R7-` ids. That is where a question is born, so it names
+    ids that `decisions.jsonl` cannot hold yet. Every other document cites, and a citation must
+    resolve. Returns an empty string for a document that only ever cites.
+    """
+    parts = relative.parts
+    if len(parts) < MIN_ROUND_PATH_PARTS or parts[0] != 'benchmark' or not parts[1].startswith('round'):
+        return ''
+
+    return f'R{parts[1].removeprefix("round")}-'
+
 
 def main() -> int:
     """Report any citation, code block or count in the docs that no longer matches its source."""
     problems: list[str] = []
 
-    decision_ids = {json.loads(line)['id'] for line in (ROOT / 'benchmark/decisions.jsonl').open()}
+    decisions = [json.loads(line) for line in (ROOT / 'benchmark/decisions.jsonl').open()]
+    problems.extend(schemaProblems(decisions))
+    decision_ids = {record['id'] for record in decisions}
+    replaced = supersessions(decisions)
     tree = ast.parse((ROOT / 'skill/checks.py').read_text())
     rule_codes: set[str] = set()
     for node in tree.body:
@@ -33,16 +131,24 @@ def main() -> int:
 
     docs = [p for p in ROOT.rglob('*.md') if '.lintenv' not in str(p)]
     cited_ids: set[str] = set()
+    declared_ids: set[str] = set()
     blocks = 0
 
     for doc in docs:
         text = doc.read_text()
         rel = doc.relative_to(ROOT)
+        own_prefix = declarationPrefix(rel)
 
         for token in re.findall(r'\b(?:Q\d{2}|R\d[a-z]?-[A-Za-z0-9]+(?:-[a-z]+)?|V-\d\d)\b', text):
+            if own_prefix and token.startswith(own_prefix):
+                declared_ids.add(token)
+                continue
+
             cited_ids.add(token)
             if token not in decision_ids:
                 problems.append(f'{rel}: cites unknown decision {token}')
+            elif token in replaced and statesCurrentRules(rel):
+                problems.append(f'{rel}: cites {token}, which {replaced[token]} superseded')
 
         for code in re.findall(r'\bNAR\d{3}\b', text):
             if code not in rule_codes:
@@ -62,6 +168,12 @@ def main() -> int:
 
     print(f'checked {len(docs)} documents, {len(cited_ids)} distinct decision citations, {blocks} python blocks')
     print(f'decisions.jsonl: {len(decision_ids)} ids;  checks.py: {len(rule_codes)} rule codes')
+
+    unanswered = sorted(declared_ids - decision_ids)
+    if unanswered:
+        # Not a problem. A question is written before it is answered, and this is the count of the
+        # gap between the two. It reaches zero when the round is recorded.
+        print(f'{len(unanswered)} question ids declared with no decision yet: {unanswered[0]} .. {unanswered[-1]}')
 
     for problem in problems:
         print(f'  PROBLEM  {problem}')

@@ -9,16 +9,17 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 105 forced choices between
+Every rule cites the decision that produced it. The decisions came from 181 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
 
-The skill is seven files in one directory.
+The skill is eight files in one directory.
 
 ```bash
 mkdir -p ~/.claude/skills/narrative
-cp skill/SKILL.md skill/tooling.md skill/GAPS.md skill/checks.py skill/verify.py \
+cp skill/SKILL.md skill/architecture.md skill/tooling.md skill/GAPS.md \
+   skill/checks.py skill/verify.py \
    skill/requirements-lock.txt \
    skill/pyproject-snippet.toml \
    ~/.claude/skills/narrative/
@@ -158,12 +159,15 @@ match and fails any file that uses no 3.10-only feature.
 | path | contents |
 |---|---|
 | `skill/` | the deliverable: `SKILL.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml` |
+| `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
 | `skill/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
-| `benchmark/decisions.jsonl` | all 105 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 181 decisions, each with its reasoning and evidence |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |
 | `benchmark/round3/` | two problems in three architectures each, style held constant |
 | `benchmark/round4/` | five comparisons that settled the reported gaps |
+| `benchmark/round5/` | two measured rule revisions: NAR005 depth, NAR008 data literals |
+| `benchmark/round7/` | 41 forced choices on architecture, plus a measured 3-variant program; all six blocks answered |
 | `validation/` | held-out tasks, three arms each: no guidance, prior style doc, skill |
 | `experiment/length/` | does the style make code longer — four tasks, two arms |
 
