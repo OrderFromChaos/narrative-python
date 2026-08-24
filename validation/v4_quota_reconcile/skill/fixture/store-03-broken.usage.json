@@ -1,0 +1,4 @@
+{
+  "host": "store-03",
+  "entries": [
+    {"path": "/srv/index/shard-d", "bytes": 1073741824, "team": "platform"},

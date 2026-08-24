@@ -1,0 +1,148 @@
+{
+  "input_dir": "fixture",
+  "teams": [
+    {
+      "team": "search",
+      "used_bytes": 1319413953331,
+      "quota_bytes": 2199023255552,
+      "overage_bytes": 0,
+      "paths": [
+        {
+          "path": "/srv/corpus/2024",
+          "bytes": 1319413953331
+        }
+      ]
+    },
+    {
+      "team": "platform",
+      "used_bytes": 590558003200,
+      "quota_bytes": 536870912000,
+      "overage_bytes": 53687091200,
+      "paths": [
+        {
+          "path": "/srv/index/shard-a",
+          "bytes": 429496729600
+        },
+        {
+          "path": "/srv/index/shard-c",
+          "bytes": 161061273600
+        }
+      ]
+    },
+    {
+      "team": "archive",
+      "used_bytes": 128849018880,
+      "quota_bytes": 107374182400,
+      "overage_bytes": 21474836480,
+      "paths": [
+        {
+          "path": "/srv/archive/cold",
+          "bytes": 128849018880
+        }
+      ]
+    },
+    {
+      "team": "media",
+      "used_bytes": 85899345920,
+      "quota_bytes": 53687091200,
+      "overage_bytes": 32212254720,
+      "paths": [
+        {
+          "path": "/srv/index/shard-b",
+          "bytes": 85899345920
+        }
+      ]
+    }
+  ],
+  "overages": [
+    {
+      "team": "platform",
+      "used_bytes": 590558003200,
+      "quota_bytes": 536870912000,
+      "overage_bytes": 53687091200,
+      "paths": [
+        {
+          "path": "/srv/index/shard-a",
+          "bytes": 429496729600
+        },
+        {
+          "path": "/srv/index/shard-c",
+          "bytes": 161061273600
+        }
+      ]
+    },
+    {
+      "team": "media",
+      "used_bytes": 85899345920,
+      "quota_bytes": 53687091200,
+      "overage_bytes": 32212254720,
+      "paths": [
+        {
+          "path": "/srv/index/shard-b",
+          "bytes": 85899345920
+        }
+      ]
+    },
+    {
+      "team": "archive",
+      "used_bytes": 128849018880,
+      "quota_bytes": 107374182400,
+      "overage_bytes": 21474836480,
+      "paths": [
+        {
+          "path": "/srv/archive/cold",
+          "bytes": 128849018880
+        }
+      ]
+    }
+  ],
+  "unattributed_bytes": 48083501056,
+  "exempt_bytes": 12884901888,
+  "reports": [
+    {
+      "source": "fixture/store-01.usage.json",
+      "format": "json",
+      "outcome": "degraded",
+      "host": "store-01",
+      "entries": 3,
+      "rejected": 1,
+      "detail": ""
+    },
+    {
+      "source": "fixture/store-02.usage.json",
+      "format": "json",
+      "outcome": "read",
+      "host": "store-02",
+      "entries": 3,
+      "rejected": 0,
+      "detail": ""
+    },
+    {
+      "source": "fixture/store-03-broken.usage.json",
+      "format": "json",
+      "outcome": "unreadable",
+      "host": null,
+      "entries": 0,
+      "rejected": 0,
+      "detail": "the file does not hold JSON"
+    },
+    {
+      "source": "fixture/store-04.usage",
+      "format": "text",
+      "outcome": "degraded",
+      "host": null,
+      "entries": 3,
+      "rejected": 2,
+      "detail": ""
+    },
+    {
+      "source": "fixture/store-05.usage",
+      "format": "text",
+      "outcome": "read",
+      "host": null,
+      "entries": 2,
+      "rejected": 0,
+      "detail": ""
+    }
+  ]
+}

@@ -1,9 +1,12 @@
 # Gaps found by writing real programs against the skill
 
+**This is a round writeup, not a rule document.** Read the rules from `skill/SKILL.md`, which is the
+only place that states them. This file ships with the benchmark and not with the skill.
+
 Agents wrote programs against `SKILL.md` and reported every place the skill was ambiguous,
 contradictory, or impossible to follow. That report found more defects than any review of the text.
 
-All six gaps are now closed. Each entry records what the agent hit and what the rule became.
+All six gaps are closed. Each entry records what the agent hit and what the rule became.
 
 ## 1. "Log at the raise site and the handle site" did not scale
 

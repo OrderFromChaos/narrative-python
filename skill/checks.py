@@ -39,7 +39,7 @@ RULES = {
     'NAR006': 'assignment shadows a module-level name -- add `global`, or rename the local',
     'NAR002': 'hasattr(self, ...) -- attributes must not be conditionally defined',
     'NAR003': f'def signature with more than {MAX_ARGS_ON_ONE_LINE} POSITIONAL args on one line',
-    'NAR004': 'no docstring on a function that raises, takes >3 parameters, or runs long',
+    'NAR004': 'docstring missing or without Raises: on a function that takes >3 parameters or runs long',
     'NAR005': f'annotation naming more than {MAX_ANNOTATION_THINGS} things: give it a name',
     'NAR007': '`and` inside `or` without parentheses -- do not make the reader apply precedence',
     'NAR009': 'module docstring missing, or runnable module without a usage example',
@@ -47,11 +47,11 @@ RULES = {
     'NAR000': 'file could not be read or parsed',
 }
 
-### Codes that existed and were withdrawn. Kept so a document may still name one -- the writeups
-### that measured a rule outlive the rule -- while `--select` and the findings never offer it.
+### Withdrawn codes. A code stays here so that a document naming it still resolves, while `--select`
+### and the findings never offer it.
 
 RETIRED = {
-    'NAR008': 'withdrawn: measured at 42% precision, 22% recall against hand-marked whitespace (R8-NAR008)',
+    'NAR008': 'withdrawn: blank lines inside a function are review judgement',
 }
 
 
@@ -74,20 +74,20 @@ def main() -> int:
         targets.extend(sorted(discoverPython(target)) if target.is_dir() else [target])
 
     findings: list[Finding] = []
-    for path in targets:
-        findings.extend(checkFile(path))
+    for checked_file in targets:
+        findings.extend(checkFile(checked_file))
     if args.select:
         findings = [f for f in findings if f.code in args.select]
 
-    for finding in sorted(findings, key=lambda f: (str(f.path), f.line)):
+    for finding in sorted(findings, key=lambda f: (str(f.checked_file), f.line)):
         print(f'{finding} -- {RULES.get(finding.code, "")}')
 
     if targets:
         # A file already reported as unreadable must not be re-read here just to size the report.
         scanned = 0
-        for path in targets:
+        for checked_file in targets:
             try:
-                scanned += len(path.read_text(encoding='utf-8').splitlines())
+                scanned += len(checked_file.read_text(encoding='utf-8').splitlines())
             except (OSError, UnicodeDecodeError):
                 continue
 
@@ -167,7 +167,6 @@ def mutatedModuleNames(func: ast.FunctionDef | ast.AsyncFunctionDef, module_vars
     name without `global`, so that case cannot go undeclared.
 
     Args:
-        func: The function to inspect.
         module_vars: Names bound by a plain assignment at module level.
 
     Returns:
@@ -249,7 +248,7 @@ def locallyBoundNames(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
     return bound
 
 
-def checkGlobalDeclarations(tree: ast.Module, path: Path) -> list[Finding]:
+def checkGlobalDeclarations(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Flag undeclared writes to module state.
 
     NAR001 is in-place mutation with no `global`, which neither ruff nor pylint reports at any
@@ -276,7 +275,7 @@ def checkGlobalDeclarations(tree: ast.Module, path: Path) -> list[Finding]:
         mutated = sorted(mutatedModuleNames(func, module_vars) - declared - shadowed)
         if mutated:
             detail = f'{func.name} mutates {", ".join(mutated)}'
-            findings.append(Finding(path, func.lineno, 'NAR001', detail))
+            findings.append(Finding(checked_file, func.lineno, 'NAR001', detail))
 
         # A bare `NAME = x` with no `global` silently creates a local that shadows module state.
         # Python accepts it; the module value never changes. Almost always a bug.
@@ -284,12 +283,12 @@ def checkGlobalDeclarations(tree: ast.Module, path: Path) -> list[Finding]:
         shadowing = sorted((rebound & module_vars) - declared)
         if shadowing:
             detail = f'{func.name} assigns {", ".join(shadowing)} without `global`'
-            findings.append(Finding(path, func.lineno, 'NAR006', detail))
+            findings.append(Finding(checked_file, func.lineno, 'NAR006', detail))
 
     return findings
 
 
-def checkHasattrSelf(tree: ast.Module, path: Path) -> list[Finding]:
+def checkHasattrSelf(tree: ast.Module, checked_file: Path) -> list[Finding]:
     findings: list[Finding] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
@@ -298,12 +297,12 @@ def checkHasattrSelf(tree: ast.Module, path: Path) -> list[Finding]:
             continue
         first = node.args[0]
         if isinstance(first, ast.Name) and first.id == 'self':
-            findings.append(Finding(path, node.lineno, 'NAR002', 'declare the attribute in __init__ instead'))
+            findings.append(Finding(checked_file, node.lineno, 'NAR002', 'declare the attribute in __init__ instead'))
 
     return findings
 
 
-def checkArgsPerLine(tree: ast.Module, path: Path) -> list[Finding]:
+def checkArgsPerLine(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Flag `def` signatures that keep more than three arguments on one line.
 
     Scoped to signatures, not calls (R2b-B1): applying it to calls costs about 19% more lines,
@@ -329,25 +328,16 @@ def checkArgsPerLine(tree: ast.Module, path: Path) -> list[Finding]:
 
         if count > MAX_ARGS_ON_ONE_LINE and end_line == node.lineno:
             detail = f'def {node.name} has {count} positional args on one line'
-            findings.append(Finding(path, node.lineno, 'NAR003', detail))
+            findings.append(Finding(checked_file, node.lineno, 'NAR003', detail))
 
     return findings
 
 
-def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str, path: Path) -> list[Finding]:
-    """Report a triggered function whose docstring omits a section its shape requires.
+def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str, checked_file: Path) -> list[Finding]:
+    """Report a function that the docstring trigger caught and whose docstring omits `Raises:`.
 
-    NAR004 used to test only that a docstring existed, so a one-line summary on a function with a
-    complex contract passed the gate while SKILL.md demanded Args, Returns and Raises. The
-    structural half of the rule was enforced by nobody (R8-D28).
-
-    Args:
-        node: The function to inspect.
-        docstring: Its docstring, already known to exist.
-        path: The file it came from.
-
-    Returns:
-        One finding naming every missing section, or nothing.
+    A docstring that exists is not a docstring that carries the contract, so the trigger and the
+    section check are two separate tests over the same function.
     """
     args = node.args
     every_arg = args.posonlyargs + args.args + args.kwonlyargs
@@ -358,26 +348,27 @@ def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str
     if arity <= MAX_ARGS_ON_ONE_LINE and body_lines <= MAX_BODY_LINES_WITHOUT_DOCSTRING:
         return []
 
-    # Raises: only. Args: and Returns: restate the signature, and demanding them is what made the
-    # old `raises` trigger cost 61 lines in a 124-line module. A raise names something no
-    # annotation carries, so it is the one section worth enforcing (R8-D28).
+    # Raises: only. An exception is the one part of the contract that no annotation carries, so
+    # Args: and Returns: are left to review: demanding them produces text that restates the
+    # signature.
     if not any(isinstance(n, ast.Raise) for n in ast.walk(node)) or 'Raises:' in docstring:
         return []
 
-    return [Finding(path, node.lineno, 'NAR004', f'{node.name}: docstring omits Raises:')]
+    return [Finding(checked_file, node.lineno, 'NAR004', f'{node.name}: docstring omits Raises:')]
 
 
-def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
+def checkDocstringThreshold(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Require a docstring wherever the contract is complex, not merely where the body is long.
 
-    A pure line threshold is gameable in the wrong direction: splitting a 21-line function into two
-    12-line ones deletes the obligation, so the rule would reward fragmentation. Contract
-    complexity does not shrink when you split a function — the pieces still raise, and still take
-    their parameters.
+    Two triggers: the function takes more than three parameters, or its body exceeds the line
+    threshold. A `raise` is not a trigger, because the style routes raise sites through a reject*()
+    helper and every two-line guard that calls one contains a `raise`.
 
-    Triggers: the function raises, or takes more than three parameters, or exceeds the line
-    threshold. Keyword-only parameters count here, unlike NAR003 — every parameter is part of the
+    Keyword-only parameters count here, unlike NAR003, because every parameter is part of the
     contract even when the caller may omit it.
+
+    A pure line threshold would be gameable in the wrong direction: splitting a 21-line function
+    into two 12-line ones deletes the obligation without simplifying either contract.
     """
     findings: list[Finding] = []
 
@@ -386,7 +377,7 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
             continue
         docstring = ast.get_docstring(node)
         if docstring is not None:
-            findings.extend(missingSections(node, docstring, path))
+            findings.extend(missingSections(node, docstring, checked_file))
             continue
 
         body_start = node.body[0].lineno
@@ -397,9 +388,6 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
         every_arg = args.posonlyargs + args.args + args.kwonlyargs
         arity = len(every_arg) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
 
-        # `raises` was a trigger and is not any more. SKILL.md routes raise sites through a
-        # reject*() helper, so the guards that call it all contain `raise` while being two lines
-        # long -- the trigger fired hardest on the functions with the simplest contracts (R8-D18).
         reasons = []
         if body_lines > MAX_BODY_LINES_WITHOUT_DOCSTRING:
             reasons.append(f'{body_lines} body lines')
@@ -407,7 +395,7 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
             reasons.append(f'{arity} parameters')
 
         if reasons:
-            findings.append(Finding(path, node.lineno, 'NAR004', f'{node.name}: {", ".join(reasons)}'))
+            findings.append(Finding(checked_file, node.lineno, 'NAR004', f'{node.name}: {", ".join(reasons)}'))
 
     return findings
 
@@ -415,36 +403,30 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
 def annotationThings(node: ast.expr) -> int:
     """Count every name an annotation carries, except the outermost one.
 
-    Depth and width were two proxies for one question, and each missed what the other saw. Depth let
-    `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` through at 2; width let
-    `tuple[dict[str, str], list[str]]` through at 2. What makes an annotation impossible to say out
-    loud is how many things it names, at any nesting (R8-D27).
+    What makes an annotation impossible to say out loud is how many things it names, at any nesting.
+    Counting names rather than depth or width catches both
+    `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]`, which is deep and narrow, and
+    `tuple[dict[str, str], list[str]]`, which is wide and shallow.
 
     The outermost name is free because it is the thing being described. `Car` costs 0, and
     `dict[str, list[tuple[float, float]]]` costs 5.
-
-    Args:
-        node: The annotation to measure.
-
-    Returns:
-        The number of names below the outermost.
     """
     names = [n for n in ast.walk(node) if isinstance(n, (ast.Name, ast.Attribute, ast.Constant))]
     return max(0, len(names) - 1)
 
 
-def checkAnnotationComplexity(tree: ast.Module, path: Path) -> list[Finding]:
+def checkAnnotationComplexity(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Flag an annotation too complex to say out loud.
 
-    Complexity arrives two ways. Depth over 2 catches `dict[str, list[tuple[float, float]]]`. Width
-    over 3 at any one level catches `tuple[a, b, c, d, e, f, g, h, i, j]`, which is one level deep
-    and still unnameable.
+    The measure is how many things the annotation names below its outermost name, at any nesting.
+    That catches `dict[str, list[tuple[float, float]]]`, which is deep and narrow, and
+    `tuple[a, b, c, d, e, f, g, h, i, j]`, which is one level deep and still unnameable.
 
     The type decides the remedy. A callable becomes a Protocol, and anything else becomes a
     dataclass.
 
     Returns:
-        One finding per annotation over either threshold.
+        One finding per annotation over the threshold, each naming its own remedy.
     """
     findings: list[Finding] = []
     for node in ast.walk(tree):
@@ -465,12 +447,13 @@ def checkAnnotationComplexity(tree: ast.Module, path: Path) -> list[Finding]:
             # The trigger says the thing is too complex to name in conversation. The type says what
             # to replace it with: a callable becomes a Protocol, anything else becomes a dataclass.
             remedy = 'a Protocol' if 'Callable' in rendered else 'a dataclass'
-            findings.append(Finding(path, annotation.lineno, 'NAR005', f'{count} things: {rendered} -> {remedy}'))
+            detail = f'{count} things: {rendered} -> {remedy}'
+            findings.append(Finding(checked_file, annotation.lineno, 'NAR005', detail))
 
     return findings
 
 
-def checkBoolOpParens(tree: ast.Module, source: str, path: Path) -> list[Finding]:
+def checkBoolOpParens(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
     """Flag an `and` group inside an `or` that is not parenthesised.
 
     `A and B or C and D` is correct, because `and` binds tighter — but recovering that costs the
@@ -514,7 +497,7 @@ def checkBoolOpParens(tree: ast.Module, source: str, path: Path) -> list[Finding
             closes = charAfter(operand.end_lineno or operand.lineno, operand.end_col_offset or 0) == ')'
             if not (opens and closes):
                 detail = f'`{ast.unparse(operand)}` needs its own parentheses'
-                findings.append(Finding(path, operand.lineno, 'NAR007', detail))
+                findings.append(Finding(checked_file, operand.lineno, 'NAR007', detail))
 
     return findings
 
@@ -529,7 +512,7 @@ def calleeName(node: ast.stmt) -> str | None:
     return func.id if isinstance(func, ast.Name) else None
 
 
-def checkModuleDocstring(tree: ast.Module, path: Path) -> list[Finding]:
+def checkModuleDocstring(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Require a module docstring, and a usage example on anything runnable.
 
     The docstring is the first thing a reader meets, before `main()`. A module that can be executed
@@ -549,18 +532,18 @@ def checkModuleDocstring(tree: ast.Module, path: Path) -> list[Finding]:
         # being ABOUT something rather than doing one thing. A runnable module is never exempt: it
         # still owes the usage example below.
         definitions = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-        exempt = (path.name == '__init__.py' and not tree.body) or (len(definitions) == 1 and not runnable)
+        exempt = (checked_file.name == '__init__.py' and not tree.body) or (len(definitions) == 1 and not runnable)
         if exempt:
             return []
 
-        return [Finding(path, 1, 'NAR009', 'module has no docstring')]
+        return [Finding(checked_file, 1, 'NAR009', 'module has no docstring')]
 
     if not runnable:
         return []
 
     shows_usage = any(line.lstrip().startswith(('$', '>>>', 'python3 ', 'python ')) for line in docstring.splitlines())
     if not shows_usage:
-        return [Finding(path, 1, 'NAR009', 'runnable module: docstring shows no example invocation')]
+        return [Finding(checked_file, 1, 'NAR009', 'runnable module: docstring shows no example invocation')]
 
     return []
 
@@ -578,9 +561,6 @@ def discoverPython(root: Path) -> list[Path]:
 
     Ruff already excludes a virtual environment. Without the same exclusion here, `checks.py .`
     reports findings from installed third-party code.
-
-    Args:
-        root: Directory to walk.
 
     Returns:
         Every `.py` file outside a skipped directory.
@@ -612,19 +592,12 @@ def reachableFunctions(tree: ast.Module) -> set[str]:
 
     A module with no `main` and no `__main__` block is a library module. Its callers live in files
     this checker never sees, so every function in it counts as reachable.
-
-    Args:
-        tree: The parsed module.
-
-    Returns:
-        Names of the functions reachable from an entry point.
     """
     defined = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
     # A module with no entry point is a library module: its callers are in other files, which this
-    # per-file checker cannot see. Seeding only from a local `main` made every function in such a
-    # module look orphaned, so a live marker in running code passed the gate -- the opposite of the
-    # direction this docstring promises, and following the split rule was what caused it (R8-D02).
+    # per-file checker cannot see. Seeding only from a local `main` would make every function in
+    # such a module look orphaned, which lets a live marker in running code pass the gate.
     entry = {name for name in defined if name == 'main'}
     runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
     if not entry and not runnable:
@@ -657,7 +630,7 @@ def enclosingFunction(tree: ast.Module, line: int) -> str | None:
     return None
 
 
-def checkFixmeReachability(tree: ast.Module, source: str, path: Path) -> list[Finding]:
+def checkFixmeReachability(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
     """Flag a FIXME sitting in code that runs.
 
     The two markers mean different things. A TODO is deferred work and never blocks. A FIXME is
@@ -679,7 +652,7 @@ def checkFixmeReachability(tree: ast.Module, source: str, path: Path) -> list[Fi
         owner = enclosingFunction(tree, number)
         if owner is None or owner in reachable:
             where = f'in {owner}' if owner else 'at module level'
-            findings.append(Finding(path, number, 'NAR010', f'FIXME {where}, which runs'))
+            findings.append(Finding(checked_file, number, 'NAR010', f'FIXME {where}, which runs'))
 
     return findings
 
@@ -689,9 +662,6 @@ def suppressedLines(source: str) -> dict[int, set[str]]:
 
     Every check here is a heuristic over syntax, so each one can be wrong. Without a suppression
     the only way to clear a false positive is to change correct code into incorrect code.
-
-    Args:
-        source: Full text of the module.
 
     Returns:
         Line number to the set of codes suppressed on that line, or `{'ALL'}` for a bare `# noqa`.
@@ -708,7 +678,7 @@ def suppressedLines(source: str) -> dict[int, set[str]]:
     return suppressed
 
 
-def checkFile(path: Path) -> list[Finding]:
+def checkFile(checked_file: Path) -> list[Finding]:
     """Run every check against one file.
 
     An unreadable file is reported like any other finding rather than aborting the run: a linter
@@ -718,27 +688,27 @@ def checkFile(path: Path) -> list[Finding]:
         Every finding for this file, or a single NAR000 if it could not be read or parsed.
     """
     try:
-        source = path.read_text(encoding='utf-8')
+        source = checked_file.read_text(encoding='utf-8')
     except OSError as exc:
-        return [Finding(path, 0, 'NAR000', f'unreadable: {exc.strerror}')]
+        return [Finding(checked_file, 0, 'NAR000', f'unreadable: {exc.strerror}')]
     except UnicodeDecodeError as exc:
-        return [Finding(path, 0, 'NAR000', f'not UTF-8: {exc.reason}')]
+        return [Finding(checked_file, 0, 'NAR000', f'not UTF-8: {exc.reason}')]
 
     try:
-        tree = ast.parse(source, filename=str(path))
+        tree = ast.parse(source, filename=str(checked_file))
     except SyntaxError as exc:
-        return [Finding(path, exc.lineno or 0, 'NAR000', f'syntax error: {exc.msg}')]
+        return [Finding(checked_file, exc.lineno or 0, 'NAR000', f'syntax error: {exc.msg}')]
 
     suppressed = suppressedLines(source)
     findings = [
-        *checkGlobalDeclarations(tree, path),
-        *checkHasattrSelf(tree, path),
-        *checkArgsPerLine(tree, path),
-        *checkDocstringThreshold(tree, path),
-        *checkAnnotationComplexity(tree, path),
-        *checkBoolOpParens(tree, source, path),
-        *checkModuleDocstring(tree, path),
-        *checkFixmeReachability(tree, source, path),
+        *checkGlobalDeclarations(tree, checked_file),
+        *checkHasattrSelf(tree, checked_file),
+        *checkArgsPerLine(tree, checked_file),
+        *checkDocstringThreshold(tree, checked_file),
+        *checkAnnotationComplexity(tree, checked_file),
+        *checkBoolOpParens(tree, source, checked_file),
+        *checkModuleDocstring(tree, checked_file),
+        *checkFixmeReachability(tree, source, checked_file),
     ]
 
     return [f for f in findings if not (suppressed.get(f.line, set()) & {f.code, 'ALL'})]
@@ -749,13 +719,13 @@ def checkFile(path: Path) -> list[Finding]:
 
 @dataclass(frozen=True)
 class Finding:
-    path: Path
+    checked_file: Path
     line: int
     code: str
     detail: str
 
     def __str__(self) -> str:
-        return f'{self.path}:{self.line}: {self.code} {self.detail}'
+        return f'{self.checked_file}:{self.line}: {self.code} {self.detail}'
 
 
 if __name__ == '__main__':

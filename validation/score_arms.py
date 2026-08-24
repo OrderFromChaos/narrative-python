@@ -1,11 +1,11 @@
-"""Score the three V3 arms with one toolchain and write the result beside them.
+"""Score the three arms of one validation task and write scores.json beside them.
 
-V3 arms are packages rather than single files, which prepare_blind.py cannot handle: it copies one
+An arm is a package rather than a single file, which prepare_blind.py cannot handle: it copies one
 file per arm and counts one file's lines. This walks a directory instead.
 
 Usage:
-    $ python3 validation/score_v3.py
-    $ python3 validation/score_v3.py --venv .lintenv
+    $ python3 validation/score_arms.py validation/v4_quota_reconcile
+    $ python3 validation/score_arms.py validation/v3_manifest_audit --venv .lintenv
 
 Exit codes:
     0  every arm scored
@@ -24,7 +24,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-TASK_DIR = ROOT / 'validation' / 'v3_manifest_audit'
 ARMS = ('base', 'skill', 'full')
 TOOLS = ('ruff', 'pylint', 'mypy', 'vermin')
 EXIT_SUCCESS = 0
@@ -33,9 +32,12 @@ EXIT_MISSING = 2
 
 def main() -> int:
     """Score every arm and write scores.json into the task directory."""
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('task_directory', type=Path, help='a validation task holding base/, skill/ and full/')
     parser.add_argument('--venv', type=Path, default=ROOT / '.lintenv')
     arguments = parser.parse_args()
+
+    task_directory = arguments.task_directory.resolve()
 
     binaries = {tool: arguments.venv / 'bin' / tool for tool in TOOLS}
     absent = [tool for tool, path in binaries.items() if not path.is_file()]
@@ -45,14 +47,14 @@ def main() -> int:
 
     scores = {}
     for arm in ARMS:
-        directory = TASK_DIR / arm
+        directory = task_directory / arm
         if not directory.is_dir():
             print(f'missing arm: {directory}', file=sys.stderr)
             return EXIT_MISSING
 
         scores[arm] = scoreArm(directory, binaries)
 
-    report = TASK_DIR / 'scores.json'
+    report = task_directory / 'scores.json'
     report.write_text(json.dumps(scores, indent=2) + '\n')
 
     width = max(len(arm) for arm in ARMS)
@@ -75,11 +77,10 @@ def scoreArm(directory: Path, binaries: dict[str, Path]) -> dict[str, object]:
     author left behind cannot change what the tools mean.
 
     Args:
-        directory: The arm to score.
-        binaries: Absolute paths to the four tools.
+        binaries: Absolute paths to the four tools, already checked to exist.
 
     Returns:
-        One row of counts.
+        One row of counts, in the order the summary table prints them.
     """
     sources = sorted(p for p in directory.rglob('*.py') if '__pycache__' not in str(p))
     scratch = directory.parent / '.scratch' / directory.name

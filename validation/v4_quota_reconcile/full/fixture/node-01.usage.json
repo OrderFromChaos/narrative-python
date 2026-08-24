@@ -1,0 +1,8 @@
+{
+  "host": "node-01",
+  "entries": [
+    {"path": "/srv/blobs", "bytes": 644245094400, "team": "platform"},
+    {"path": "/srv/index/shard-a", "bytes": 966367641600, "team": "search"},
+    {"path": "/var/log/audit/2026-08.log", "bytes": 53687091200, "team": "platform"}
+  ]
+}

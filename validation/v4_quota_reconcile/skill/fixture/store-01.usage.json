@@ -1,0 +1,9 @@
+{
+  "host": "store-01",
+  "entries": [
+    {"path": "/srv/index/shard-a", "bytes": 429496729600, "team": "platform"},
+    {"path": "/srv/index/shard-b", "bytes": 85899345920, "team": "media"},
+    {"path": "/var/log/audit/2024.log", "bytes": 10737418240, "team": "platform"},
+    {"path": "/srv/cache", "bytes": "12G", "team": "search"}
+  ]
+}

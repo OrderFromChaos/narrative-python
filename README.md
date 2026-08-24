@@ -9,12 +9,12 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 254 forced choices between
+Every rule cites the decision that produced it. The decisions came from 265 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
 
-The skill is eight files in one directory. Clone the repository first, and run every command below
+The skill is seven files in one directory. Clone the repository first, and run every command below
 from its root.
 
 ```bash
@@ -22,7 +22,7 @@ git clone git@github.com:OrderFromChaos/narrative-python.git
 cd narrative-python
 
 mkdir -p ~/.claude/skills/narrative
-cp skill/SKILL.md skill/architecture.md skill/tooling.md skill/GAPS.md \
+cp skill/SKILL.md skill/architecture.md skill/tooling.md \
    skill/checks.py skill/verify.py \
    skill/requirements-lock.txt \
    skill/pyproject-snippet.toml \
@@ -185,10 +185,10 @@ measured it still resolve. (`R8-NAR008`)
 
 | path | contents |
 |---|---|
-| `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `GAPS.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
+| `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
 | `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
-| `skill/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
-| `benchmark/decisions.jsonl` | all 254 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 265 decisions, each with its reasoning and evidence |
+| `benchmark/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |
 | `benchmark/round3/` | two problems in three architectures each, style held constant |
@@ -196,6 +196,7 @@ measured it still resolve. (`R8-NAR008`)
 | `benchmark/round5/` | two measured rule revisions: NAR005 depth, NAR008 data literals |
 | `benchmark/round7/` | 41 forced choices on architecture, plus two measured programs; all six blocks answered |
 | `benchmark/round8/` | red team: 35 defects from four fresh-context agents, and the NAR008 whitespace measurement |
+| `benchmark/round9/` | the skill read as an artifact: four defects in its own text, and V4 as the held-out test |
 | `validation/` | held-out tasks, three arms each: no guidance, prior style doc, skill |
 | `experiment/length/` | does the style make code longer — four tasks, two arms |
 

@@ -1,0 +1,8 @@
+# storage report for db02
+# this report carries two damaged lines, and the good lines still count
+
+/var/lib/postgres/base	40G
+/var/lib/postgres/wal	3500M
+/var/lib/postgres/oops-no-size
+/backup/nightly	-2G
+/mnt/scratch/restore	60G

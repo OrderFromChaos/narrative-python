@@ -1,0 +1,8 @@
+{
+  "host": "store-02",
+  "entries": [
+    {"path": "/srv/index/shard-c", "bytes": 161061273600, "team": "platform"},
+    {"path": "/srv/corpus/2024", "bytes": 1319413953331, "team": "search"},
+    {"path": "/srv/archive/cold", "bytes": 128849018880, "team": "archive"}
+  ]
+}

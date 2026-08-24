@@ -1,0 +1,9 @@
+# storage report for web01
+# path<TAB>size, sizes are powers of 1024
+
+/srv/www/assets	45G
+/srv/www/uploads	30G
+/var/log/audit	8G
+/var/log/nginx	1.5G
+/home/deploy	512M
+/etc/nginx/conf.d	4096

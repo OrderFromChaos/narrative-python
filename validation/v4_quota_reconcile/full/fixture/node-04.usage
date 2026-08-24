@@ -1,0 +1,5 @@
+# two lines of this report state no size
+/srv/apps/frontend	2T
+/srv/apps/backend
+/srv/apps/worker	12X
+/srv/apps/api	800M

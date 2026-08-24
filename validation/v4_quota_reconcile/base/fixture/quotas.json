@@ -1,0 +1,12 @@
+{
+  "team_quotas": {
+    "platform": "500G",
+    "search": "2T",
+    "media": "1T"
+  },
+  "default_quota": "100G",
+  "exempt_paths": [
+    "/var/log/audit",
+    "/mnt/scratch"
+  ]
+}

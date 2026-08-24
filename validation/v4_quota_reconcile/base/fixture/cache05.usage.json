@@ -1,0 +1,8 @@
+{
+  "host": "cache05",
+  "entries": [
+    {"path": "/var/cache/media/transcodes", "bytes": 549755813888, "team": "media"},
+    {"path": "/srv/search/shards", "bytes": 107374182400, "team": "search"},
+    {"path": "/var/cache/orphan", "bytes": 1073741824}
+  ]
+}

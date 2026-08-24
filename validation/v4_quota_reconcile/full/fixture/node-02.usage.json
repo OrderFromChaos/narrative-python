@@ -1,0 +1,10 @@
+{
+  "host": "node-02",
+  "entries": [
+    {"path": "/srv/blobs/cold", "bytes": 214748364800, "team": "platform"},
+    {"path": "/srv/index/shard-b", "bytes": 429496729600, "team": "search"},
+    {"path": "/srv/media/renders", "bytes": 161061273600, "team": "media"},
+    {"path": "/srv/media/thumbs", "bytes": 10737418240, "team": "media"},
+    {"path": "/srv/blobs/warm", "bytes": "12G", "team": "platform"}
+  ]
+}

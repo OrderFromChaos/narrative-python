@@ -155,11 +155,10 @@ def gradeProse(paths: list[Path], linter: Path) -> Result:
     dependency, so its absence is reported rather than treated as a failure.
 
     Args:
-        paths: Markdown files to check.
-        linter: The ste-lint.py to run them through.
+        linter: The ste-lint.py to run the files through.
 
     Returns:
-        One result covering every prose file.
+        One result covering every prose file, not one result per file.
     """
     if not linter.is_file():
         # Loud on purpose. A skipped prose check that reports success is a green run over
@@ -180,20 +179,17 @@ def gradeProse(paths: list[Path], linter: Path) -> Result:
     return Result('ste (prose)', True, f'{len(paths)} files clean', '')
 
 
-def missingConfigSections(config: Path) -> list[str]:
+def missingConfigSections(pyproject_path: Path) -> list[str]:
     """Name the Narrative config sections that this file does not carry.
-
-    Args:
-        config: Path to a pyproject.toml.
 
     Returns:
         Human-readable descriptions of what is absent. Empty when the config is usable.
     """
-    if not config.is_file():
-        return [f'{config} does not exist']
+    if not pyproject_path.is_file():
+        return [f'{pyproject_path} does not exist']
 
     try:
-        text = config.read_text(encoding='utf-8')
+        text = pyproject_path.read_text(encoding='utf-8')
     except (OSError, UnicodeDecodeError) as exc:
         return [f'unreadable: {exc}']
 
@@ -217,7 +213,7 @@ def resolveToolchain(venv: Path) -> Toolchain:
     rather than proceeding without it.
 
     Args:
-        venv: Directory of a virtual environment to prefer.
+        venv: Directory of a virtual environment, searched before PATH.
 
     Returns:
         The resolved absolute paths, and the names of any tool that could not be found.

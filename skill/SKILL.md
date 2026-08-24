@@ -5,10 +5,10 @@ description: Write or review Python in the Narrative house style — mixedCase f
 
 # Narrative Python
 
-Rules carry the id of the decision that produced them. Those ids resolve in `benchmark/decisions.jsonl`
-in the source repository, `github.com/OrderFromChaos/narrative-python`, which is **not installed with
-the skill**. Treat a citation as provenance, not as something to look up: every rule states its own
-reason. A rule with no id and no linter behind it does not belong here.
+Every rule states its own reason, so read the rule and not the id after it. The ids are provenance:
+they resolve in `benchmark/decisions.jsonl` in the source repository,
+`github.com/OrderFromChaos/narrative-python`, which does not ship with the skill. **A rule with no
+id and no linter behind it does not belong here.**
 
 **This document governs every file, however many there are.** Naming, layout, types, errors and
 docstrings apply to each module of a package exactly as they apply to a single-file program.
@@ -22,18 +22,15 @@ program, where none of it applies.
 
 **0% of reader effort on rote diffing, 100% on design.** (R2b-P0)
 
-Four near-identical lines that differ in one token, at a 90% per-line detection rate, give the
-reader a 0.9⁴ = 66% chance to see the difference. One parameterised call makes it 90%.
+Four near-identical lines that differ in one token make the reader compare them token by token, and
+every comparison is a chance to miss the difference. One parameterised call removes the comparison.
 
 This is the root of DRY, of one-name-for-one-thing, of consistent ordering, and of the ban on
 gratuitous variation. When two rules conflict, the rule that spares the reader diffing wins.
 
 Second principle, for representation choices: **prefer what the type checker and IDE can follow**,
-even when a looser form is more flexible.
-
-Measurement decides this, not aesthetics. A design that holds state in a `dict[str, Any]` instead
-of typed attributes cost 6 `cast()` calls and 15 dict lookups to pass `mypy --strict`. Typed
-attributes cost zero. (R3-P2-rank)
+even when a looser form is more flexible. State held in a `dict[str, Any]` needs a `cast()` or a
+key lookup at every use to pass `mypy --strict`; typed attributes need neither. (R3-P2-rank)
 
 ## File layout
 
@@ -93,32 +90,30 @@ class ScanHeader: ...
   only meaning here. Deliberately grouped short guards stay grouped, and two adjacent two-line
   `if ...: raise` checks belong together. No blank line after a docstring. (R3a-01)
 
-  **No tool checks this.** `NAR008` used to, on any statement of three or more lines that another
-  statement followed, and it was removed: measured against twelve functions stripped of every
-  internal blank line and marked up by hand, it wanted 12 blank lines where 23 belonged and agreed
-  on 5. Precision 42%, recall 22%. (`R8-NAR008`)
+  **No tool checks this. Statement length does not decide it, and no threshold on it works.**
+  Place a blank line by these five rules: (`R8-NAR008`, `R8-NAR008-rule`)
 
-  What the markup showed instead: (`R8-NAR008-rule`)
-
-  - blanks **recur into nested blocks** — one loop body took four
-  - **length is not the trigger**, in either direction
+  - a body of **8 lines or under takes no internal blanks at all**
+  - blanks **recur into nested blocks**, and one loop body can take four
   - **a multi-line statement and the statement that consumes its value are one step**, so
     `executemany` then `commit`, and a constructor then the `return` of it, stay adjacent
-  - a body of **8 lines or under takes no internal blanks at all**
-  - a blank precedes a `return` when the phase before it is unrelated, not when the value was just
-    built
+  - a blank precedes a `return` when the phase before it is unrelated, and not when the returned
+    value was just built
+  - **length is not the trigger**, in either direction: a long statement earns no blank after it,
+    and a short group of statements still earns one before the next group
 
 - **Label a long or complex block with a short comment.** (`R8-block-comments`) `# parse data`,
-  `# execute sql`, `# validate`. This is not the line comment the rule below forbids: a label names
-  a group of statements and pairs with the blank line that separates them.
+  `# execute sql`, `# validate`. A label names a group of statements and pairs with the blank line
+  that separates them, so it is not the restatement of a single line that the docstring section
+  forbids.
 
 - If a guard grows to three lines because it logs before raising, move the log call into a
   `reject*()` helper that logs and returns the exception. The guards are two lines again and group,
   and the raise-site rule still holds. (R4-05)
 
 - A `def` with >3 **positional** arguments puts each on its own line with a trailing comma, even
-  under 120 columns. **Calls are exempt**, because the same rule applied to calls costs +19% lines.
-  (R2b-B1)
+  under 120 columns. **Calls are exempt**: a signature is read once and a call site is read
+  everywhere, so the same rule applied to calls costs lines without buying clarity. (R2b-B1)
 
 - **Keyword-only parameters do not count**, so a function may carry as many as it needs. That is
   also the escape hatch at exactly four: put `*` before the optional ones and they stop counting,
@@ -171,10 +166,33 @@ class ScanHeader: ...
 
 - Spell names out. No `img_arr`, `cfg`, `idx`. (Q11)
 
-- Never restate the type in a parameter name: `config: RebinConfig`, not
-  `rebin_config: RebinConfig`. (Q11)
+- **A function name leads with a verb, and the verb's object names what the function returns.**
+  `parsePolicy`, `readManifest`, `extractPackagesFromLockfileText`, `computeDeletionCutoff`. Not
+  `policyIn`, not `cutoffFor`: a name built from a preposition points at what the function takes.
+  (R9-03)
 
-- Predicates are bare adjectives: `readyForScan`, not `isReadyForScan`. (Q12)
+- **A name stands alone**, and the module qualifier does not count toward it. A reader who has
+  never opened the module must understand the name. `requirements_lock.packagesIn` reads at the call
+  site and says nothing at the definition, and nothing stops a second module declaring a second
+  `packagesIn`. **Two functions in one package do not share a name.** (R9-03, R7-B06)
+
+  **Length is not the defect.** Where the clear name is the longer one, write the longer one.
+
+- Predicates are bare adjectives, and take no verb: `readyForScan`, not `isReadyForScan`, and
+  `belowMinimum`, not `checkBelowMinimum`. A predicate returns the answer to a question. (Q12)
+  Dunder and protocol methods are named by the language.
+
+- **Do not restate a domain type in a parameter name**: `config: RebinConfig`, not
+  `rebin_config: RebinConfig`. The type already names the thing, so the prefix adds nothing. (Q11)
+
+- **A generic type names no thing, so the parameter name must.** `Path`, `str`, `int`, `bytes`,
+  `dict` and `object` give a value's shape and never say which value it is. Write
+  `policy_json_path: Path`, not `path: Path`, and `manifest_text: str`, not `text: str`. The rule
+  above bans a redundant prefix, not an informative one.
+
+- **Restate the type where the bare name would shadow an import.** A program that imports a
+  first-party module by name burns that identifier at module scope, so the local becomes
+  `results_store: Store`. (R8-B06-Q11)
 
 - `from pathlib import Path`, not `pathlib.Path`. Avoid fully qualified names, but keep the module
   where it carries meaning (`struct.unpack`, `json.loads`, `asyncio.wait_for`). Import the class,
@@ -192,8 +210,8 @@ The latter is an implementation detail and belongs **inside** the function, stil
 function inside. A log path, an archive directory, a glob, exit codes and operator-tunable timeouts
 stay at module level. (R3a-12)
 
-*This is not lintable. The test "used by exactly one function" flags 14 of 16 constants, including
-the ones that should stay out. This is review judgement.*
+*No tool checks this, and the obvious proxy does not work: "used by exactly one function" flags
+almost every constant, including the ones that belong at module level. This is review judgement.*
 
 ## Types
 
@@ -218,10 +236,9 @@ the ones that should stay out. This is review judgement.*
   `dict[str, list[tuple[float, float]]]` names five, and above four the annotation wants a name.
   A callable becomes a `Protocol`; anything else becomes a dataclass. (`NAR005`, `R8-D27`)
 
-  Depth and width were two proxies for that one question and each missed what the other saw. Depth
-  let `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` through; width let
-  `tuple[dict[str, str], list[str]]` through. Counting names catches both, misses nothing either
-  caught, and needs one number rather than two.
+  Count names rather than nesting depth or argument width. Depth alone admits
+  `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` and width alone admits
+  `tuple[dict[str, str], list[str]]`. One number catches both.
 
   **The DB-API is the standing exception.** `sqlite3.executemany` takes a sequence per row, so
   `list[tuple[str, str, float, float, int, int]]` names seven things and has no dataclass form —
@@ -231,10 +248,10 @@ the ones that should stay out. This is review judgement.*
   The type then decides the fix. **A callable becomes a `Protocol`.** **Anything else — any kind of
   iterable — becomes a dataclass.**
 
-  The reason is comprehension and shared vocabulary, not type safety. Measured: neither
-  `tuple[float, float]` nor a `Point` dataclass makes `mypy --strict` catch swapped coordinates.
-  Only `NewType` does that, and it is a separate rule (Q15). Do not expect the dataclass to find a
-  bug. Expect it to give the thing a name.
+  The reason is comprehension and shared vocabulary, not type safety. A `Point` dataclass does not
+  make `mypy --strict` catch swapped coordinates, and neither does `tuple[float, float]`; only
+  `NewType` does, which is Q15's job. Expect the dataclass to give the thing a name, not to find a
+  bug.
 
 - Composition over inheritance, always.
 
@@ -257,13 +274,13 @@ case.** No helper, no `assert_never`. (Q18, R3a-07)
 Limitation: this works only when the match returns a value. A side-effecting `-> None` dispatch
 gets no protection. Restructure it to return something.
 
-**Keep the `match` even when a mapping looks more natural.** Measured on an ordering lookup, the
-`match` is the *only* form where mypy catches a new member. A `dict` lookup and an `IntEnum` both
-type-check clean and fail at runtime with `KeyError`.
+**Keep the `match` even when a mapping looks more natural.** The `match` is the only form where
+mypy catches a new member. A `dict` lookup and an `IntEnum` both type-check clean and fail at run
+time with `KeyError`.
 
-The performance objection does not survive measurement either. The mapping is 15% faster per call
-(119.8 vs 141.7 ns), and a function-local dict is **6.4× slower**. End-to-end, the spread between
-forms is smaller than run-to-run noise. (R4-03)
+Speed does not change this. A module-level mapping is faster than the `match` by tens of
+nanoseconds per call and a function-local dict is several times slower than either, so end to end
+the spread between the forms is smaller than run-to-run noise. (R4-03)
 
 `IntEnum` is not a substitute. It makes `json.dumps({'level': LogLevel.INFO})` silently emit `20`
 where a plain `Enum` raises `TypeError`, and its `str()` changed across releases. **`StrEnum` is
@@ -276,6 +293,19 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 - Parse untrusted input into a **frozen dataclass at one boundary gate**, then never validate
   again. The objection to Pydantic/ORMs is *pervasive runtime validation*, not a single gate.
   (Q14, Q17)
+
+- **A parsed record states only what its input carried.** Where one input format carries a field and
+  another does not, the field is optional on the shared record, and the check that reads it skips an
+  absent value. **Never substitute a plausible default**, because the program then reports a fact
+  that the file does not contain. (R9-01)
+
+  A lockfile of `name==version` lines declares no source. Give the record `source: SourceName | None`
+  and let the source check pass on `None`. Do not stamp `'pypi'` on every package: under a policy
+  that allows only `internal`, an invented source turns every line of every lockfile into a finding
+  that the manifest never justified.
+
+  This bites hardest where one shared record serves two formats, which is what `architecture.md`
+  asks for. The fix is the optional field, not a second record type.
 
 - The config enforces that **more bluntly than the rationale**. `TID251` bans the `pydantic` import
   outright, because a linter cannot see whether a model is used once at a gate or on every request.
@@ -302,14 +332,14 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   string costs a second `json.loads` downstream, makes it unaddressable by `jq`, and forces the
   reader back through `Any`. (R4-04)
 
-  This creates two traps, both verified:
+  This creates two traps:
 
   - **Never splat the remainder into an output record.** `{'source': path, **entry.extra}` lets an
     untrusted log line that carries its own `source` key **forge its provenance in your report**.
     Nest it: `{'source': path, 'extra': dict(entry.extra)}`.
 
   - `frozen=True` plus a mapping field is **not hashable**. `set(entries)` raises `TypeError` at
-    runtime with no linter warning. Fine until someone dedupes.
+    run time with no linter warning. Fine until someone dedupes.
 
 - **No ORM on a hot path.** A request handler that returns database values must not pay run-time
   validation for information the database and Python both already know. Use `sqlite3` and SQL.
@@ -340,13 +370,14 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 
 - **The raise site records the generic fact once, however you factor that.** A parser with six
   raise sites does not get six log statements. Route them through a helper that logs and returns
-  the exception, then `raise rejectLine(...) from exc`. Verified: the helper and six inline logs
-  emit byte-identical records, and the helper costs 13 fewer lines. (Q23, R4-02)
+  the exception, then `raise rejectLine(...) from exc`. The helper emits the same records as six
+  inline log calls and costs fewer lines. (Q23, R4-02)
 
 - **The handle site records what it meant here, but in a degrade-and-report loop it logs the
   aggregate, not the item.** This is the rule that matters. Per-item handle-site logging on a file
-  with 10,000 bad lines emitted **10,023 records / 3.2 MB**. To log the item at DEBUG and a
-  per-file tally at WARNING gave **24 records / 1.2 KB** with nothing lost under `--verbose`. (R4-02)
+  of 10,000 bad lines writes a record per line and megabytes of output. Log the item at DEBUG and a
+  per-file tally at WARNING: that is tens of records and kilobytes, and `--verbose` still shows
+  every item. (R4-02)
 
 - **Level follows from what an operator can act on**: a per-item failure is DEBUG, the tally is
   WARNING. An operator cannot act on line 4,812 of one file. An operator can act on "4,812 of
@@ -420,31 +451,48 @@ Required:
 `NAR009` enforces the docstring. For a module with a `__main__` block, `NAR009` also enforces the
 example.
 
-- A function gets a full structured docstring (summary, Args, Returns, Raises) when its **contract
-  is complex**: it takes more than three parameters, or exceeds 20 lines. Below both, `#` comments
-  carry the contract. (Q05, R2-03, R2-05, R5-05)
+- **A function gets a docstring when its contract is complex**: it takes more than three
+  parameters, or it exceeds 20 lines. Below both, `#` comments carry the contract. Raising is not a
+  trigger, because the style routes raise sites through a `reject*()` helper and every two-line
+  guard that calls one contains a `raise`. (Q05, R2-03, R2-05, R5-05, R8-D18-resolved)
 
-- **Raising is not a trigger.** It was, and it fired hardest on the simplest functions: the style
-  routes raise sites through a `reject*()` helper, so every two-line guard that calls one contains a
-  `raise`. Measured at +61 lines of docstring in one 124-line module, most of it restating the
-  signature. (R8-D18-resolved)
+  The trigger is contract complexity rather than length alone, which is why the parameter count sits
+  beside the line count. A bare line threshold would reward fragmentation: splitting a 21-line
+  function into two 12-line ones deletes the obligation without simplifying either contract.
 
-- Of the four sections, `NAR004` enforces **`Raises:` only**, and only on a function the trigger
-  already caught. `Args:` and `Returns:` restate what the signature says; a raise names something no
-  annotation carries. Write the other sections where they earn their place. (R8-D28-resolved)
+- **The docstring carries a summary and a `Raises:` section. It carries `Args:` and `Returns:` only
+  where they say something the signature cannot.** `NAR004` enforces `Raises:`, because an
+  exception is the one part of a contract that no annotation carries. (R8-D28-resolved)
 
-  A bare line threshold is gameable in the wrong direction. To split a 21-line function into two
-  12-line ones would delete the obligation, so the rule would reward fragmentation. Contract
-  complexity does not shrink when you split: the pieces still raise, and they still take their
-  parameters.
+  Write `Returns:` for an ordering, a nullability, a unit, or a count whose meaning is not obvious:
+  `The number of rows this call added, which is 0 on a repeat run.` Do not write `The parsed policy`
+  above `-> Policy`. Write an `Args:` entry for a parameter the body does not consume in the obvious
+  way: `manifest: Where the text came from, for the rejection message.` Do not write
+  `path: The file to read.`
+
+  A section that duplicates the module docstring is worse than an absent one. A `main()` whose
+  module docstring already lists the exit codes does not list them again.
 
 - A docstring must not assert anything the code does not do, and must not state a consequence it
   already implied. (Q05)
 
+- **A docstring says what the code does. It does not say why the code is shaped the way this style
+  guide requires.** `Two audits can hold two databases at once` is behaviour and belongs.
+  `so this is a class and not a module` argues with the style guide and does not. The reader wants
+  the program explained, not the rulebook. (R9-02)
+
+- **A docstring describes its own file.** Do not assert what another module does, do not claim to be
+  the only place something happens, and do not count callers. `nothing outside this module imports
+  sqlite3` and `this is the one place that builds it` are claims that no tool checks and that the
+  next commit falsifies. Name another module only where a reader of *this* file needs the name in
+  order to use this file. (R9-02)
+
 - Where semantics vary by implementation (file moves, copies, path manipulation), **show a
   concrete before/after example**, not prose. (R3a-11)
 
-- Comments carry the why, the tribal knowledge, the link to the source. Never restate the line.
+- **Comments carry why the program behaves this way**: the tribal knowledge, the constraint from
+  outside, the link to the source. Never restate the line, and never explain why the file conforms
+  to a rule in this document. (R9-02)
 
 - **`TODO:` marks deferred work.** It never blocks a merge.
 
@@ -459,9 +507,8 @@ example.
   than let a running `FIXME` through.
 
   **A module with no `main` and no `__main__` block is a library module**, and every function in it
-  counts as reachable, because its callers sit in files this per-file checker never sees. Without
-  that, splitting a program was what switched the check off: a helper called only from
-  `__main__.py` looked orphaned in its own file and a live marker passed the gate. (R8-D02)
+  counts as reachable, because its callers sit in files that this per-file checker never sees.
+  (R8-D02)
 
 ## Logging
 
@@ -471,20 +518,18 @@ message is a queryable key. (Q08)
 **JSONL output is for a service, not for every script. Decide by who reads the logs.** (R5-03,
 R8-D23-resolved) A collector that queries them wants JSONL; a person at a terminal does not.
 
-The line-count argument that used to justify this is dropped. It compared a hand-rolled
-`JsonlFormatter` against a field formatter, and both numbers have already moved once. The
-hand-rolling is temporary in any case: JSONL logging belongs in an importable library that every
-program shares, and then it costs one import.
+Decide by the reader, not by the line count of either formatter. JSONL logging belongs in an
+importable library that every program shares, and then it costs one import.
 
 - **A service, or any program whose logs someone collects**: JSONL, from a shared module. In a
   monorepo each program imports it and never re-pastes it. That is what makes it worth having.
 
-- **A single-file tool run by hand**: a 9-line formatter that renders the fields.
+- **A single-file tool run by hand**: the short field formatter below.
 
 **Do not use `basicConfig(format='%(levelname)s %(message)s')`.** The standard formatter discards
 everything in `extra`. `LOG.warning('merge.rejected', extra={'rejected': 4812, 'total': 10000})`
-then prints `WARNING merge.rejected`, and the operator never sees the number the tally rule exists
-to give them. A cold-start reader followed both rules as written and shipped worse logs than an
+then prints `WARNING merge.rejected`, and the operator never sees the number that the tally rule
+exists to give them. Follow the event-name rule with that formatter and the logs are worse than an
 f-string. (R5-09)
 
 ```python
@@ -501,8 +546,7 @@ class FieldFormatter(logging.Formatter):
 ```
 
 That prints `WARNING merge.rejected funcName=merge lineno=88 module=loader rejected=4812
-total=10000`, in 9 lines against the 21 that the
-JSONL formatter costs.
+total=10000`, which is the tally an operator acts on and the location that finds the call site.
 
 ## Configuration
 
@@ -532,13 +576,13 @@ asyncio is the default for I/O-bound work. (R2-04)
   stateful property test may be opt-in rather than run in CI. (R2-12)
 
 - **Test functions are `testSomethingDescriptive`**, in camelCase with a `test` prefix. The
-  conventional `test_parse_header_roundtrips` fails the `mixedCase` gate this style mandates.
-  The camelCase spelling passes pylint, *and* the pytest default `python_functions = test*` still
-  collects it. Both verified.
+  conventional `test_parse_header_roundtrips` fails the `mixedCase` gate this style mandates. The
+  camelCase spelling passes pylint, *and* the pytest default `python_functions = test*` still
+  collects it.
 
 - Tests live in their own module, not in the program file. A `from hypothesis import given` at
-  module scope makes the program unable to start without the test library installed. Verified: the
-  program raises `ModuleNotFoundError` before it reaches `main()`.
+  module scope makes the program raise `ModuleNotFoundError` before it reaches `main()` on any
+  machine without the test library.
 
   Where a single file is genuinely required, put the tests behind `### tests` before the
   `### vocabulary` divider and import hypothesis lazily.
@@ -547,22 +591,18 @@ asyncio is the default for I/O-bound work. (R2-04)
 
 `ruff` targets `py311`. Check with `vermin -t=3.11- --violations`. (R7-E07-floor)
 
-The floor moved from 3.10 for two reasons, and the second is the stronger. `asyncio.TaskGroup` is the
-right tool for supervising several long-lived tasks and hand-rolling its cancellation is what fails
-silently — and **3.10 reaches end of life in October 2026**, which is sufficient on its own.
+**3.10 reaches end of life in October 2026.** `asyncio.TaskGroup` also arrives at 3.11, and it is
+the right tool for supervising several long-lived tasks; hand-rolling its cancellation is what
+fails silently.
 
 - `datetime.UTC`, `typing.assert_never`, `enum.StrEnum`, `asyncio.TaskGroup`, `asyncio.timeout()`,
   `typing.Self` and `tomllib` are all available. No workaround is needed for any of them.
 
-- **`typing.assert_never` being available does not change the dispatch rule.** Omitting `case _` is
-  still the only form where mypy reports a new member; verified. Keep omitting it. (Q18, R3a-07)
+- **`except TimeoutError` is correct** around `asyncio.wait_for`. At 3.11 `asyncio.TimeoutError`
+  *is* the builtin, so the two are one class. (R3a-06)
 
-- **`except TimeoutError` is now correct** around `asyncio.wait_for`. At 3.11 `asyncio.TimeoutError`
-  *is* the builtin, so the two are one class and the old warning no longer applies. Verified.
-  (R3a-06, superseded)
-
-- Not yet available, so still out: anything added in 3.12 or later, including the `type` statement
-  and PEP 695 generics.
+- Not available, so out: anything added in 3.12 or later, including the `type` statement and
+  PEP 695 generics.
 
 ## Avoid the usual traps
 
@@ -580,9 +620,8 @@ Give it any path. It sorts Python files from prose and runs the right checks on 
 has to decide a workflow at run time. There is one command, not a sequence to remember.
 
 It resolves every tool to an absolute path and exits 2 if one is missing or if `pyproject.toml` is
-absent. A hand-rolled loop counts findings by grepping tool output, so a missing binary or a
-missing config produces empty output and reads as a pass. That mistake has happened twice in this
-project.
+absent. **Do not replace it with a loop that greps tool output for findings**: a missing binary or a
+missing config then produces empty output, which reads as a pass.
 
 It runs, in the order that converges: `ruff check --fix`, `ruff format`, `pylint`, `mypy --strict`,
 `checks.py`, `vermin`.

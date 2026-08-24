@@ -1,0 +1,5 @@
+{
+  "host": "edge04",
+  "entries": [
+    {"path": "/srv/edge/cache", "bytes": 4294967296, "team": "platform"},
+    {"path": "/srv/edge/tls", "bytes": 10485

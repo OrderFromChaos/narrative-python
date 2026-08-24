@@ -1,0 +1,6 @@
+# node-03 reports no owning team, so these bytes belong to no team
+/srv/scratch/tmp	4096
+/srv/scratch/build	12K
+
+/srv/scratch/cache	1.5G
+/var/log/audit/2026-07.log	800M

@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent
 ### without one.
 
 DECISION_FIELDS = ('id', 'dimension', 'round', 'kind', 'options', 'choice', 'strength', 'condition', 'note', 'date')
-DECISION_ROUNDS = frozenset({'1', '2', '2b', '3', '3a', '4', '5', '6', '7', '8', 'validation'})
+DECISION_ROUNDS = frozenset({'1', '2', '2b', '3', '3a', '4', '5', '6', '7', '8', '9', 'validation'})
 DECISION_KINDS = frozenset({'control', 'gap', 'provocation', 'derived'})
 DECISION_STRENGTHS = frozenset({'strong', 'weak'})
 NULLABLE_FIELDS = frozenset({'condition', 'note', 'strength'})
@@ -81,11 +81,8 @@ def supersededBy(record: dict[str, object]) -> list[str]:
     The record type is dict[str, object] because the schema holds strings, lists and nulls, so the
     optional field needs narrowing before it can be walked.
 
-    Args:
-        record: One decision.
-
     Returns:
-        The superseded ids, or nothing.
+        The superseded ids, in the order the record lists them. Empty when the field is absent.
     """
     value = record.get('supersedes')
     if not isinstance(value, list):
@@ -162,7 +159,7 @@ def main() -> int:
         rel = doc.relative_to(ROOT)
         own_prefix = declarationPrefix(rel)
 
-        for token in re.findall(r'\b(?:Q\d{2}|R\d[a-z]?-[A-Za-z0-9]+(?:-[a-z]+)?|V-\d\d)\b', text):
+        for token in re.findall(r'\b(?:Q\d{2}|R\d[a-z]?-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*|V-\d\d)\b', text):
             if own_prefix and token.startswith(own_prefix):
                 declared_ids.add(token)
                 continue

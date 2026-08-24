@@ -1,0 +1,7 @@
+# store-04 runs the text agent, which does not know team names
+
+/srv/scratch/build	42G
+/srv/scratch/tmp	800M
+/var/log/audit/old.log	2G
+/srv/scratch/broken	notasize
+this line carries no tab
