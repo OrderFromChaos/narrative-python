@@ -16,6 +16,8 @@ Exit codes:
     1  at least one finding
 """
 
+from __future__ import annotations
+
 import argparse
 import ast
 import re
@@ -53,18 +55,46 @@ RETIRED = {
 }
 
 
-@dataclass(frozen=True)
-class Finding:
-    path: Path
-    line: int
-    code: str
-    detail: str
-
-    def __str__(self) -> str:
-        return f'{self.path}:{self.line}: {self.code} {self.detail}'
-
-
 TYPE_FACTORY_CALLS = frozenset({'NewType', 'TypeVar', 'ParamSpec', 'TypeVarTuple', 'NamedTuple', 'TypedDict'})
+
+
+def main() -> int:
+    """Check every file named on the command line and print the findings.
+
+    Returns:
+        1 if anything was found, 0 otherwise, so this can gate a commit.
+    """
+    parser = argparse.ArgumentParser(description='Style checks that ruff, pylint and mypy do not implement.')
+    parser.add_argument('paths', nargs='+', type=Path)
+    parser.add_argument('--select', action='append', choices=sorted(RULES), help='only report these rules')
+    args = parser.parse_args()
+
+    targets: list[Path] = []
+    for target in args.paths:
+        targets.extend(sorted(discoverPython(target)) if target.is_dir() else [target])
+
+    findings: list[Finding] = []
+    for path in targets:
+        findings.extend(checkFile(path))
+    if args.select:
+        findings = [f for f in findings if f.code in args.select]
+
+    for finding in sorted(findings, key=lambda f: (str(f.path), f.line)):
+        print(f'{finding} -- {RULES.get(finding.code, "")}')
+
+    if targets:
+        # A file already reported as unreadable must not be re-read here just to size the report.
+        scanned = 0
+        for path in targets:
+            try:
+                scanned += len(path.read_text(encoding='utf-8').splitlines())
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        rate = len(findings) / max(scanned, 1) * 100
+        print(f'\n{len(findings)} findings over {len(targets)} files ({rate:.2f} per 100 lines)')
+
+    return 1 if findings else 0
 
 
 def bindsAType(value: ast.expr) -> bool:
@@ -714,43 +744,18 @@ def checkFile(path: Path) -> list[Finding]:
     return [f for f in findings if not (suppressed.get(f.line, set()) & {f.code, 'ALL'})]
 
 
-def main() -> int:
-    """Check every file named on the command line and print the findings.
+### vocabulary #########################################################################
 
-    Returns:
-        1 if anything was found, 0 otherwise, so this can gate a commit.
-    """
-    parser = argparse.ArgumentParser(description='Style checks that ruff, pylint and mypy do not implement.')
-    parser.add_argument('paths', nargs='+', type=Path)
-    parser.add_argument('--select', action='append', choices=sorted(RULES), help='only report these rules')
-    args = parser.parse_args()
 
-    targets: list[Path] = []
-    for target in args.paths:
-        targets.extend(sorted(discoverPython(target)) if target.is_dir() else [target])
+@dataclass(frozen=True)
+class Finding:
+    path: Path
+    line: int
+    code: str
+    detail: str
 
-    findings: list[Finding] = []
-    for path in targets:
-        findings.extend(checkFile(path))
-    if args.select:
-        findings = [f for f in findings if f.code in args.select]
-
-    for finding in sorted(findings, key=lambda f: (str(f.path), f.line)):
-        print(f'{finding} -- {RULES.get(finding.code, "")}')
-
-    if targets:
-        # A file already reported as unreadable must not be re-read here just to size the report.
-        scanned = 0
-        for path in targets:
-            try:
-                scanned += len(path.read_text(encoding='utf-8').splitlines())
-            except (OSError, UnicodeDecodeError):
-                continue
-
-        rate = len(findings) / max(scanned, 1) * 100
-        print(f'\n{len(findings)} findings over {len(targets)} files ({rate:.2f} per 100 lines)')
-
-    return 1 if findings else 0
+    def __str__(self) -> str:
+        return f'{self.path}:{self.line}: {self.code} {self.detail}'
 
 
 if __name__ == '__main__':

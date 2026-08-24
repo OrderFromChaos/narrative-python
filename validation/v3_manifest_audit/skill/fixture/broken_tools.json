@@ -1,0 +1,3 @@
+{
+  "packages": [
+    {"name": "black", "version": "24.1.0", "source": "pypi"},

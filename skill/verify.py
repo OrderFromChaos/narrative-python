@@ -34,7 +34,7 @@ from pathlib import Path
 
 
 TOOLS = ('ruff', 'pylint', 'mypy', 'vermin')
-PYTHON_FLOOR = '3.10'
+PYTHON_FLOOR = '3.11'
 STE_LINT_DEFAULT = Path.home() / '.claude/skills/ste-writing/ste-lint.py'
 MAX_STE_PER_100_WORDS = 2.5
 SKIPPED = frozenset({'.venv', 'venv', '.lintenv', '.git', 'build', 'dist', '__pycache__'})
@@ -197,7 +197,7 @@ def missingConfigSections(config: Path) -> list[str]:
     except (OSError, UnicodeDecodeError) as exc:
         return [f'unreadable: {exc}']
 
-    # Matched by text rather than parsed. `tomllib` is 3.11+, and this style targets 3.10, so the
+    # Matched by text rather than parsed. The floor is now 3.11 so `tomllib` is available, and this
     # tool that enforces the floor must not itself break it.
     required = (
         (r'\[tool\.ruff\]', '[tool.ruff]'),

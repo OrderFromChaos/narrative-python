@@ -23,7 +23,7 @@ Run order matters: `ruff check --fix`, then `ruff format`, then `pylint`, `mypy`
 
 **`pyproject-snippet.toml` is the config.** This document does not reproduce it, because a second
 copy drifts. This one already drifted: it omitted `N806`, `lines-after-imports` and `variable-rgx`,
-and it still said `py313` after the floor moved to 3.10. Read the file.
+and it still said `py313` after the floor moved. Read the file.
 
 What follows explains *why* each non-obvious setting is there.
 

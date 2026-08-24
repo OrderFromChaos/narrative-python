@@ -1,0 +1,10 @@
+{
+  "banned": ["leftpad", "eventstream", "colours"],
+  "minimum_versions": {
+    "requests": "2.31.0",
+    "flask": "3.0.0",
+    "urllib3": "2.0.0",
+    "lodash": "4.17.21"
+  },
+  "allowed_sources": ["pypi", "internal"]
+}

@@ -106,7 +106,10 @@ measure directly: cut on the axis the expected changes land in more cleanly.
 **Naming a concept and crossing a boundary are one test.** (`R7-B04`) A helper that leaves the
 package must be findable by someone who did not write it, which forces it to name a concept. A
 checksum earns `checksum.py`. A byte formatter and a batcher that never leave can share one module.
-*No program tests the claim that the two tests never disagree.*
+
+**The two tests do disagree, and the claim that they never would is refuted.** (`R8-D39`) A version
+comparator can name a concept cleanly and still be imported by one module and never cross anything.
+When they disagree, no order between them is settled: treat it as a question, not a rule.
 
 **Shared code inside one system starts as one `common.py`, scoped to that system's directory.**
 (`R7-A05-growth`) Split it when it grows: definitions first, then implementation. This is never a
@@ -287,18 +290,14 @@ What a tool *can* check, once built: import cycles, a cross-module import of an 
 name, an `__all__` naming an undefined name, and a handle type in a signature outside its owning
 module.
 
-## Pending, and not yet in force
+## Nothing is pending
 
-Recorded, measured where possible, **not shipped**. Do not follow these yet.
+Every change this document once listed as recorded-but-not-shipped is now in force: the `NAR009`
+exemptions for an empty `__init__.py` and a single-def module (`R7-B01-init`, `R7-B10-scope`), the
+field formatter emitting `module`, `lineno` and `funcName` (`R7-E02-fields`), `per-file-ignores`
+emptied so a lint exception is declared in the module that needs it (`R7-D04-generalised`), and the
+Python floor at 3.11 (`R7-E07-floor`).
 
-- `NAR009` exempting a module with exactly one def (`R7-B10`, `R7-B10-scope`) and exempting an empty
-  `__init__.py` (`R7-B01-init`).
-
-- `per-file-ignores` emptying, with every lint exception declared in its own file.
-  (`R7-D04-generalised`)
-
-- The field formatter emitting `module`, `lineno` and `funcName`, at 9 lines against 7.
-  (`R7-E02-fields`)
-
-- The Python floor moving to 3.11. (`R7-E07-floor`) `SKILL.md` still documents 3.10 and its
-  workarounds, and that is still what the toolchain enforces.
+One thing named above is **not built**: the project-wide checker for import cycles, cross-module
+underscore imports, `__all__` consistency and handle containment. Those rules are review judgement
+until it exists.

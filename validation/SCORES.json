@@ -5,7 +5,7 @@
     "format_clean": false,
     "pylint": 0,
     "mypy": 0,
-    "checks": 21,
+    "checks": 8,
     "min_python": "3.7"
   },
   "v1_log_triage/skill": {
@@ -14,16 +14,16 @@
     "format_clean": true,
     "pylint": 0,
     "mypy": 0,
-    "checks": 0,
+    "checks": 1,
     "min_python": "3.10"
   },
   "v1_log_triage/base": {
     "lines": 656,
-    "ruff": 186,
+    "ruff": 185,
     "format_clean": false,
     "pylint": 12,
     "mypy": 23,
-    "checks": 19,
+    "checks": 2,
     "min_python": "3.10"
   },
   "v2_drift_checker/skill": {
@@ -32,16 +32,16 @@
     "format_clean": true,
     "pylint": 0,
     "mypy": 0,
-    "checks": 0,
+    "checks": 1,
     "min_python": "3.10"
   },
   "v2_drift_checker/doc": {
-    "lines": 337,
+    "lines": 336,
     "ruff": 10,
     "format_clean": false,
     "pylint": 0,
     "mypy": 0,
-    "checks": 11,
+    "checks": 5,
     "min_python": "3.7"
   },
   "v2_drift_checker/base": {
@@ -50,7 +50,7 @@
     "format_clean": false,
     "pylint": 39,
     "mypy": 0,
-    "checks": 22,
+    "checks": 7,
     "min_python": "3.10"
   }
 }

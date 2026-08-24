@@ -1,0 +1,11 @@
+{
+  "packages": [
+    {"name": "lodash", "version": "4.17.21", "source": "internal"},
+    {"name": "eventstream", "version": "3.3.6", "source": "npm-mirror"},
+    {"name": "colours", "version": "1.4.0", "source": "pypi"},
+    {"name": "requests", "version": "2.31.0", "source": "pypi"},
+    {"name": "internal-telemetry", "version": "0.4.2", "source": "internal"},
+    {"name": "flask", "version": "nightly", "source": "pypi"},
+    {"name": "urllib3", "version": "1.26.18"}
+  ]
+}

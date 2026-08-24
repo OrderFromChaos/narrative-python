@@ -9,7 +9,7 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 239 forced choices between
+Every rule cites the decision that produced it. The decisions came from 254 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
@@ -39,7 +39,7 @@ earlier version keeps its old rules with no warning. `git pull && cp ...` is the
 ### The custom checker needs nothing
 
 `checks.py` imports only `argparse`, `ast`, `dataclasses`, `pathlib`, `re` and `sys`. Run it with any
-`python3` at 3.10 or later. No virtual environment, no install.
+`python3` at 3.11 or later. No virtual environment, no install.
 
 ```bash
 python3 ~/.claude/skills/narrative/checks.py src/
@@ -48,10 +48,11 @@ python3 ~/.claude/skills/narrative/checks.py src/ --select NAR001 --select NAR00
 
 ### The external toolchain needs `uv`
 
-Four tools do the work `checks.py` does not. Install them into a project-local environment:
+Four tools do the work `checks.py` does not, plus one library they need. Install them into a
+project-local environment:
 
 ```bash
-uv venv .lintenv --python 3.10
+uv venv .lintenv --python 3.11
 uv pip install --python .lintenv/bin/python -r ~/.claude/skills/narrative/requirements-lock.txt
 echo '.lintenv/' >> .gitignore
 ```
@@ -64,7 +65,8 @@ your code against a different standard library than the floor this style targets
 | `ruff` | 0.16.3 | formatting, imports, annotations, bugbear, quotes, banned APIs |
 | `pylint` | 4.0.7 | `mixedCase` function names — **no other linter can require this** |
 | `mypy` | 2.3.1 | type correctness under `--strict` |
-| `vermin` | 1.8.0 | the Python 3.10 floor |
+| `vermin` | 1.8.0 | the Python 3.11 floor |
+| `hypothesis` | 6.165.10 | not a linter. The style mandates property tests, and `mypy --strict` needs its stubs |
 
 The versions are pinned in `requirements-lock.txt`. An unpinned install can change what the config
 means, because ruff moved `[tool.ruff.lint]` in 0.2.
@@ -112,10 +114,10 @@ identifiers.
 
 ### Python version
 
-Write for **3.10**. `ruff` targets `py310` and `vermin` checks it. Two things this rules out, both
-cheap to avoid: `datetime.UTC` (use `datetime.timezone.utc`) and `typing.assert_never` (omit the
-fallback arm instead, see `SKILL.md`). Also unavailable: `enum.StrEnum`, `asyncio.TaskGroup`,
-`asyncio.timeout()`, `typing.Self`, `tomllib`.
+Write for **3.11**. `ruff` targets `py311` and `vermin` checks it. The floor moved from 3.10 because
+`asyncio.TaskGroup` is the right tool for supervising several long-lived tasks, and because 3.10
+reaches end of life in October 2026. `datetime.UTC`, `typing.assert_never`, `enum.StrEnum`,
+`asyncio.TaskGroup`, `asyncio.timeout()`, `typing.Self` and `tomllib` are all available. (`R7-E07-floor`)
 
 ## Verify
 
@@ -153,8 +155,8 @@ It runs the tools in the order that converges: `ruff check --fix`, `ruff format`
 | 1 | at least one tool reported a finding |
 | 2 | the toolchain or the config is missing, so nothing was checked |
 
-The `vermin` call uses `-t=3.10-` with a trailing hyphen. Without it `vermin` asserts an exact
-match and fails any file that uses no 3.10-only feature.
+The `vermin` call uses `-t=3.11-` with a trailing hyphen. Without it `vermin` asserts an exact
+match and fails any file that uses no 3.11-only feature.
 
 ## The nine custom rules
 
@@ -174,7 +176,10 @@ match and fails any file that uses no 3.10-only feature.
 
 `NAR000` is not a style rule. It reports a file that could not be read or parsed.
 
-`NAR008` was withdrawn. It asked for a blank line after any statement of three or more lines, and measured at 42% precision and 22% recall against hand-marked whitespace, so the rule it stood for is now review judgement. `checks.py` keeps the code in a `RETIRED` registry so the writeups that measured it still resolve. (`R8-NAR008`)
+`NAR008` was withdrawn. It asked for a blank line after any statement of three or more lines, and
+measured at 42% precision and 22% recall against hand-marked whitespace, so the rule it stood for is
+now review judgement. `checks.py` keeps the code in a `RETIRED` registry so the writeups that
+measured it still resolve. (`R8-NAR008`)
 
 ## What is in this repository
 
@@ -183,7 +188,7 @@ match and fails any file that uses no 3.10-only feature.
 | `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `GAPS.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
 | `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
 | `skill/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
-| `benchmark/decisions.jsonl` | all 239 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 254 decisions, each with its reasoning and evidence |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |
 | `benchmark/round3/` | two problems in three architectures each, style held constant |
@@ -198,10 +203,30 @@ match and fails any file that uses no 3.10-only feature.
 
 Ready for real work. Two things are worth knowing before you rely on it.
 
-**The blind validation is not finished.** Six implementations exist across two held-out tasks, but
-the reported line counts compromised the blinding. The counts went out before the rating, which
-makes each arm identifiable. No one judged the comparison that matters: skill against the prior
-style doc.
+**The blind validation was never done.** Six implementations exist across two held-out tasks and
+`RATING.md` is still an empty form. Nobody judged the comparison that matters, skill against the
+prior style doc, so the project has no answer to its own stated bar. The reported line counts had
+already compromised the blinding by going out before any rating.
+
+**The mechanical scores were wrong, and are now regenerated.** `SCORES.json` recorded `checks: 0`
+for an arm that has a finding, and a line count that was off by one — both wrong when written,
+confirmed against the checker as shipped at the time (`R8-D36`). It also recorded `mypy: 0` for an
+arm that needs `hypothesis`, which was not in `requirements-lock.txt`, so the toolchain could not
+check code the style mandates (`R8-F05`). Current numbers, all six arms, one checker:
+
+| | lines | ruff | pylint | mypy | checks |
+|---|---|---|---|---|---|
+| v1 skill | 497 | **0** | 0 | 0 | **1** |
+| v1 doc | 534 | 4 | 0 | 0 | 8 |
+| v1 base | 656 | 185 | 12 | 23 | 2 |
+| v2 skill | 513 | 2 | 0 | 0 | **1** |
+| v2 doc | 336 | 10 | 0 | 0 | 5 |
+| v2 base | 758 | 230 | 39 | 0 | 7 |
+
+The skill arm wins on `checks` and on `ruff` in both tasks. **One ordering inverted**: on `v1`
+`checks`, base now scores better than doc, because most of what the doc arm was penalised for was
+`NAR008`, which has since been withdrawn. Read the whole table as measuring today's checker, not the
+one that produced the original numbers.
 
 **Does the style make code longer?** Measured over four tasks against unguided Claude. Both arms
 got identical instructions and neither was asked for tests.

@@ -1,0 +1,8 @@
+{
+  "packages": [
+    {"name": "requests", "version": "2.31.0", "source": "pypi"},
+    {"name": "eventstream", "version": "3.3.6", "source": "pypi"},
+    {"name": "telemetry-client", "version": "0.9.0", "source": "vendor-cdn"},
+    {"name": "shared-schemas", "version": "1.4.2", "source": "internal"}
+  ]
+}

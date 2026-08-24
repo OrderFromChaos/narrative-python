@@ -1,0 +1,71 @@
+{
+  "manifest_directory": "fixture",
+  "findings_stored": 4,
+  "findings": [
+    {
+      "manifest": "fixture/frontend.json",
+      "package": "eventstream",
+      "version": "3.3.6",
+      "violation": "banned",
+      "detail": "the policy bans this package"
+    },
+    {
+      "manifest": "fixture/frontend.json",
+      "package": "telemetry-client",
+      "version": "0.9.0",
+      "violation": "disallowed_source",
+      "detail": "source vendor-cdn is not one of internal, pypi"
+    },
+    {
+      "manifest": "fixture/service.lock",
+      "package": "requests",
+      "version": "2.28.1",
+      "violation": "below_minimum",
+      "detail": "below the minimum 2.31.0"
+    },
+    {
+      "manifest": "fixture/service.lock",
+      "package": "leftpad",
+      "version": "1.0.0",
+      "violation": "banned",
+      "detail": "the policy bans this package"
+    }
+  ],
+  "manifests": [
+    {
+      "manifest": "fixture/README.txt",
+      "format": null,
+      "packages_read": 0,
+      "findings": 0,
+      "error": "fixture/README.txt: unrecognised format for suffix '.txt'"
+    },
+    {
+      "manifest": "fixture/broken.json",
+      "format": null,
+      "packages_read": 0,
+      "findings": 0,
+      "error": "fixture/broken.json: package 0 needs a string name, version and source"
+    },
+    {
+      "manifest": "fixture/frontend.json",
+      "format": "packages_json",
+      "packages_read": 4,
+      "findings": 2,
+      "error": null
+    },
+    {
+      "manifest": "fixture/legacy.lock",
+      "format": null,
+      "packages_read": 0,
+      "findings": 0,
+      "error": "fixture/legacy.lock: line 1 is not name==version: 'requests 2.31.0'"
+    },
+    {
+      "manifest": "fixture/service.lock",
+      "format": "requirements_lock",
+      "packages_read": 4,
+      "findings": 2,
+      "error": null
+    }
+  ]
+}

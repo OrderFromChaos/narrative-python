@@ -82,3 +82,29 @@ This is the table `README.md` Status cites as the project's main quantitative cl
 skill arm at 0 checker findings against the doc arm at 11. One cell of it does not reproduce, and the
 other cells were not re-verified. **Regenerate the whole table with `prepare_blind.py` before citing
 it again.**
+
+## V3 — the multi-module task, rated openly
+
+`validation/v3_manifest_audit/` is the first held-out task that spans several modules. Round 7 and
+round 8 produced roughly 130 rules about multi-module structure and no held-out task exercised any
+of them.
+
+**The arms are not v1's arms.** v1 and v2 compared no-guidance against the prior style doc against
+the skill. That prior doc is not in this repository and the question is stale. V3 compares:
+
+| arm | context |
+|---|---|
+| `base` | the task alone |
+| `skill` | `SKILL.md` and the config, with **`architecture.md` withheld** |
+| `full` | the same plus `architecture.md` |
+
+`skill` against `full` is the comparison that matters: does `architecture.md` earn its context
+budget on a program that spans files.
+
+**Blinding is dropped, deliberately.** The directory tree identifies the arm before a line is read,
+and normalising the layout would destroy what is being measured. That is a real limitation on the
+result, stated up front rather than discovered afterwards as it was for v1.
+
+**The mechanical scores cannot decide it.** Every rule `architecture.md` adds is one no tool checks,
+so `skill` and `full` should score alike. If they do, the entire case for `architecture.md` rests on
+the human rating in `v3_manifest_audit/RATING.md`.

@@ -1,0 +1,5 @@
+{
+  "banned": ["leftpad", "eventstream"],
+  "minimum_versions": {"requests": "2.31.0", "urllib3": "2.0.0"},
+  "allowed_sources": ["pypi", "internal"]
+}

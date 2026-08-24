@@ -1,0 +1,4 @@
+# A lock file that the reader rejects: the second line has a range, not a pin.
+six==1.16.0
+numpy>=1.26
+pandas==2.2.0

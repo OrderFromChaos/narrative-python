@@ -1,0 +1,5 @@
+# Batch worker. Every package here meets the policy, except the pre-release,
+# which sorts below the 3.0.0 minimum for flask.
+requests==2.31.0
+flask==3.0.0rc2
+urllib3==2.2.1

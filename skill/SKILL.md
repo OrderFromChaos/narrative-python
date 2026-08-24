@@ -266,7 +266,10 @@ The performance objection does not survive measurement either. The mapping is 15
 forms is smaller than run-to-run noise. (R4-03)
 
 `IntEnum` is not a substitute. It makes `json.dumps({'level': LogLevel.INFO})` silently emit `20`
-where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.12. (R4-03)
+where a plain `Enum` raises `TypeError`, and its `str()` changed across releases. **`StrEnum` is
+available at the 3.11 floor and is not a substitute either**, for the same reason: it serialises
+silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum` and the exhaustive
+`match`. (R4-03, R7-E07-floor)
 
 ## Data at boundaries
 
@@ -312,9 +315,11 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
   validation for information the database and Python both already know. Use `sqlite3` and SQL.
   (Q17, R6-03)
 - **An ORM is a fine tool off the hot path.** A healing script, a migration or a one-off backfill
-  runs once, so developer time outweighs per-request cost. The config lifts the ban under
-  `maintenance/`, `scripts/` and `migrations/`. Add your own directory to `per-file-ignores` if you
-  keep such work elsewhere. (R6-07)
+  runs once, so developer time outweighs per-request cost. **The module that needs the exception
+  declares it**, with a file-level `# ruff: noqa: TID251`. There is no `per-file-ignores` list: an
+  exception is a property of the module, not of a glob that drifts from the tree it describes.
+  Conformance owes no explanation, so the suppression stands bare. (R6-07, R7-D04,
+  R7-D04-generalised)
 
 ## Errors
 
@@ -538,19 +543,26 @@ asyncio is the default for I/O-bound work. (R2-04)
   Where a single file is genuinely required, put the tests behind `### tests` before the
   `### vocabulary` divider and import hypothesis lazily.
 
-## Python 3.10 floor
+## Python 3.11 floor
 
-`ruff` targets `py310`. Check with `vermin -t=3.10- --violations`.
+`ruff` targets `py311`. Check with `vermin -t=3.11- --violations`. (R7-E07-floor)
 
-- `datetime.UTC` is 3.11+ → `datetime.timezone.utc`.
-- `typing.assert_never` is 3.11+ → not needed. Omit the fallback arm instead (above).
+The floor moved from 3.10 for two reasons, and the second is the stronger. `asyncio.TaskGroup` is the
+right tool for supervising several long-lived tasks and hand-rolling its cancellation is what fails
+silently — and **3.10 reaches end of life in October 2026**, which is sufficient on its own.
 
-- **`except asyncio.TimeoutError`, never the builtin `TimeoutError`**, around `asyncio.wait_for`.
-  On 3.10 they are different classes and the builtin handler catches nothing. Verified on 3.10.18.
-  `vermin` does **not** catch this. (R3a-06)
+- `datetime.UTC`, `typing.assert_never`, `enum.StrEnum`, `asyncio.TaskGroup`, `asyncio.timeout()`,
+  `typing.Self` and `tomllib` are all available. No workaround is needed for any of them.
 
-- Also unavailable: `enum.StrEnum`, `asyncio.TaskGroup`, `asyncio.timeout()`, `typing.Self`,
-  `tomllib` (use `tomli`). `match`, `X | Y` and `dataclass(slots=True)` are fine.
+- **`typing.assert_never` being available does not change the dispatch rule.** Omitting `case _` is
+  still the only form where mypy reports a new member; verified. Keep omitting it. (Q18, R3a-07)
+
+- **`except TimeoutError` is now correct** around `asyncio.wait_for`. At 3.11 `asyncio.TimeoutError`
+  *is* the builtin, so the two are one class and the old warning no longer applies. Verified.
+  (R3a-06, superseded)
+
+- Not yet available, so still out: anything added in 3.12 or later, including the `type` statement
+  and PEP 695 generics.
 
 ## Avoid the usual traps
 

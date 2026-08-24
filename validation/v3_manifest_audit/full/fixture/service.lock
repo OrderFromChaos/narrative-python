@@ -1,0 +1,6 @@
+# pinned by the release job on 2026-08-01
+requests==2.28.1
+leftpad==1.0.0
+
+urllib3==2.2.1   # transitive, kept for the pin
+certifi==2024.7.4
