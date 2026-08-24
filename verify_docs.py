@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent
 ### without one.
 
 DECISION_FIELDS = ('id', 'dimension', 'round', 'kind', 'options', 'choice', 'strength', 'condition', 'note', 'date')
-DECISION_ROUNDS = frozenset({'1', '2', '2b', '3', '3a', '4', '5', '6', '7', 'validation'})
+DECISION_ROUNDS = frozenset({'1', '2', '2b', '3', '3a', '4', '5', '6', '7', '8', 'validation'})
 DECISION_KINDS = frozenset({'control', 'gap', 'provocation', 'derived'})
 DECISION_STRENGTHS = frozenset({'strong', 'weak'})
 NULLABLE_FIELDS = frozenset({'condition', 'note', 'strength'})
@@ -66,13 +66,32 @@ def schemaProblems(decisions: list[dict[str, object]]) -> list[str]:
             if value is not None and value not in allowed:
                 problems.append(f'decisions.jsonl {name}: {field} is {value!r}, not one of {sorted(allowed)}')
 
-        for old in record.get('supersedes', []):
+        for old in supersededBy(record):
             if old not in known:
                 problems.append(f'decisions.jsonl {name}: supersedes unknown decision {old}')
             elif old == name:
                 problems.append(f'decisions.jsonl {name}: supersedes itself')
 
     return problems
+
+
+def supersededBy(record: dict[str, object]) -> list[str]:
+    """Return the ids a decision replaces.
+
+    The record type is dict[str, object] because the schema holds strings, lists and nulls, so the
+    optional field needs narrowing before it can be walked.
+
+    Args:
+        record: One decision.
+
+    Returns:
+        The superseded ids, or nothing.
+    """
+    value = record.get('supersedes')
+    if not isinstance(value, list):
+        return []
+
+    return [str(item) for item in value]
 
 
 def supersessions(decisions: list[dict[str, object]]) -> dict[str, str]:
@@ -84,8 +103,8 @@ def supersessions(decisions: list[dict[str, object]]) -> dict[str, str]:
     """
     replaced: dict[str, str] = {}
     for record in decisions:
-        for old in record.get('supersedes', []):
-            replaced[old] = record['id']
+        for old in supersededBy(record):
+            replaced[old] = str(record['id'])
 
     return replaced
 
@@ -122,12 +141,16 @@ def main() -> int:
     decision_ids = {record['id'] for record in decisions}
     replaced = supersessions(decisions)
     tree = ast.parse((ROOT / 'skill/checks.py').read_text())
-    rule_codes: set[str] = set()
+    registries: dict[str, set[str]] = {'RULES': set(), 'RETIRED': set()}
     for node in tree.body:
-        if not isinstance(node, ast.Assign) or getattr(node.targets[0], 'id', '') != 'RULES':
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
             continue
-        if isinstance(node.value, ast.Dict):
-            rule_codes = {k.value for k in node.value.keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+        name = getattr(node.targets[0], 'id', '')
+        if name in registries:
+            keys = node.value.keys
+            registries[name] = {k.value for k in keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
+
+    rule_codes, retired = registries['RULES'], registries['RETIRED']
 
     docs = [p for p in ROOT.rglob('*.md') if '.lintenv' not in str(p)]
     cited_ids: set[str] = set()
@@ -151,7 +174,7 @@ def main() -> int:
                 problems.append(f'{rel}: cites {token}, which {replaced[token]} superseded')
 
         for code in re.findall(r'\bNAR\d{3}\b', text):
-            if code not in rule_codes:
+            if code not in rule_codes | retired:
                 problems.append(f'{rel}: references unknown rule {code}')
 
         for block in re.findall(r'```python\n(.*?)```', text, re.S):
@@ -167,7 +190,7 @@ def main() -> int:
         problems.append(f'README claims {claimed.group(1)} decisions, decisions.jsonl has {len(decision_ids)}')
 
     print(f'checked {len(docs)} documents, {len(cited_ids)} distinct decision citations, {blocks} python blocks')
-    print(f'decisions.jsonl: {len(decision_ids)} ids;  checks.py: {len(rule_codes)} rule codes')
+    print(f'decisions.jsonl: {len(decision_ids)} ids;  checks.py: {len(rule_codes)} rule codes, {len(retired)} retired')
 
     unanswered = sorted(declared_ids - decision_ids)
     if unanswered:

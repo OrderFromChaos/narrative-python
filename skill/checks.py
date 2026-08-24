@@ -1,7 +1,7 @@
 """Report Narrative style violations that ruff, pylint and mypy do not implement.
 
 Each rule is one check. NAR001 and NAR006 cover module state. NAR002 covers class attributes.
-NAR003 and NAR008 cover layout. NAR004 and NAR009 cover documentation. NAR005 covers annotation
+NAR003 covers layout. NAR004 and NAR009 cover documentation. NAR005 covers annotation
 complexity. NAR007 covers boolean grouping. NAR010 covers FIXME reachability.
 
 See tooling.md for what the other tools own.
@@ -30,9 +30,7 @@ from pathlib import Path
 
 MAX_BODY_LINES_WITHOUT_DOCSTRING = 20
 MAX_ARGS_ON_ONE_LINE = 3
-MAX_ANNOTATION_DEPTH = 2
-MAX_ANNOTATION_WIDTH = 3
-MIN_LINES_BEFORE_BLANK = 3
+MAX_ANNOTATION_THINGS = 4
 
 RULES = {
     'NAR001': 'module-level object mutated in a function without a `global` declaration',
@@ -40,12 +38,18 @@ RULES = {
     'NAR002': 'hasattr(self, ...) -- attributes must not be conditionally defined',
     'NAR003': f'def signature with more than {MAX_ARGS_ON_ONE_LINE} POSITIONAL args on one line',
     'NAR004': 'no docstring on a function that raises, takes >3 parameters, or runs long',
-    'NAR005': f'annotation deeper than {MAX_ANNOTATION_DEPTH} or wider than {MAX_ANNOTATION_WIDTH}: give it a name',
+    'NAR005': f'annotation naming more than {MAX_ANNOTATION_THINGS} things: give it a name',
     'NAR007': '`and` inside `or` without parentheses -- do not make the reader apply precedence',
-    'NAR008': f'no blank line after a statement spanning {MIN_LINES_BEFORE_BLANK}+ lines',
     'NAR009': 'module docstring missing, or runnable module without a usage example',
     'NAR010': 'FIXME in reachable code -- a merge blocker, not a danger sign',
     'NAR000': 'file could not be read or parsed',
+}
+
+### Codes that existed and were withdrawn. Kept so a document may still name one -- the writeups
+### that measured a rule outlive the rule -- while `--select` and the findings never offer it.
+
+RETIRED = {
+    'NAR008': 'withdrawn: measured at 42% precision, 22% recall against hand-marked whitespace (R8-NAR008)',
 }
 
 
@@ -300,6 +304,39 @@ def checkArgsPerLine(tree: ast.Module, path: Path) -> list[Finding]:
     return findings
 
 
+def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str, path: Path) -> list[Finding]:
+    """Report a triggered function whose docstring omits a section its shape requires.
+
+    NAR004 used to test only that a docstring existed, so a one-line summary on a function with a
+    complex contract passed the gate while SKILL.md demanded Args, Returns and Raises. The
+    structural half of the rule was enforced by nobody (R8-D28).
+
+    Args:
+        node: The function to inspect.
+        docstring: Its docstring, already known to exist.
+        path: The file it came from.
+
+    Returns:
+        One finding naming every missing section, or nothing.
+    """
+    args = node.args
+    every_arg = args.posonlyargs + args.args + args.kwonlyargs
+    arity = len(every_arg) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
+    body_end = max((getattr(n, 'end_lineno', None) or 0) for n in ast.walk(node))
+    body_lines = body_end - node.body[0].lineno + 1
+
+    if arity <= MAX_ARGS_ON_ONE_LINE and body_lines <= MAX_BODY_LINES_WITHOUT_DOCSTRING:
+        return []
+
+    # Raises: only. Args: and Returns: restate the signature, and demanding them is what made the
+    # old `raises` trigger cost 61 lines in a 124-line module. A raise names something no
+    # annotation carries, so it is the one section worth enforcing (R8-D28).
+    if not any(isinstance(n, ast.Raise) for n in ast.walk(node)) or 'Raises:' in docstring:
+        return []
+
+    return [Finding(path, node.lineno, 'NAR004', f'{node.name}: docstring omits Raises:')]
+
+
 def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
     """Require a docstring wherever the contract is complex, not merely where the body is long.
 
@@ -317,7 +354,9 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if ast.get_docstring(node) is not None:
+        docstring = ast.get_docstring(node)
+        if docstring is not None:
+            findings.extend(missingSections(node, docstring, path))
             continue
 
         body_start = node.body[0].lineno
@@ -327,15 +366,15 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
         args = node.args
         every_arg = args.posonlyargs + args.args + args.kwonlyargs
         arity = len(every_arg) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
-        raises = any(isinstance(n, ast.Raise) for n in ast.walk(node))
 
+        # `raises` was a trigger and is not any more. SKILL.md routes raise sites through a
+        # reject*() helper, so the guards that call it all contain `raise` while being two lines
+        # long -- the trigger fired hardest on the functions with the simplest contracts (R8-D18).
         reasons = []
         if body_lines > MAX_BODY_LINES_WITHOUT_DOCSTRING:
             reasons.append(f'{body_lines} body lines')
         if arity > MAX_ARGS_ON_ONE_LINE:
             reasons.append(f'{arity} parameters')
-        if raises:
-            reasons.append('raises')
 
         if reasons:
             findings.append(Finding(path, node.lineno, 'NAR004', f'{node.name}: {", ".join(reasons)}'))
@@ -343,48 +382,28 @@ def checkDocstringThreshold(tree: ast.Module, path: Path) -> list[Finding]:
     return findings
 
 
-def annotationDepth(node: ast.expr) -> int:
-    """Measure how deeply an annotation nests.
+def annotationThings(node: ast.expr) -> int:
+    """Count every name an annotation carries, except the outermost one.
 
-    Walks `ast.List` without charging a level, because a callable's parameter list is a list rather
-    than a subscript. Without that clause the same type is flagged as a parameter and invisible
-    inside `Callable[[...], None]`, so the rule depended on where the type appeared.
-    """
-    if isinstance(node, ast.Subscript):
-        inner = node.slice
-        parts = inner.elts if isinstance(inner, ast.Tuple) else [inner]
-        return 1 + max((annotationDepth(p) for p in parts), default=0)
+    Depth and width were two proxies for one question, and each missed what the other saw. Depth let
+    `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` through at 2; width let
+    `tuple[dict[str, str], list[str]]` through at 2. What makes an annotation impossible to say out
+    loud is how many things it names, at any nesting (R8-D27).
 
-    if isinstance(node, ast.List):
-        return max((annotationDepth(p) for p in node.elts), default=0)
-
-    return 0
-
-
-def annotationWidth(node: ast.expr) -> int:
-    """Measure the most elements an annotation carries at any one level.
-
-    Depth is not the only measure of complexity. `tuple[a, b, c, d, e, f, g, h, i, j]` is one level
-    deep and still wants a name. Walks `ast.List` too, so a callable's parameter list counts.
+    The outermost name is free because it is the thing being described. `Car` costs 0, and
+    `dict[str, list[tuple[float, float]]]` costs 5.
 
     Args:
         node: The annotation to measure.
 
     Returns:
-        The largest element count found at any single level.
+        The number of names below the outermost.
     """
-    if isinstance(node, ast.Subscript):
-        inner = node.slice
-        parts = inner.elts if isinstance(inner, ast.Tuple) else [inner]
-    elif isinstance(node, ast.List):
-        parts = node.elts
-    else:
-        return 0
-
-    return max([len(parts), *(annotationWidth(part) for part in parts)])
+    names = [n for n in ast.walk(node) if isinstance(n, (ast.Name, ast.Attribute, ast.Constant))]
+    return max(0, len(names) - 1)
 
 
-def checkAnnotationDepth(tree: ast.Module, path: Path) -> list[Finding]:
+def checkAnnotationComplexity(tree: ast.Module, path: Path) -> list[Finding]:
     """Flag an annotation too complex to say out loud.
 
     Complexity arrives two ways. Depth over 2 catches `dict[str, list[tuple[float, float]]]`. Width
@@ -408,17 +427,15 @@ def checkAnnotationDepth(tree: ast.Module, path: Path) -> list[Finding]:
             annotations = [node.annotation]
 
         for annotation in annotations:
-            depth = annotationDepth(annotation)
-            width = annotationWidth(annotation)
-            if depth <= MAX_ANNOTATION_DEPTH and width <= MAX_ANNOTATION_WIDTH:
+            count = annotationThings(annotation)
+            if count <= MAX_ANNOTATION_THINGS:
                 continue
 
             rendered = ast.unparse(annotation)
             # The trigger says the thing is too complex to name in conversation. The type says what
             # to replace it with: a callable becomes a Protocol, anything else becomes a dataclass.
             remedy = 'a Protocol' if 'Callable' in rendered else 'a dataclass'
-            measure = f'depth {depth}' if depth > MAX_ANNOTATION_DEPTH else f'width {width}'
-            findings.append(Finding(path, annotation.lineno, 'NAR005', f'{measure}: {rendered} -> {remedy}'))
+            findings.append(Finding(path, annotation.lineno, 'NAR005', f'{count} things: {rendered} -> {remedy}'))
 
     return findings
 
@@ -472,41 +489,6 @@ def checkBoolOpParens(tree: ast.Module, source: str, path: Path) -> list[Finding
     return findings
 
 
-def checkBlankLineBlocks(tree: ast.Module, path: Path) -> list[Finding]:
-    """Flag a multi-line statement butted directly against the next statement.
-
-    Blank lines inside a function separate logically self-contained blocks, and in this style that
-    is their only meaning. The rule is deliberately conservative — it fires only after a statement
-    of three or more lines, so deliberately grouped one- and two-line guards stay grouped.
-
-    A docstring is exempt: it is not a block of logic, and the first real statement follows it
-    directly.
-    """
-    findings: list[Finding] = []
-
-    for parent in ast.walk(tree):
-        for field in ('body', 'orelse', 'finalbody'):
-            block = getattr(parent, field, None)
-            if not isinstance(block, list):
-                continue
-
-            for first, second in zip(block, block[1:], strict=False):
-                span = (first.end_lineno or first.lineno) - first.lineno + 1
-                touching = second.lineno == (first.end_lineno or first.lineno) + 1
-                is_docstring = (
-                    block.index(first) == 0
-                    and isinstance(first, ast.Expr)
-                    and isinstance(first.value, ast.Constant)
-                    and isinstance(first.value.value, str)
-                )
-
-                if span >= MIN_LINES_BEFORE_BLANK and touching and not (is_docstring or sameCallee(first, second)):
-                    detail = f'{span}-line statement is followed immediately by another'
-                    findings.append(Finding(path, second.lineno, 'NAR008', detail))
-
-    return findings
-
-
 def calleeName(node: ast.stmt) -> str | None:
     if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
         return None
@@ -515,14 +497,6 @@ def calleeName(node: ast.stmt) -> str | None:
     if isinstance(func, ast.Attribute):
         return func.attr
     return func.id if isinstance(func, ast.Name) else None
-
-
-def sameCallee(first: ast.stmt, second: ast.stmt) -> bool:
-    # Repeated calls to one callee are a group by construction -- a run of `parser.add_argument(...)`
-    # is one block however long any single call wraps to. Splitting it would break exactly the
-    # grouping this rule exists to protect.
-    name = calleeName(first)
-    return name is not None and name == calleeName(second)
 
 
 def checkModuleDocstring(tree: ast.Module, path: Path) -> list[Finding]:
@@ -536,11 +510,20 @@ def checkModuleDocstring(tree: ast.Module, path: Path) -> list[Finding]:
         One finding for a missing docstring, or one for a runnable module whose docstring shows no
         example invocation.
     """
+    runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
+
     docstring = ast.get_docstring(tree)
     if docstring is None:
-        return [Finding(path, 1, 'NAR009', 'module has no docstring')]
+        # A package marker has nothing to describe (R7-B01-init), and a module holding one function
+        # is described by that function (R7-B10-scope). The second def is where a module starts
+        # being ABOUT something rather than doing one thing. A runnable module is never exempt: it
+        # still owes the usage example below.
+        definitions = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        exempt = (path.name == '__init__.py' and not tree.body) or (len(definitions) == 1 and not runnable)
+        if exempt:
+            return []
 
-    runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
+        return [Finding(path, 1, 'NAR009', 'module has no docstring')]
 
     if not runnable:
         return []
@@ -597,6 +580,9 @@ def reachableFunctions(tree: ast.Module) -> set[str]:
     node. That over-approximates reachability, which is the safe direction: NAR010 would rather
     call an orphan reachable than let a live FIXME through.
 
+    A module with no `main` and no `__main__` block is a library module. Its callers live in files
+    this checker never sees, so every function in it counts as reachable.
+
     Args:
         tree: The parsed module.
 
@@ -605,7 +591,16 @@ def reachableFunctions(tree: ast.Module) -> set[str]:
     """
     defined = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
-    frontier = {name for name in defined if name == 'main'}
+    # A module with no entry point is a library module: its callers are in other files, which this
+    # per-file checker cannot see. Seeding only from a local `main` made every function in such a
+    # module look orphaned, so a live marker in running code passed the gate -- the opposite of the
+    # direction this docstring promises, and following the split rule was what caused it (R8-D02).
+    entry = {name for name in defined if name == 'main'}
+    runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
+    if not entry and not runnable:
+        return set(defined)
+
+    frontier = set(entry)
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             frontier |= calledNames(node) & set(defined)
@@ -710,9 +705,8 @@ def checkFile(path: Path) -> list[Finding]:
         *checkHasattrSelf(tree, path),
         *checkArgsPerLine(tree, path),
         *checkDocstringThreshold(tree, path),
-        *checkAnnotationDepth(tree, path),
+        *checkAnnotationComplexity(tree, path),
         *checkBoolOpParens(tree, source, path),
-        *checkBlankLineBlocks(tree, path),
         *checkModuleDocstring(tree, path),
         *checkFixmeReachability(tree, source, path),
     ]

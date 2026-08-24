@@ -18,6 +18,7 @@ round4/                  five comparisons that settled the reported gaps
 round5/                  two measured rule revisions: NAR005 depth, NAR008 data literals
 round7/questions.md      41 forced-choice architecture snippets, blind
 round7/key.md            what each probes; do not read before answering
+round8/                  red team: 35 defects from four fresh-context agents, plus the NAR008 measurement
 validation/              two held-out tasks for the blind skill-vs-doc comparison
 decisions.jsonl          the evidence base, one answer per line
 ```
@@ -57,6 +58,13 @@ produces material a later reader must see to judge the answer.
    absent: it is the shape rounds 1 to 6 already cover, and the shape that hides every question this
    round asks. Stage 2 builds real multi-module programs only where stage 1 leaves an answer open.
 
+8. **Round 8** — red team. Four agents with no access to the design conversation: one built a
+   multi-module service against the skill, one read it hostilely for contradictions, one installed it
+   from the README on a simulated fresh machine, and one reviewed a program with eight planted
+   defects. 35 defects recorded as `R8-D01` to `R8-D35`. Separately, twelve functions were stripped
+   of every internal blank line and marked up by hand, which measured `NAR008` at 42% precision and
+   22% recall and removed it.
+
 ## decisions.jsonl schema
 
 One object per line. Every rule in `skill/SKILL.md` must cite an `id` from this file. A rule
@@ -66,7 +74,7 @@ with no `id` and no linter behind it does not ship.
 |---|---|---|
 | `id` | str | `Q07`, `R2-03`, `R3-P1-rank`, `R5-06`, `V-03` |
 | `dimension` | str | dotted, e.g. `errors.chaining` |
-| `round` | str | `1`, `2`, `2b`, `3`, `3a`, `4`, `5`, `6`, `7`, `validation` |
+| `round` | str | `1`, `2`, `2b`, `3`, `3a`, `4`, `5`, `6`, `7`, `8`, `validation` |
 | `kind` | str | `control` \| `gap` \| `provocation` \| `derived` |
 | `options` | list[str] | short labels in the order presented |
 | `choice` | str | chosen label, or `depends` |

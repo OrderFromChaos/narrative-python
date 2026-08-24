@@ -9,14 +9,18 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 181 forced choices between
+Every rule cites the decision that produced it. The decisions came from 239 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
 
-The skill is eight files in one directory.
+The skill is eight files in one directory. Clone the repository first, and run every command below
+from its root.
 
 ```bash
+git clone git@github.com:OrderFromChaos/narrative-python.git
+cd narrative-python
+
 mkdir -p ~/.claude/skills/narrative
 cp skill/SKILL.md skill/architecture.md skill/tooling.md skill/GAPS.md \
    skill/checks.py skill/verify.py \
@@ -27,11 +31,14 @@ cp skill/SKILL.md skill/architecture.md skill/tooling.md skill/GAPS.md \
 
 Invoke it as `/narrative`, or let Claude load it when a task involves Python in this style.
 
+**To update, run the same `cp` again.** Nothing detects a stale install, and a skill installed at an
+earlier version keeps its old rules with no warning. `git pull && cp ...` is the whole procedure.
+
 ## Dependencies
 
 ### The custom checker needs nothing
 
-`checks.py` imports only `argparse`, `ast`, `dataclasses`, `pathlib` and `sys`. Run it with any
+`checks.py` imports only `argparse`, `ast`, `dataclasses`, `pathlib`, `re` and `sys`. Run it with any
 `python3` at 3.10 or later. No virtual environment, no install.
 
 ```bash
@@ -44,10 +51,13 @@ python3 ~/.claude/skills/narrative/checks.py src/ --select NAR001 --select NAR00
 Four tools do the work `checks.py` does not. Install them into a project-local environment:
 
 ```bash
-uv venv .lintenv
+uv venv .lintenv --python 3.10
 uv pip install --python .lintenv/bin/python -r ~/.claude/skills/narrative/requirements-lock.txt
 echo '.lintenv/' >> .gitignore
 ```
+
+**Pin the interpreter.** Without `--python`, `uv` picks whatever it finds, and `mypy` then types
+your code against a different standard library than the floor this style targets.
 
 | tool | pinned version | what it owns |
 |---|---|---|
@@ -59,9 +69,15 @@ echo '.lintenv/' >> .gitignore
 The versions are pinned in `requirements-lock.txt`. An unpinned install can change what the config
 means, because ruff moved `[tool.ruff.lint]` in 0.2.
 
-Copy `pyproject-snippet.toml` into the `pyproject.toml` of your project. The settings are not
-defaults and several are load-bearing. `tooling.md` records why each one is there and what breaks
-without it.
+**Merge** `pyproject-snippet.toml` into your project's `pyproject.toml`. If the project has none,
+copy the file and rename it:
+
+```bash
+cp ~/.claude/skills/narrative/pyproject-snippet.toml pyproject.toml   # new project
+```
+
+The settings are not defaults and several are load-bearing. `tooling.md` records why each one is
+there and what breaks without it.
 
 ### Simplified Technical English, for prose only
 
@@ -87,6 +103,10 @@ python3 ~/.claude/skills/ste-writing/ste-lint.py --strict RUNBOOK.md
 This is a **soft dependency**. Without it the rule still stands and `NAR009` still enforces that the
 docstring exists. Only the wording guidance is absent.
 
+`verify.py` looks for it at that path and takes `--ste-lint <path>` if you keep it elsewhere. When it
+is missing, the run reports `SKIPPED, prose was not checked` and still exits 0. Read that row: a
+skipped check is not a clean one.
+
 STE governs docstrings, comments and READMEs. It never governs code, and it never governs
 identifiers.
 
@@ -105,6 +125,7 @@ Run `verify.py`. Do not call the tools by hand.
 cd your-project                                          # both defaults are relative
 python3 ~/.claude/skills/narrative/verify.py .           # rewrites files: runs --fix and format
 python3 ~/.claude/skills/narrative/verify.py . --no-fix  # reports only, changes nothing
+python3 ~/.claude/skills/narrative/verify.py . --ste-lint path/to/ste-lint.py
 ```
 
 One command covers the project. It sorts Python files from prose, runs the six code checks on the
@@ -135,7 +156,7 @@ It runs the tools in the order that converges: `ruff check --fix`, `ruff format`
 The `vermin` call uses `-t=3.10-` with a trailing hyphen. Without it `vermin` asserts an exact
 match and fails any file that uses no 3.10-only feature.
 
-## The ten custom rules
+## The nine custom rules
 
 `checks.py` implements what no off-the-shelf tool does.
 
@@ -144,30 +165,32 @@ match and fails any file that uses no 3.10-only feature.
 | `NAR001` | module state mutated with no `global` — **ruff and pylint report nothing on this at any setting** |
 | `NAR002` | `hasattr(self, ...)`, meaning an attribute is conditionally defined |
 | `NAR003` | more than three *positional* arguments on one `def` line |
-| `NAR004` | no docstring where the contract is complex: raises, >3 parameters, or long |
-| `NAR005` | an annotation deeper than 2 or wider than 3: a callable needs a `Protocol`, anything else a dataclass |
+| `NAR004` | no docstring where the contract is complex: >3 parameters or long; and a missing `Raises:` on one that raises |
+| `NAR005` | an annotation naming more than four things below the outermost: a callable needs a `Protocol`, anything else a dataclass |
 | `NAR006` | an assignment that shadows a module name, so the module value silently never changes |
 | `NAR007` | `and` inside `or` without parentheses |
-| `NAR008` | a multi-line statement butted against the next with no blank line |
-| `NAR009` | a missing module docstring, or a runnable module with no usage example |
+| `NAR009` | a missing module docstring, or a runnable module with no usage example. An empty `__init__.py` and a single-def module are exempt |
 | `NAR010` | a `FIXME` in code that runs, which is a merge blocker rather than a danger sign |
 
 `NAR000` is not a style rule. It reports a file that could not be read or parsed.
+
+`NAR008` was withdrawn. It asked for a blank line after any statement of three or more lines, and measured at 42% precision and 22% recall against hand-marked whitespace, so the rule it stood for is now review judgement. `checks.py` keeps the code in a `RETIRED` registry so the writeups that measured it still resolve. (`R8-NAR008`)
 
 ## What is in this repository
 
 | path | contents |
 |---|---|
-| `skill/` | the deliverable: `SKILL.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml` |
+| `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `GAPS.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
 | `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
 | `skill/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
-| `benchmark/decisions.jsonl` | all 181 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 239 decisions, each with its reasoning and evidence |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |
 | `benchmark/round3/` | two problems in three architectures each, style held constant |
 | `benchmark/round4/` | five comparisons that settled the reported gaps |
 | `benchmark/round5/` | two measured rule revisions: NAR005 depth, NAR008 data literals |
-| `benchmark/round7/` | 41 forced choices on architecture, plus a measured 3-variant program; all six blocks answered |
+| `benchmark/round7/` | 41 forced choices on architecture, plus two measured programs; all six blocks answered |
+| `benchmark/round8/` | red team: 35 defects from four fresh-context agents, and the NAR008 whitespace measurement |
 | `validation/` | held-out tasks, three arms each: no guidance, prior style doc, skill |
 | `experiment/length/` | does the style make code longer — four tasks, two arms |
 

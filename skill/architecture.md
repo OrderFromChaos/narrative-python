@@ -5,7 +5,9 @@
 Read this when the program spans more than one module, or imports a third-party package. Do not read
 it for a single-file program: none of it applies, and it is pure context cost.
 
-Every rule cites its decision in `benchmark/decisions.jsonl`. Rules that no tool can check say so.
+Every rule carries the id of the decision that produced it. Those ids resolve in
+`benchmark/decisions.jsonl` in the source repository, which is **not installed with the skill**, so
+every rule states its own reason and the id is provenance only. Rules that no tool can check say so.
 
 ## The measure
 
@@ -50,6 +52,12 @@ unrelated:
   consumed inside one function is a step, not a type. The three values a `struct.unpack` produces
   stay unnamed.
 
+  **This means what it says.** (`R8-D19-resolved`) A config record built in one module and read in three
+  crosses, so it centralises. A round report built in one module and returned to the entry point
+  crosses, so it centralises. The modules then hold functions and constants, and the glossary holds
+  every type they pass between them. A module that holds only types needs **no `### vocabulary`
+  divider**: the divider separates types from the code above them, and there is no code.
+
 - **A log field set belongs to whatever emits the record**, not to the formatter. A flat shared list
   is fine while one module produces the records, and is a smell once two producers need different
   keys. (`R7-E02-fields`)
@@ -68,15 +76,6 @@ the directory says. Directory depth is not the level. A declared layer order fai
 different reason: layers inferred from current imports make every existing edge legal by
 construction.
 
-What "below" buys is exactly one thing: **`X` is below `Y` means `Y` may import `X`, and `X` may not
-import `Y`.** A level claim that decides no import is decoration.
-
-Two tests, applied together. **Could it stand alone in another project?** and **what real-world event
-would force it to change, and does that same event force the other one?** Where they agree, that is
-the level. **Where they disagree, a fact sits in the wrong module.** A generic module that keeps
-changing when a specific one changes is not generic. *One program supports this last claim, and no
-counter-example exists. Treat it as a diagnostic, not a law.*
-
 **A cycle is a wrong cut, not an import problem.** (`R7-A02`) Break it with a shared vocabulary
 module. Do not reach for `if TYPE_CHECKING`, which is cheap only because the future import is
 mandatory. Do not dissolve the shared type into primitives: **a callee that takes primitives
@@ -88,8 +87,13 @@ pushes its own destructuring decision onto every caller.**
 ## Where the cuts go
 
 **A coherent concern earns a module. Line count is not the criterion.** (`R7-B01-B03-criterion`)
-Twenty-eight lines earned a file (`R7-B03`). Three hundred and forty became six files. Neither
-answer referred to a number.
+Twenty-eight lines earned a file. Three hundred and forty became six. Neither answer referred to a
+number.
+
+**The test is whether you can name it without saying "and".** (`R8-D12-resolved`) `retention.py` is retention.
+`store.py` is storage. A `protocol.py` that also holds `crc32Of` is "the wire format **and**
+checksums", so the checksum leaves and gets its own module. This is `R7-C05-naming` one level up: a
+group you cannot name is not a real grouping.
 
 **Split.** (`R7-B01`) Six modules of 40 to 90 lines beat one file of 340, because the modules are
 buckets a reader can put groups of functions into. Splitting only when a second program needs the
@@ -113,6 +117,8 @@ project-wide `utils.py`.
 **A leading underscore marks any module-level name that is internal:** functions, constants,
 classes, and type aliases. (`R7-B08`, `R7-B08-scope`) A module filename does not take one. The underscore
 states a present fact, not a forecast: if a name ends up called in many places, it was public.
+A module nothing can import has no public surface to mark, so the rule does not reach `__main__.py`.
+Its names stay bare.
 
 **`__all__` declares a package's exports.** (`R7-B05`) A library's `__init__.py` is a re-export façade
 with `__all__`, holding no state and no constants. An application package's `__init__.py` is empty.
@@ -124,8 +130,9 @@ Split the workflow out only when `main` grows long.
 files is the floor for adding a new subject: the new module, and the one line that names it.
 
 **The reading order lives in `__main__.py`.** (`R7-B01-map`) Its docstring says what the program is
-for and lists the modules in reading order. Every other module keeps its own one-line docstring.
-Known cost, accepted: a reader arriving at one module from a stack trace sees that module and no map.
+for and lists the modules in reading order. What every other module owes is `SKILL.md`'s rule, not a
+second one stated here. Known cost, accepted: a reader arriving at one module from a stack trace sees
+that module and no map.
 
 **`main()`-first generalises to a library.** (`R7-E05`) The public entry takes the position `main()`
 holds, callees follow in first-call order, types last under the divider. It does not replace the
@@ -138,15 +145,8 @@ connections can coexist, so a store is a class (`R7-C02`). A frame format is the
 so the parser is a module. Neither lifetime ownership nor shared state is the test: shared state would make every
 file a class.
 
-**A second real implementation earns a Protocol.** (`R7-C01`) A test double is not one
-(`R2-02`). A Protocol over the only implementation restates every method signature.
-
-These are two separate tests that look alike. Refusing the Protocol and keeping the object is not a
-contradiction.
-
-**A long parameter list is a missing owner, not a missing record.** (`R7-C05-resolved`) Find what owns
-the values. A frozen record is the answer only when nothing has behaviour over them. **If a general
-name for the group is hard to pick, it is not a real grouping.** (`R7-C05-naming`)
+`SKILL.md` already governs when a `Protocol` is earned. The two tests look alike and are not the
+same: refusing the `Protocol` and keeping the object is not a contradiction.
 
 **One coordinator, not a chain.** (`R7-C03`) Stages that nothing reuses separately do not each call
 the next. One function calls them in turn and holds the intermediates.
@@ -178,6 +178,13 @@ file.
 **One program-scoped config object reaches every module.** (`R7-E03`) Per-module slices make consumers
 re-derive a local version, which is new surface. A config object is the one bundle that needs no
 owner with behaviour, because the program owns it.
+
+**It travels as a module-level singleton, not as a parameter.** (`R8-D09-resolved`) Parse it once at import
+into a frozen record and import that name where it is needed. This needs no exception to the rule
+above: a frozen config has nothing to close, so it is already the shape that rule permits. What that
+rule excludes is a *hardcoded default* invented in a module, which belongs in the config file. Note
+the singleton is **assigned once and never rebound** — a function that reassigns it is mutating
+module state and owes a `global`, which is the shape `NAR001` exists to catch.
 
 **Leaf modules import the constants they need**, when those constants exist at import time.
 (`R7-A07`) Thread the config object instead when the program resolves it at run time. *Weak: both
@@ -211,35 +218,32 @@ every boundary.
 (`R7-D05`, `R7-D05-trust`) Reimplement when you must change the thing wholesale. Vendor only when one
 frozen version fits and needs no changes. *Adoption cannot see a package that is popular and bad.*
 
-**A ban exception belongs to the module, and the module declares it**, as a bare suppression.
-(`R7-D04`) Conformance does not owe an explanation.
-
 **A pin is a property of the deployment, never of the library.** (`R7-D06`) A library states a floor. The
 repository pins the exact set in one lock file. A library that pins exact makes its constraint
 everyone's.
 
 ## Service, library, monorepo
 
-**One shared logger from one logs module** (`R7-E02`), if the record still locates itself to a file
-and a line.
+**One shared logger from one logs module.** (`R7-E02`) A shared logger makes `record.name` constant,
+so the formatter emits `module`, `lineno` and `funcName` to locate the record instead.
+(`R7-E02-fields`)
 
 **Shared code goes in the shared library**, not in whichever program needed it first. (`R7-E06`)
 
-**The instrument pushes and the service follows**, when the device supports it. (`R7-E07`) A poll loop
-is the fallback, not the shape. Without rounds, the reporting unit becomes a **time window**:
-`Q24` then aggregates over a window rather than over a batch.
+**The source pushes and the service follows**, when the source supports it. (`R7-E07`) A poll loop is
+the fallback, not the shape. This was decided for instruments on a socket, and it reaches anything
+that can notify — a queue, a filesystem watch, a webhook. It does **not** reach a source that can only
+be asked, such as an HTTP endpoint you do not control; there, polling is the shape and not a defeat.
 
-## Rules from `SKILL.md` that survive the move to several modules
+Without rounds there is no natural batch, so the reporting unit becomes a **time window**: `Q24` then
+aggregates over a window rather than over a batch.
 
-Both were re-tested at module scale in round 7 and neither changed.
+## Two `SKILL.md` rules were re-tested at module scale
 
-- **Degrade and report.** (`Q24`, `R7-A08`) The module that does the work collects per-item failures.
-  The module above logs the aggregate. One unreachable device must not stop the other thirty-nine,
-  and that holds for a long-running service exactly as it did for a batch program.
-
-- **Tests use real dependencies.** (`R2-02`, `R7-C08`) A real temporary database, not a fake store,
-  including when the production signature takes an object rather than a connection. A test that
-  exercises a double tests the double.
+Degrade-and-report (`Q24`, `R7-A08`) and real dependencies in tests (`R2-02`, `R7-C08`) both hold
+unchanged across a module boundary. `SKILL.md` states them; this note only records that the move did
+not alter them. In degrade-and-report the split is the obvious one: the module doing the work
+collects per-item failures, the module above logs the aggregate.
 
 ## Comments
 
@@ -247,6 +251,10 @@ Both were re-tested at module scale in round 7 and neither changed.
 `R7-D04-comments-scope`) A file the skill generates is user code wherever it sits. `(Q08)` is
 unlookupable outside the benchmark, and a comment that a future reader cannot follow is negotiation
 residue, not documentation. Keep the reason. The reason is the comment.
+
+One exception, and it is narrow: a program may name a rule it **implements**. `checks.py` says
+"that case is `NAR006`'s, not this one's", where `NAR006` is its own identifier rather than a
+cross-reference. Naming your own code is not a citation.
 
 ## Not architecture, learned alongside
 

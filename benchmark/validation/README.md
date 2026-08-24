@@ -71,3 +71,14 @@ never taught this — the agent mirrored the register of a rule document dense w
 the prohibition has to be explicit rather than implied. And `prepare_blind.py` had already classified
 citations as telltales: its `TELLTALES` regex redacts them before rating, so `blind/1.py`,
 `blind/2.py` and `blind/3.py` carry none and `SCORES.json` was never affected.
+
+## SCORES.json does not fully reproduce
+
+`v2_drift_checker/skill.py` has no module docstring, so `NAR009` fires on it. `SCORES.json` records
+`"checks": 0` for that arm. Confirmed against the checker as shipped at `HEAD`, so the score was
+wrong when it was written and no later change caused it. (`R8-D36`)
+
+This is the table `README.md` Status cites as the project's main quantitative claim for itself — the
+skill arm at 0 checker findings against the doc arm at 11. One cell of it does not reproduce, and the
+other cells were not re-verified. **Regenerate the whole table with `prepare_blind.py` before citing
+it again.**

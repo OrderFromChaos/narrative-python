@@ -1,15 +1,22 @@
 ---
 name: narrative
-description: Write or review Python in the Narrative house style — mixedCase functions, main() first with types last, parse-at-the-boundary dataclasses, no ORM, explicit global on mutation, exhaustive match without a fallback arm, and a verified ruff/pylint/mypy toolchain. Use for any Python written in or for this codebase, and when reviewing a diff against this style.
+description: Write or review Python in the Narrative house style — mixedCase functions, main() first with types last, parse-at-the-boundary dataclasses, no ORM, explicit global on mutation, exhaustive match without a fallback arm, and a verified ruff/pylint/mypy toolchain. Covers multi-module architecture too: which module may import which, when one file becomes several, what a package __init__.py holds, where a shared type lives, and when to take or contain a third-party dependency. Use for any Python written in or for this codebase, when laying out modules or packages, and when reviewing a diff against this style.
 ---
 
 # Narrative Python
 
-Rules cite the benchmark decision behind them (`benchmark/decisions.jsonl`). A rule with no
-citation and no linter behind it does not belong here.
+Rules carry the id of the decision that produced them. Those ids resolve in `benchmark/decisions.jsonl`
+in the source repository, `github.com/OrderFromChaos/narrative-python`, which is **not installed with
+the skill**. Treat a citation as provenance, not as something to look up: every rule states its own
+reason. A rule with no id and no linter behind it does not belong here.
 
-**This document governs one file.** When the program spans several modules or imports a third-party
-package, read `architecture.md` beside it. Do not read it for a single-file program.
+**This document governs every file, however many there are.** Naming, layout, types, errors and
+docstrings apply to each module of a package exactly as they apply to a single-file program.
+
+`architecture.md` adds what happens **between** files: which module may import which, where a shared
+type lives, when one file becomes several, and what a third-party dependency may touch. Read it when
+the program spans more than one module or imports a third-party package. Skip it for a single-file
+program, where none of it applies.
 
 ## The principle everything else serves
 
@@ -86,15 +93,28 @@ class ScanHeader: ...
   only meaning here. Deliberately grouped short guards stay grouped, and two adjacent two-line
   `if ...: raise` checks belong together. No blank line after a docstring. (R3a-01)
 
-- If a guard grows to three lines because it logs before raising, `NAR008` will force a blank line
-  and break the grouping. **That is a signal, not a conflict**: move the log call into a
-  `reject*()` helper that logs and returns the exception. The guards are two lines again, they
-  group, `NAR008` is silent, and the raise-site rule still holds. Neither rule yields. (R4-05)
+  **No tool checks this.** `NAR008` used to, on any statement of three or more lines that another
+  statement followed, and it was removed: measured against twelve functions stripped of every
+  internal blank line and marked up by hand, it wanted 12 blank lines where 23 belonged and agreed
+  on 5. Precision 42%, recall 22%. (`R8-NAR008`)
 
-- `NAR008` also fires when `ruff format` explodes a large dict literal and the next line consumes
-  it. **The blank line is correct there.** Defining a record and serialising it are two operations,
-  not one. The deeper answer is that a large dict passed between functions should be a frozen
-  dataclass, and then the literal never appears. (R6-10)
+  What the markup showed instead: (`R8-NAR008-rule`)
+
+  - blanks **recur into nested blocks** — one loop body took four
+  - **length is not the trigger**, in either direction
+  - **a multi-line statement and the statement that consumes its value are one step**, so
+    `executemany` then `commit`, and a constructor then the `return` of it, stay adjacent
+  - a body of **8 lines or under takes no internal blanks at all**
+  - a blank precedes a `return` when the phase before it is unrelated, not when the value was just
+    built
+
+- **Label a long or complex block with a short comment.** (`R8-block-comments`) `# parse data`,
+  `# execute sql`, `# validate`. This is not the line comment the rule below forbids: a label names
+  a group of statements and pairs with the blank line that separates them.
+
+- If a guard grows to three lines because it logs before raising, move the log call into a
+  `reject*()` helper that logs and returns the exception. The guards are two lines again and group,
+  and the raise-site rule still holds. (R4-05)
 
 - A `def` with >3 **positional** arguments puts each on its own line with a trailing comma, even
   under 120 columns. **Calls are exempt**, because the same rule applied to calls costs +19% lines.
@@ -138,8 +158,10 @@ class ScanHeader: ...
 
 - If it names a path, its type is `Path`, not `str`. (R3a-10)
 
-- Collection literals get one item per line, because `ruff format` gives you no choice. A
-  word-list-shaped literal may use a `# fmt: off` / `# fmt: on` fence to stay packed. (R2b-B2)
+- Collection literals get one item per line **wherever `ruff format` explodes them**, which is any
+  literal it cannot fit on one line. This describes the formatter rather than adding a rule: a short
+  literal it leaves packed is already correct. A word-list-shaped literal may use a `# fmt: off` /
+  `# fmt: on` fence to stay packed. (R2b-B2)
 
 ## Naming
 
@@ -190,14 +212,21 @@ the ones that should stay out. This is review judgement.*
 
 - **An annotation you cannot say out loud needs a name.** The test is conversational: could you
   refer to this type in a normal discussion with another programmer? `park(car: Car)` reads and
-  discusses. `park(car: dict[str, list[tuple[float, float]]])` does neither. (NAR005, R6-09)
+  discusses. `park(car: dict[str, list[tuple[float, float]]])` does neither. (NAR005, R8-D27-resolved)
 
-  Two thresholds measure that, because complexity arrives two ways:
+  **One measure: how many things it names, below the outermost.** `Car` names none.
+  `dict[str, list[tuple[float, float]]]` names five, and above four the annotation wants a name.
+  A callable becomes a `Protocol`; anything else becomes a dataclass. (`NAR005`, `R8-D27`)
 
-  | trigger | example |
-  |---|---|
-  | **depth** over 2 | `dict[str, list[tuple[float, float]]]` |
-  | **width** over 3 at any one level | `tuple[a, b, c, d, e, f, g, h, i, j]`, which is depth 1 |
+  Depth and width were two proxies for that one question and each missed what the other saw. Depth
+  let `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` through; width let
+  `tuple[dict[str, str], list[str]]` through. Counting names catches both, misses nothing either
+  caught, and needs one number rather than two.
+
+  **The DB-API is the standing exception.** `sqlite3.executemany` takes a sequence per row, so
+  `list[tuple[str, str, float, float, int, int]]` names seven things and has no dataclass form —
+  passing one raises `ProgrammingError: parameters are of unsupported type`. Give the row shape a
+  named alias so it reads, and suppress the finding with that reason. (`R8-D27`)
 
   The type then decides the fix. **A callable becomes a `Protocol`.** **Anything else — any kind of
   iterable — becomes a dataclass.**
@@ -245,9 +274,22 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
   again. The objection to Pydantic/ORMs is *pervasive runtime validation*, not a single gate.
   (Q14, Q17)
 
-- `frozen=True` for data that crosses a boundary: parsed input, config, returned values. An object
-  that models something that genuinely changes over time stays mutable. Not a blanket default.
-  (R2-07)
+- The config enforces that **more bluntly than the rationale**. `TID251` bans the `pydantic` import
+  outright, because a linter cannot see whether a model is used once at a gate or on every request.
+  A genuine single-gate use is therefore a per-module `# ruff: noqa: TID251` with the gate named in
+  the module docstring. Writing that suppression twice in one program means the validation is no
+  longer at one gate. (R8-D10)
+
+- **`frozen=True` is the default for every dataclass.** It has nothing to do with boundaries: a
+  record built and consumed inside one function is frozen for the same reason a parsed one is.
+  (R8-D11-resolved)
+
+- Drop to mutable only when a **field holds a mutable value**, and treat that as a smell rather than
+  a decision. Reach for a `tuple` where you would write a `list`. A frozen wrapper around mutable
+  contents is a half-guarantee: `dataclasses` will not stop you writing through it, so the bug grows
+  quietly and surfaces at run time with nothing to catch it. The standing exception is the
+  schemaless remainder below, where a `Mapping` field is the prescribed shape and its cost is
+  already recorded.
 
 - A dataclass, never a dict of parsed fields. (Q02) That rule is about **what holds the record**,
   not about what type a field may have. A mapping-typed *field* is fine.
@@ -283,6 +325,12 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
 - Handle each failure mode narrowly and separately. Never one `try` around the whole operation with
   a tuple of unrelated exception types. (Q19)
 
+- **Related means the handling is the same, not that the classes share a base.** Where two failures
+  genuinely produce one outcome, one `except (A, B)` arm is correct and two identical arms are the
+  rote diffing the top principle forbids. But check the premise first: two arms that look identical
+  usually should not be. A timeout and an unreachable host are different facts and deserve different
+  words, and writing the same string twice is how that gets lost. (R8-D24-resolved)
+
 - `raise NewError(...) from exc`, **and** log it. Both. (Q21)
 
 - **The raise site records the generic fact once, however you factor that.** A parser with six
@@ -305,6 +353,11 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
 - Degrade and report: process the whole batch, collect failures, log a summary, exit nonzero. Never
   abort on the first bad item. (Q24)
 
+- **The config gate is the exception.** (R8-D25-resolved) `Q24` governs the batch a program processes, not
+  the configuration telling it what to process. A half-valid config means the program does not know
+  what it was asked to do, so the gate raises on the first malformed entry and the program exits.
+  Degrading there would run the job the operator did not ask for.
+
 ## Module state
 
 - **`global` marks a side effect, not a dependency.** Declare it when a function *mutates* module
@@ -312,6 +365,14 @@ where a plain `Enum` raises `TypeError`, and `str()` differs between 3.10 and 3.
 
 - Python already forces `global` to rebind. Python does not police in-place mutation, and no linter
   catches it: `CONFIG.clear()`, `CONFIG['k'] = v`, `CONFIG.attr = v`. That is `NAR001`.
+
+- **The check goes further than those three forms.** It also matches any method whose name *starts
+  with* a configuration verb: `set`, `add`, `remove`, `register`, `unregister`, `reset`, `delete`,
+  `insert`, `enable`, `disable`, `configure`, `install`, `attach`, `detach`, `bind`, `unbind`,
+  `truncate`, `flush`, `commit`, `rollback`, `execute`, `close`. So `LOG.addHandler(...)` is a
+  mutation, and a function that configures a module-level logger declares `global LOG` even though
+  it never rebinds it. The check under-reports rather than crying wolf: a domain method can mutate
+  without saying so in its name. (V-03)
 
 - Every attribute declared in `__init__`. `hasattr(self, ...)` is a red flag. (Q04)
 
@@ -355,8 +416,17 @@ Required:
 example.
 
 - A function gets a full structured docstring (summary, Args, Returns, Raises) when its **contract
-  is complex**: it raises, or takes more than three parameters, or exceeds 20 lines. Below all
-  three, `#` comments carry the contract. (Q05, R2-03, R2-05, R5-05)
+  is complex**: it takes more than three parameters, or exceeds 20 lines. Below both, `#` comments
+  carry the contract. (Q05, R2-03, R2-05, R5-05)
+
+- **Raising is not a trigger.** It was, and it fired hardest on the simplest functions: the style
+  routes raise sites through a `reject*()` helper, so every two-line guard that calls one contains a
+  `raise`. Measured at +61 lines of docstring in one 124-line module, most of it restating the
+  signature. (R8-D18-resolved)
+
+- Of the four sections, `NAR004` enforces **`Raises:` only**, and only on a function the trigger
+  already caught. `Args:` and `Returns:` restate what the signature says; a raise names something no
+  annotation carries. Write the other sections where they earn their place. (R8-D28-resolved)
 
   A bare line threshold is gameable in the wrong direction. To split a 21-line function into two
   12-line ones would delete the obligation, so the rule would reward fragmentation. Contract
@@ -383,20 +453,28 @@ example.
   level. It over-approximates reachability on purpose. The check would rather call an orphan live
   than let a running `FIXME` through.
 
+  **A module with no `main` and no `__main__` block is a library module**, and every function in it
+  counts as reachable, because its callers sit in files this per-file checker never sees. Without
+  that, splitting a program was what switched the check off: a helper called only from
+  `__main__.py` looked orphaned in its own file and a live marker passed the gate. (R8-D02)
+
 ## Logging
 
 One stable event name plus structured `extra={...}` fields, never an f-string of prose. The
 message is a queryable key. (Q08)
 
-**JSONL output is for a service, not for every script.** The stdlib has no JSONL formatter, so a
-self-contained program hand-rolls `JsonlFormatter` + `configureLogging`. That costs **21 lines per
-file, byte-identical every time, 8% of a four-program sample**, and it gives a one-shot CLI
-machine-parseable stderr that no machine will read. Decide by who reads the logs: (R5-03)
+**JSONL output is for a service, not for every script. Decide by who reads the logs.** (R5-03,
+R8-D23-resolved) A collector that queries them wants JSONL; a person at a terminal does not.
+
+The line-count argument that used to justify this is dropped. It compared a hand-rolled
+`JsonlFormatter` against a field formatter, and both numbers have already moved once. The
+hand-rolling is temporary in any case: JSONL logging belongs in an importable library that every
+program shares, and then it costs one import.
 
 - **A service, or any program whose logs someone collects**: JSONL, from a shared module. In a
   monorepo each program imports it and never re-pastes it. That is what makes it worth having.
 
-- **A single-file tool run by hand**: a 7-line formatter that renders the fields.
+- **A single-file tool run by hand**: a 9-line formatter that renders the fields.
 
 **Do not use `basicConfig(format='%(levelname)s %(message)s')`.** The standard formatter discards
 everything in `extra`. `LOG.warning('merge.rejected', extra={'rejected': 4812, 'total': 10000})`
@@ -406,16 +484,19 @@ f-string. (R5-09)
 
 ```python
 _STANDARD = frozenset(logging.LogRecord('', 0, '', 0, '', None, None).__dict__) | {'message', 'asctime'}
+_LOCATION = ('module', 'lineno', 'funcName')
 
 
 class FieldFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         extra = {k: v for k, v in record.__dict__.items() if k not in _STANDARD}
-        fields = ' '.join(f'{k}={v}' for k, v in sorted(extra.items()))
-        return f'{record.levelname} {record.getMessage()}{" " + fields if fields else ""}'
+        located = {key: getattr(record, key) for key in _LOCATION}
+        fields = ' '.join(f'{k}={v}' for k, v in sorted({**located, **extra}.items()))
+        return f'{record.levelname} {record.getMessage()} {fields}'
 ```
 
-That prints `WARNING merge.rejected rejected=4812 total=10000`, in 7 lines against the 21 that the
+That prints `WARNING merge.rejected funcName=merge lineno=88 module=loader rejected=4812
+total=10000`, in 9 lines against the 21 that the
 JSONL formatter costs.
 
 ## Configuration

@@ -28,12 +28,14 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 
 TOOLS = ('ruff', 'pylint', 'mypy', 'vermin')
 PYTHON_FLOOR = '3.10'
+STE_LINT_DEFAULT = Path.home() / '.claude/skills/ste-writing/ste-lint.py'
 MAX_STE_PER_100_WORDS = 2.5
 SKIPPED = frozenset({'.venv', 'venv', '.lintenv', '.git', 'build', 'dist', '__pycache__'})
 EXIT_SUCCESS = 0
@@ -52,13 +54,14 @@ def main() -> int:
     parser.add_argument('--venv', type=Path, default=Path('.lintenv'))
     parser.add_argument('--config', type=Path, default=Path('pyproject.toml'))
     parser.add_argument('--no-fix', action='store_true', help='report only, do not rewrite files')
+    parser.add_argument('--ste-lint', type=Path, default=STE_LINT_DEFAULT, help='path to ste-lint.py')
     args = parser.parse_args()
 
-    toolchain, missing = resolveToolchain(args.venv)
-    if missing:
+    toolchain = resolveToolchain(args.venv)
+    if toolchain.missing:
         lock = Path(__file__).resolve().parent / 'requirements-lock.txt'
         install = f'uv pip install --python {args.venv}/bin/python -r {lock}'
-        print(f'toolchain incomplete: {", ".join(missing)} not found', file=sys.stderr)
+        print(f'toolchain incomplete: {", ".join(toolchain.missing)} not found', file=sys.stderr)
         print(f'  looked in {args.venv / "bin"} and on PATH', file=sys.stderr)
         print(f'  fix: uv venv {args.venv} && {install}', file=sys.stderr)
         return EXIT_NO_TOOLCHAIN
@@ -86,22 +89,22 @@ def main() -> int:
     results: list[Result] = []
 
     if not args.no_fix:
-        run([toolchain['ruff'], 'check', '--config', str(args.config), '--fix', '-q', *targets])
-        run([toolchain['ruff'], 'format', '--config', str(args.config), '-q', *targets])
+        run([toolchain.paths['ruff'], 'check', '--config', str(args.config), '--fix', '-q', *targets])
+        run([toolchain.paths['ruff'], 'format', '--config', str(args.config), '-q', *targets])
 
     ruff_config = ['--config', str(args.config)]
-    check_cmd = [toolchain['ruff'], 'check', *ruff_config, '--output-format=concise']
+    check_cmd = [toolchain.paths['ruff'], 'check', *ruff_config, '--output-format=concise']
     results.append(gradeRuffCheck(run([*check_cmd, *targets])))
-    results.append(gradeFormat(run([toolchain['ruff'], 'format', *ruff_config, '--check', *targets])))
-    results.append(gradePylint(run([toolchain['pylint'], f'--rcfile={args.config}', *targets])))
-    mypy_cmd = [toolchain['mypy'], '--config-file', str(args.config), '--strict', '--no-error-summary']
+    results.append(gradeFormat(run([toolchain.paths['ruff'], 'format', *ruff_config, '--check', *targets])))
+    results.append(gradePylint(run([toolchain.paths['pylint'], f'--rcfile={args.config}', *targets])))
+    mypy_cmd = [toolchain.paths['mypy'], '--config-file', str(args.config), '--strict', '--no-error-summary']
     results.append(gradeMypy(run([*mypy_cmd, *targets])))
     results.append(gradeChecks(run([sys.executable, str(checker), *targets])))
-    vermin_cmd = [toolchain['vermin'], '--no-tips', f'-t={PYTHON_FLOOR}-', '--violations']
+    vermin_cmd = [toolchain.paths['vermin'], '--no-tips', f'-t={PYTHON_FLOOR}-', '--violations']
     results.append(gradeVermin(run([*vermin_cmd, *targets])))
 
     if prose:
-        results.append(gradeProse(prose))
+        results.append(gradeProse(prose, args.ste_lint))
 
     width = max(len(r.tool) for r in results)
     for result in results:
@@ -145,7 +148,7 @@ def splitByKind(paths: list[Path]) -> tuple[list[Path], list[Path]]:
     return code, prose
 
 
-def gradeProse(paths: list[Path]) -> Result:
+def gradeProse(paths: list[Path], linter: Path) -> Result:
     """Run the STE linter over every prose file, when that skill is installed.
 
     Prose quality is a rule of this style, so the pipeline must cover it. The skill is a soft
@@ -153,13 +156,16 @@ def gradeProse(paths: list[Path]) -> Result:
 
     Args:
         paths: Markdown files to check.
+        linter: The ste-lint.py to run them through.
 
     Returns:
         One result covering every prose file.
     """
-    linter = Path.home() / '.claude/skills/ste-writing/ste-lint.py'
     if not linter.is_file():
-        return Result('ste (prose)', True, f'skipped, {linter.name} not installed', '')
+        # Loud on purpose. A skipped prose check that reports success is a green run over
+        # unchecked prose, which is the same false pass verify.py exists to prevent (R8-D34).
+        detail = f'{linter} not found. Install ste-writing, or pass --ste-lint <path>.'
+        return Result('ste (prose)', True, 'SKIPPED, prose was not checked', detail)
 
     noisy: list[str] = []
     for path in paths:
@@ -203,7 +209,7 @@ def missingConfigSections(config: Path) -> list[str]:
     return [label for pattern, label in required if not re.search(pattern, text)]
 
 
-def resolveToolchain(venv: Path) -> tuple[dict[str, str], list[str]]:
+def resolveToolchain(venv: Path) -> Toolchain:
     """Find every tool as an absolute path.
 
     A relative path breaks the moment anything changes directory, which is how a missing binary
@@ -232,7 +238,7 @@ def resolveToolchain(venv: Path) -> tuple[dict[str, str], list[str]]:
 
         missing.append(tool)
 
-    return resolved, missing
+    return Toolchain(resolved, tuple(missing))
 
 
 def run(command: list[str]) -> Output:
@@ -293,6 +299,12 @@ class Result:
     passed: bool
     summary: str
     detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class Toolchain:
+    paths: Mapping[str, str]
+    missing: tuple[str, ...]
 
 
 if __name__ == '__main__':
