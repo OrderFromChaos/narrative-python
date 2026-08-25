@@ -1,0 +1,5 @@
+{
+  "scanned_at": "2026-03-04T11:20:00Z",
+  "resources": [
+    {"id": "min-halite-6612", "sku": "compute-standard-8", "team": "billing-ops", "region": "na1"},
+    {"id": "min-pyrite-8874", "sku": "blockstore-ssd", "team": "billi

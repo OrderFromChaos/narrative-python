@@ -1,0 +1,2 @@
+WARNING inventory.file_failed funcName=readInventoryDirectory lineno=50 module=inventory path=/home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/fixture/broken.scan.json reason=not valid JSON: Unterminated string starting at, line 5
+INFO run.recorded added=7 findings=7 funcName=main lineno=59 module=__main__

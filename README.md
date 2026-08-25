@@ -184,9 +184,19 @@ Ready for real work. Two things are worth knowing before you rely on it.
 
 ### The result
 
+The style is trying to do four things. Three can be measured by an agent harness; the fourth cannot.
+
+| goal | verdict |
+|---|---|
+| 1. shorter than unguided | **yes** — a third less executable code |
+| 2. more readable than unguided | **not measured** — human judgement, and the rating forms are empty |
+| 3. a future change touches few files and lines | **no on one change** — unguided wins 18/390 against 22/491. **Narrowly yes over two** |
+| 4. no worse against the spec | **yes, on twenty blind tests** — 20 of 20 both |
+
 The current comparison is **V5**, a held-out billing reconciler: read two inventory formats, join
 them, report what fails to match on either side. Both arms got the same spec, at the same time, and
 neither was asked for tests. `base` got the task and nothing else; `full` got the whole skill.
+`validation/harness/` holds the instruments for goals 3 and 4.
 
 | | modules | lines | ruff | format | pylint | mypy | checks |
 |---|---|---|---|---|---|---|---|
@@ -237,6 +247,113 @@ first thing worth fixing in either program.
 Two earlier rounds, `v3_manifest_audit` and `v4_quota_reconcile`, ran against older versions of the
 skill and are kept as history. Both reproduce the same mechanical shape: `base` at 324 and 367 ruff
 findings, the guided arms at zero.
+
+### Does it cost real bugs?
+
+A conformance suite written by an agent that read the spec and **was forbidden to see any
+implementation** scores both arms **20 of 20**. That blindness is the control: a suite written after
+reading one arm tests that arm's decisions, and every disagreement then scores as the other arm's
+bug. It drives each package as a subprocess through its documented entry point, so an arm that
+reorganises entirely still passes. It also produced a list of 50 questions the spec does not settle,
+at `validation/harness/conformance/UNDERSPECIFIED.md`.
+
+Read the score as *"no difference across twenty spec-derived tests"* rather than *"no difference"*,
+for a reason the harness found the hard way. **A maintenance agent found a spec violation the suite
+cannot see**: `base` reads input with `encoding='utf-8'` and catches only `OSError`, and
+`UnicodeDecodeError` is a `ValueError` — so one non-UTF-8 file aborts the whole run, against
+requirement 7, that one malformed file must not stop the others. `full` catches it and carries on.
+The suite misses it because every malformed fixture it builds is valid UTF-8.
+
+That test has **not** been added. Writing it now, knowing which arm fails, would end the suite's
+blindness and make its score unusable as evidence. `validation/harness/README.md` records the gap.
+
+### Does a future change stay small?
+
+This is the style's own central claim — *"name the change, and the name must give you one file to
+open"* — so it is worth measuring rather than asserting. `validation/harness/` holds the instrument.
+
+Four change requests were written from the spec's vocabulary, each naming a different seam. Each arm
+received each change **applied to its own codebase**, in an isolated copy, by an agent that saw only
+that arm, that change, and — for `full` — the skill. Cost is files touched and lines moved.
+
+| change | what it asks for | `base` files / churn | `full` files / churn |
+|---|---|---|---|
+| C1 | a third input format | **5 / 137** | 7 / 234 |
+| C2 | a fourth finding kind, crossing every layer | 6 / 115 | **5 / 106** |
+| C3 | a new rules field | **2 / 48** | 4 / 59 |
+| C4 | a new column threaded to three outputs | **5 / 90** | 6 / 92 |
+| | **total** | **18 / 390** | 22 / 491 |
+
+**The unguided arm wins, and the result is the opposite of what the style predicts.** `full` absorbs
+a cross-layer change better — C2 is the one change designed to touch everything, and it is the one
+`full` wins — but pays for it everywhere else.
+
+C1 is most of the gap, and the cause is a rule doing exactly what it says. Asked for a third format
+whose parser would be near-identical to an existing one, the guided agent refused to copy it:
+
+> Extracted `cost_line.py` instead of copying the billing parser. A standalone ledger parser would
+> have been token-identical to `_parseBillingLine` bar the origin — the rote diffing `R2b-P0` /
+> `R2b-E4` forbid. Cost: `billing_csv.py` changed.
+
+That is a refactor of working code that `base` never had to do: 72 new lines, and `billing_csv.py`
+cut from 94 lines to 57. **The style trades cost now for cost later** — so the obvious question is
+whether "later" ever arrives.
+
+### Does the deferred cost pay off?
+
+A fifth change, `C5`, adds a *fourth* cost format on top of what C1 produced, so each arm starts from
+its own C1 output. `base` begins with the four-field validation in two places; `full` begins with it
+in one.
+
+| | `base` files / churn | `full` files / churn |
+|---|---|---|
+| C1 — add a 3rd cost format | **5 / 137** | 7 / 234 |
+| C5 — add a 4th cost format | 7 / 228 | **7 / 95** |
+| **two-change total** | **12** / 365 | 14 / **329** |
+
+**The crossover is real and it is narrow.** `full` wins the sequence on churn by 36 lines out of 365,
+just under 10%, and still loses on files. The two metrics disagree; both are reported.
+
+`base` was not able to duplicate a third time, because the change required identical rejection
+messages across the formats. Its agent extracted the validator itself:
+
+> A third copy would satisfy that only by inspection and would drift on the next edit; one function
+> satisfies it by construction.
+
+That is `R2b-P0`'s argument, reached from the requirement text rather than from a style rule. So
+`base` arrived at the same design one change later, and paid **137 + 228 = 365** to get where `full`
+got for **234 + 95 = 329**.
+
+The shape of `full`'s second change is the point. Seven files touched, but only one of substance:
+
+    charges_psv.py   +75  -0     the whole change
+    vocabulary.py     +2  -1     one enum member
+    inventory.py      +5  -3     one match arm
+    join.py           +1  -1     one enum name
+    __main__.py       +2  -1     module map line
+    cost_line.py      +1  -1     one word in a docstring
+    report.py         +1  -1     a re-pasted sample
+
+`base`'s second change had three files of substance: the new reader, the extraction, and the gutting
+of the two readers it had duplicated.
+
+**This is not "the style wins in the long run."** A fifth format now costs both arms about 95, since
+`base` has the shared validator too. It is narrower than that: the style pays the extraction at the
+first change, unguided pays it at the second, and the 36-line difference is the interest. On any
+single change measured cold, unguided wins.
+
+**Caveat, and it matters:** `C5` was designed after `C1`, by someone who knew which arm the
+extraction favours. It is a fair test of that specific claim and it returned a smaller margin than
+expected — but a run designed to check a hypothesis already held is weaker evidence than one designed
+before it. The four-change table above was written blind to its own outcome; this one was not.
+
+A second, smaller cost is `R9-08`, the rule that says paste a real sample of a module's output. Two
+of `full`'s C1 files and one of its C3 files were touched **only** to re-paste samples that had gone
+stale. No behaviour changed in them.
+
+Every non-breaking change left the conformance suite at 20 of 20 for both arms, so none of this was
+bought by breaking something. C4 takes both arms to 5 of 20 by design — it makes the old four-column
+CSV malformed, which is the point of the change.
 
 ### How far this evidence goes
 

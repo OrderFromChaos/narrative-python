@@ -1,0 +1,17 @@
+{
+  "scanned_at": "2026-03-04T11:20:00Z",
+  "resources": [
+    {"id": "min-quartz-4471", "sku": "compute-standard-8", "team": "platform-core", "region": "na1"},
+    {"id": "min-basalt-2298", "sku": "compute-burst-2", "team": "platform-core", "region": "na1"},
+    {"id": "min-gypsum-7715", "sku": "blockstore-ssd", "team": "data-eng", "region": "south-pacific-2"},
+    {"id": "min-obsidian-3062", "sku": "nat-gateway", "team": "network-eng", "region": "sp2"},
+    {"id": "min-pumice-9104", "sku": "platform-support-tier", "team": "finance-ops", "region": "sp2"},
+    {"id": "min-schist-3391", "sku": "compute-standard-8", "team": "data-eng", "region": "sp2"},
+    {"id": "min-cinnabar-7028", "sku": "queue-broker", "team": "ml-research", "region": "north-atlantic-1"},
+    {"id": "min-chert-8830", "sku": "object-archive", "team": "archive-guild", "region": "south-pacific-2"},
+    {"id": "min-jasper-4408", "sku": "object-archive", "team": "data-eng", "region": "na1"},
+    {"id": "min-agate-2216", "sku": "dns-zone", "team": "network-eng", "region": "na1"},
+    {"id": "min-topaz-9053", "sku": "compute-standard-8", "team": "platform-core", "region": "mc"},
+    {"id": "min-borax-8241", "sku": "queue-broker", "team": "network-eng", "region": ""}
+  ]
+}

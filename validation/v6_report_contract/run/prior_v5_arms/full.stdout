@@ -1,0 +1,16 @@
+KIND              RESOURCE           SKU                  CENTS  TEAM           BILLED_REGION     SCANNED_REGION    GRACE
+billed_not_found  min-flint-5520     gpu-accelerated-1   41,200  -              na1               -                 over
+billed_not_found  min-slate-6647     blockstore-ssd       6,300  -              sp2               -                 over
+billed_not_found  min-marl-1183      dns-zone               750  -              na1               -                 -
+found_not_billed  min-chert-8830     object-archive           -  archive-guild  -                 south-pacific-2   -
+found_not_billed  min-schist-3391    compute-standard-8       -  data-eng       -                 sp2               -
+found_not_billed  min-cinnabar-7028  queue-broker             -  ml-research    -                 north-atlantic-1  -
+region_mismatch   min-obsidian-3062  nat-gateway          9,600  network-eng    north-atlantic-1  sp2               -
+
+FILE              ACCEPTED  REJECTED  ERROR
+broken.scan.json         0         0  not valid JSON: Unterminated string starting at, line 5
+core.billing.csv         7         0  -
+edge.billing.csv         3         0  -
+estate.scan.json         8         0  -
+
+7 findings, 2 above the 750c grace, 4 files read, 1 unreadable

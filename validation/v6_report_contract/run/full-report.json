@@ -1,0 +1,245 @@
+{
+  "generated_at": "2026-08-25T05:34:39+00:00",
+  "input_dir": "../fixture",
+  "rules": {
+    "ignored_skus": [
+      "platform-support-tier"
+    ],
+    "region_aliases": {
+      "mc7": "mc",
+      "mid-continent-7": "mc7",
+      "north-atlantic-1": "na1",
+      "south-pacific-2": "sp2"
+    },
+    "grace_cents": 750
+  },
+  "totals": {
+    "billing_lines": 17,
+    "scanned_resources": 11,
+    "ignored_billing": 3,
+    "ignored_scanned": 1,
+    "matched": 7,
+    "findings": 13,
+    "above_grace": 6,
+    "by_kind": {
+      "billed_not_found": 7,
+      "found_not_billed": 3,
+      "region_mismatch": 3
+    }
+  },
+  "findings": [
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-flint-5520",
+      "sku": "gpu-accelerated-1",
+      "monthly_cents": 41200,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "core.billing.csv"
+      ]
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-augite-5290",
+      "sku": "compute-burst-2",
+      "monthly_cents": 20000,
+      "team": null,
+      "billed_region": "sp2",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "core.billing.csv"
+      ]
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-zircon-1147",
+      "sku": "compute-burst-2",
+      "monthly_cents": 20000,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "core.billing.csv"
+      ]
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-borax-8241",
+      "sku": "queue-broker",
+      "monthly_cents": 15000,
+      "team": null,
+      "billed_region": "sp2",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "core.billing.csv"
+      ]
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-slate-6647",
+      "sku": "blockstore-ssd",
+      "monthly_cents": 6300,
+      "team": null,
+      "billed_region": "sp2",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "core.billing.csv"
+      ]
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-galena-3357",
+      "sku": "object-archive",
+      "monthly_cents": 900,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "edge.billing.csv"
+      ]
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-marl-1183",
+      "sku": "dns-zone",
+      "monthly_cents": 750,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": false,
+      "sources": [
+        "edge.billing.csv"
+      ]
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "min-chert-8830",
+      "sku": "object-archive",
+      "monthly_cents": null,
+      "team": "archive-guild",
+      "billed_region": null,
+      "scanned_region": "south-pacific-2",
+      "above_grace": false,
+      "sources": [
+        "estate.scan.json"
+      ]
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "min-cinnabar-7028",
+      "sku": "queue-broker",
+      "monthly_cents": null,
+      "team": "ml-research",
+      "billed_region": null,
+      "scanned_region": "north-atlantic-1",
+      "above_grace": false,
+      "sources": [
+        "estate.scan.json"
+      ]
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "min-schist-3391",
+      "sku": "compute-standard-8",
+      "monthly_cents": null,
+      "team": "data-eng",
+      "billed_region": null,
+      "scanned_region": "sp2",
+      "above_grace": false,
+      "sources": [
+        "estate.scan.json"
+      ]
+    },
+    {
+      "kind": "region_mismatch",
+      "resource_id": "min-agate-2216",
+      "sku": "dns-zone",
+      "monthly_cents": 3300,
+      "team": "network-eng",
+      "billed_region": "NA1",
+      "scanned_region": "na1",
+      "above_grace": false,
+      "sources": [
+        "core.billing.csv",
+        "estate.scan.json"
+      ]
+    },
+    {
+      "kind": "region_mismatch",
+      "resource_id": "min-obsidian-3062",
+      "sku": "nat-gateway",
+      "monthly_cents": 9600,
+      "team": "network-eng",
+      "billed_region": "north-atlantic-1",
+      "scanned_region": "sp2",
+      "above_grace": false,
+      "sources": [
+        "core.billing.csv",
+        "estate.scan.json"
+      ]
+    },
+    {
+      "kind": "region_mismatch",
+      "resource_id": "min-topaz-9053",
+      "sku": "compute-standard-8",
+      "monthly_cents": 7100,
+      "team": "platform-core",
+      "billed_region": "mid-continent-7",
+      "scanned_region": "mc",
+      "above_grace": false,
+      "sources": [
+        "core.billing.csv",
+        "estate.scan.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "broken.scan.json",
+      "format": "scan",
+      "status": "failed",
+      "accepted": 0,
+      "rejected": 0,
+      "problems": [
+        "unreadable: Unterminated string starting at: line 5 column 64 (char 222)"
+      ]
+    },
+    {
+      "path": "core.billing.csv",
+      "format": "billing",
+      "status": "ok",
+      "accepted": 13,
+      "rejected": 0,
+      "problems": []
+    },
+    {
+      "path": "edge.billing.csv",
+      "format": "billing",
+      "status": "partial",
+      "accepted": 4,
+      "rejected": 1,
+      "problems": [
+        "row 6: resource_id min-galena-3357 already appeared on the billing side"
+      ]
+    },
+    {
+      "path": "estate.scan.json",
+      "format": "scan",
+      "status": "partial",
+      "accepted": 11,
+      "rejected": 1,
+      "problems": [
+        "resource 12: region is not a non-empty string"
+      ]
+    }
+  ],
+  "exit_code": 1
+}

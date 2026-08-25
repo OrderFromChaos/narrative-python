@@ -1,0 +1,31 @@
+FINDINGS
+  kind              resource           sku                 team           monthly  billed            scanned           grace
+  ----------------  -----------------  ------------------  -------------  -------  ----------------  ----------------  ------
+  billed_not_found  min-flint-5520     gpu-accelerated-1   -              $412.00  na1               -                 over
+  billed_not_found  min-slate-6647     blockstore-ssd      -               $63.00  sp2               -                 over
+  billed_not_found  min-marl-1183      dns-zone            -                $7.50  na1               -                 within
+  found_not_billed  min-chert-8830     object-archive      archive-guild        -  -                 south-pacific-2   -
+  found_not_billed  min-cinnabar-7028  queue-broker        ml-research          -  -                 north-atlantic-1  -
+  found_not_billed  min-schist-3391    compute-standard-8  data-eng             -  -                 sp2               -
+  region_mismatch   min-obsidian-3062  nat-gateway         network-eng     $96.00  north-atlantic-1  sp2               -
+
+FILES
+  file              format   status  records  problems
+  ----------------  -------  ------  -------  --------
+  broken.scan.json  scan     failed        0         1
+  core.billing.csv  billing  ok            7         -
+  edge.billing.csv  billing  ok            3         -
+  estate.scan.json  scan     ok            8         -
+  broken.scan.json: file is not valid JSON: Unterminated string starting at: line 5 column 64 (char 222)
+
+SUMMARY
+  billing lines     10 (3 ignored)
+  scanned resources 8 (1 ignored)
+  matched           4
+  findings          7 (billed_not_found 3, found_not_billed 3, region_mismatch 1)
+  above grace       2 (grace $7.50)
+  files             1 failed, 3 ok
+
+OUTPUTS
+  store   /home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/run/base.db (7 new, 0 seen again, 7 rows)
+  report  /home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/run/base-report.json

@@ -1,0 +1,14 @@
+resource_id,sku,monthly_cents,region
+min-quartz-4471,compute-standard-8,182400,na1
+min-basalt-2298,compute-burst-2,43900,north-atlantic-1
+min-gypsum-7715,blockstore-ssd,12750,sp2
+min-obsidian-3062,nat-gateway,9600,north-atlantic-1
+min-pumice-9104,platform-support-tier,250000,na1
+min-flint-5520,gpu-accelerated-1,41200,na1
+min-slate-6647,blockstore-ssd,6300,sp2
+min-zircon-1147,compute-burst-2,20000,na1
+min-augite-5290,compute-burst-2,20000,sp2
+min-jasper-4408,blockstore-ssd,8800,na1
+min-agate-2216,dns-zone,3300,NA1
+min-topaz-9053,compute-standard-8,7100,mid-continent-7
+min-borax-8241,queue-broker,15000,sp2

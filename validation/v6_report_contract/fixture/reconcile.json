@@ -1,0 +1,10 @@
+{
+  "ignored_skus": ["platform-support-tier"],
+  "region_aliases": {
+    "mc7": "mc",
+    "mid-continent-7": "mc7",
+    "north-atlantic-1": "na1",
+    "south-pacific-2": "sp2"
+  },
+  "grace_cents": 750
+}

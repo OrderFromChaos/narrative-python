@@ -1,0 +1,6 @@
+resource_id,sku,monthly_cents,region
+min-marl-1183,dns-zone,750,na1
+min-tuff-2504,platform-support-tier,31000,sp2
+min-chert-8830,platform-support-tier,4500,south-pacific-2
+min-galena-3357,object-archive,900,na1
+min-galena-3357,object-archive,1400,na1

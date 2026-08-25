@@ -1,0 +1,3 @@
+WARNING file.read accepted=0 funcName=_logFileOutcome lineno=115 module=inventory path=broken.scan.json rejected=0 status=failed
+WARNING file.read accepted=4 funcName=_logFileOutcome lineno=115 module=inventory path=edge.billing.csv rejected=1 status=partial
+WARNING file.read accepted=11 funcName=_logFileOutcome lineno=115 module=inventory path=estate.scan.json rejected=1 status=partial

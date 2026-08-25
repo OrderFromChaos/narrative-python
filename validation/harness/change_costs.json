@@ -1,0 +1,74 @@
+{
+  "C1_base": {
+    "files_touched": "5",
+    "files_added": "1",
+    "lines_added": "123",
+    "lines_removed": "14",
+    "churn": "137"
+  },
+  "C1_full": {
+    "files_touched": "7",
+    "files_added": "2",
+    "lines_added": "171",
+    "lines_removed": "63",
+    "churn": "234"
+  },
+  "C2_base": {
+    "files_touched": "6",
+    "files_added": "0",
+    "lines_added": "104",
+    "lines_removed": "11",
+    "churn": "115"
+  },
+  "C2_full": {
+    "files_touched": "5",
+    "files_added": "0",
+    "lines_added": "73",
+    "lines_removed": "33",
+    "churn": "106"
+  },
+  "C3_base": {
+    "files_touched": "2",
+    "files_added": "0",
+    "lines_added": "37",
+    "lines_removed": "11",
+    "churn": "48"
+  },
+  "C3_full": {
+    "files_touched": "4",
+    "files_added": "0",
+    "lines_added": "46",
+    "lines_removed": "13",
+    "churn": "59"
+  },
+  "C4_base": {
+    "files_touched": "5",
+    "files_added": "0",
+    "lines_added": "76",
+    "lines_removed": "14",
+    "churn": "90"
+  },
+  "C4_full": {
+    "files_touched": "6",
+    "files_added": "0",
+    "lines_added": "66",
+    "lines_removed": "26",
+    "churn": "92"
+  },
+  "C5_base": {
+    "files_touched": "7",
+    "files_added": "1",
+    "lines_added": "170",
+    "lines_removed": "58",
+    "churn": "228",
+    "baseline": "base arm as C1 left it, not the pristine arm"
+  },
+  "C5_full": {
+    "files_touched": "7",
+    "files_added": "1",
+    "lines_added": "87",
+    "lines_removed": "8",
+    "churn": "95",
+    "baseline": "full arm as C1 left it, not the pristine arm"
+  }
+}

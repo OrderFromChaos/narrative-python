@@ -1,0 +1,101 @@
+{
+  "grace_cents": 750,
+  "findings": [
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-flint-5520",
+      "sku": "gpu-accelerated-1",
+      "monthly_cents": 41200,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": true
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-slate-6647",
+      "sku": "blockstore-ssd",
+      "monthly_cents": 6300,
+      "team": null,
+      "billed_region": "sp2",
+      "scanned_region": null,
+      "above_grace": true
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "min-marl-1183",
+      "sku": "dns-zone",
+      "monthly_cents": 750,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": false
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "min-chert-8830",
+      "sku": "object-archive",
+      "monthly_cents": null,
+      "team": "archive-guild",
+      "billed_region": null,
+      "scanned_region": "south-pacific-2",
+      "above_grace": false
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "min-schist-3391",
+      "sku": "compute-standard-8",
+      "monthly_cents": null,
+      "team": "data-eng",
+      "billed_region": null,
+      "scanned_region": "sp2",
+      "above_grace": false
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "min-cinnabar-7028",
+      "sku": "queue-broker",
+      "monthly_cents": null,
+      "team": "ml-research",
+      "billed_region": null,
+      "scanned_region": "north-atlantic-1",
+      "above_grace": false
+    },
+    {
+      "kind": "region_mismatch",
+      "resource_id": "min-obsidian-3062",
+      "sku": "nat-gateway",
+      "monthly_cents": 9600,
+      "team": "network-eng",
+      "billed_region": "north-atlantic-1",
+      "scanned_region": "sp2",
+      "above_grace": false
+    }
+  ],
+  "files": [
+    {
+      "path": "/home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/fixture/broken.scan.json",
+      "accepted_lines": 0,
+      "rejected_lines": 0,
+      "error": "not valid JSON: Unterminated string starting at, line 5"
+    },
+    {
+      "path": "/home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/fixture/core.billing.csv",
+      "accepted_lines": 7,
+      "rejected_lines": 0,
+      "error": null
+    },
+    {
+      "path": "/home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/fixture/edge.billing.csv",
+      "accepted_lines": 3,
+      "rejected_lines": 0,
+      "error": null
+    },
+    {
+      "path": "/home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/fixture/estate.scan.json",
+      "accepted_lines": 8,
+      "rejected_lines": 0,
+      "error": null
+    }
+  ]
+}

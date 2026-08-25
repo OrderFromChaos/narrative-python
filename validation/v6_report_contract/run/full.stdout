@@ -1,0 +1,33 @@
+FINDINGS
+kind              resource           sku                 team           monthly  billed_region     scanned_region    grace
+billed_not_found  min-flint-5520     gpu-accelerated-1   -              41200c   na1               -                 over
+billed_not_found  min-augite-5290    compute-burst-2     -              20000c   sp2               -                 over
+billed_not_found  min-zircon-1147    compute-burst-2     -              20000c   na1               -                 over
+billed_not_found  min-borax-8241     queue-broker        -              15000c   sp2               -                 over
+billed_not_found  min-slate-6647     blockstore-ssd      -              6300c    sp2               -                 over
+billed_not_found  min-galena-3357    object-archive      -              900c     na1               -                 over
+billed_not_found  min-marl-1183      dns-zone            -              750c     na1               -                 within
+found_not_billed  min-chert-8830     object-archive      archive-guild  -        -                 south-pacific-2   -
+found_not_billed  min-cinnabar-7028  queue-broker        ml-research    -        -                 north-atlantic-1  -
+found_not_billed  min-schist-3391    compute-standard-8  data-eng       -        -                 sp2               -
+region_mismatch   min-agate-2216     dns-zone            network-eng    3300c    NA1               na1               -
+region_mismatch   min-obsidian-3062  nat-gateway         network-eng    9600c    north-atlantic-1  sp2               -
+region_mismatch   min-topaz-9053     compute-standard-8  platform-core  7100c    mid-continent-7   mc                -
+
+FILES
+path              format   status   accepted  rejected  problems
+broken.scan.json  scan     failed   0         0         1
+core.billing.csv  billing  ok       13        0         0
+edge.billing.csv  billing  partial  4         1         1
+estate.scan.json  scan     partial  11        1         1
+
+TOTALS
+total              count
+billing_lines      17
+scanned_resources  11
+ignored_billing    3
+ignored_scanned    1
+matched            7
+findings           13
+above_grace        6
+by_kind            billed_not_found 7  found_not_billed 3  region_mismatch 3

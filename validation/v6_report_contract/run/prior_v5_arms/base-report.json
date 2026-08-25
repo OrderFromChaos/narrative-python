@@ -1,0 +1,168 @@
+{
+  "generated_at": "2026-08-25T04:34:14+00:00",
+  "input_dir": "/home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/fixture",
+  "rules": {
+    "ignored_skus": [
+      "platform-support-tier"
+    ],
+    "region_aliases": {
+      "north-atlantic-1": "na1",
+      "south-pacific-2": "sp2"
+    },
+    "grace_cents": 750,
+    "source": "/home/order/Dropbox/Python_Code/Utility/improved-ai-code-style/validation/v6_shared_fixture/fixture/reconcile.json"
+  },
+  "totals": {
+    "billing_lines": 10,
+    "scanned_resources": 8,
+    "ignored_billing": 3,
+    "ignored_scanned": 1,
+    "matched": 4,
+    "findings": 7,
+    "above_grace": 2,
+    "by_kind": {
+      "billed_not_found": 3,
+      "found_not_billed": 3,
+      "region_mismatch": 1
+    }
+  },
+  "findings": [
+    {
+      "key": "billed_not_found:min-flint-5520",
+      "kind": "billed_not_found",
+      "resource_id": "min-flint-5520",
+      "sku": "gpu-accelerated-1",
+      "monthly_cents": 41200,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "core.billing.csv"
+      ]
+    },
+    {
+      "key": "billed_not_found:min-slate-6647",
+      "kind": "billed_not_found",
+      "resource_id": "min-slate-6647",
+      "sku": "blockstore-ssd",
+      "monthly_cents": 6300,
+      "team": null,
+      "billed_region": "sp2",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "core.billing.csv"
+      ]
+    },
+    {
+      "key": "billed_not_found:min-marl-1183",
+      "kind": "billed_not_found",
+      "resource_id": "min-marl-1183",
+      "sku": "dns-zone",
+      "monthly_cents": 750,
+      "team": null,
+      "billed_region": "na1",
+      "scanned_region": null,
+      "above_grace": false,
+      "sources": [
+        "edge.billing.csv"
+      ]
+    },
+    {
+      "key": "found_not_billed:min-chert-8830",
+      "kind": "found_not_billed",
+      "resource_id": "min-chert-8830",
+      "sku": "object-archive",
+      "monthly_cents": null,
+      "team": "archive-guild",
+      "billed_region": null,
+      "scanned_region": "south-pacific-2",
+      "above_grace": false,
+      "sources": [
+        "estate.scan.json"
+      ]
+    },
+    {
+      "key": "found_not_billed:min-cinnabar-7028",
+      "kind": "found_not_billed",
+      "resource_id": "min-cinnabar-7028",
+      "sku": "queue-broker",
+      "monthly_cents": null,
+      "team": "ml-research",
+      "billed_region": null,
+      "scanned_region": "north-atlantic-1",
+      "above_grace": false,
+      "sources": [
+        "estate.scan.json"
+      ]
+    },
+    {
+      "key": "found_not_billed:min-schist-3391",
+      "kind": "found_not_billed",
+      "resource_id": "min-schist-3391",
+      "sku": "compute-standard-8",
+      "monthly_cents": null,
+      "team": "data-eng",
+      "billed_region": null,
+      "scanned_region": "sp2",
+      "above_grace": false,
+      "sources": [
+        "estate.scan.json"
+      ]
+    },
+    {
+      "key": "region_mismatch:min-obsidian-3062",
+      "kind": "region_mismatch",
+      "resource_id": "min-obsidian-3062",
+      "sku": "nat-gateway",
+      "monthly_cents": 9600,
+      "team": "network-eng",
+      "billed_region": "north-atlantic-1",
+      "scanned_region": "sp2",
+      "above_grace": false,
+      "sources": [
+        "core.billing.csv",
+        "estate.scan.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "broken.scan.json",
+      "kind": "scan",
+      "status": "failed",
+      "records": 0,
+      "problems": [
+        "file is not valid JSON: Unterminated string starting at: line 5 column 64 (char 222)"
+      ]
+    },
+    {
+      "path": "core.billing.csv",
+      "kind": "billing",
+      "status": "ok",
+      "records": 7,
+      "problems": []
+    },
+    {
+      "path": "edge.billing.csv",
+      "kind": "billing",
+      "status": "ok",
+      "records": 3,
+      "problems": []
+    },
+    {
+      "path": "estate.scan.json",
+      "kind": "scan",
+      "status": "ok",
+      "records": 8,
+      "problems": []
+    }
+  ],
+  "exit_code": 1,
+  "store": {
+    "inserted": 0,
+    "updated": 7,
+    "total_rows": 7
+  }
+}
