@@ -1,0 +1,22 @@
+{
+  "base": {
+    "ruff": 93,
+    "pylint": 32,
+    "mypy": 2,
+    "checks": 2,
+    "modules": 14,
+    "lines": 1380,
+    "format_clean": false,
+    "min_python": "3.11"
+  },
+  "full": {
+    "ruff": 0,
+    "pylint": 0,
+    "mypy": 0,
+    "checks": 0,
+    "modules": 14,
+    "lines": 1316,
+    "format_clean": true,
+    "min_python": "3.11"
+  }
+}
