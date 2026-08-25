@@ -64,6 +64,33 @@ the scheduler that applies it. This one rule decides four questions that look un
   is fine while one module produces the records, and is a smell once two producers need different
   keys. (`R7-E02-fields`)
 
+- **A one-line body earns its name when the expression encodes a domain decision.** It does not when
+  the expression is a plain language or stdlib operation. (`R9-12`)
+
+  ```python
+  # No. A dict lookup with a default is not a concept.
+  def canonicaliseRegion(region: RegionName, reconcile_rules: ReconcileRules) -> RegionName:
+      return reconcile_rules.region_aliases.get(region, region)
+
+  # Yes. The pattern and the fold are the PEP 503 rule, and the name is what states it.
+  def normalizeName(name: PackageName) -> PackageName:
+      return _NAME_SEPARATORS.sub('-', name.strip().lower())
+  ```
+
+  These two settle the boundary, because only one token separates them:
+
+  ```python
+  sorted(path for path in directory.iterdir() if path.is_file())                    # inline it
+  sorted(path for path in directory.iterdir() if path.is_file() and isReport(path))  # name it
+  ```
+
+  The first is three `Path` calls. The second composes `isReport`, which is a concept from the
+  problem, and the name of the whole is what tells a reader the two conditions belong together.
+
+  This is judgement and no tool checks it. Measured over eight packages, seven functions forwarded to
+  a single expression and only one was the defect, so a mechanical threshold would be six false
+  positives in seven.
+
 **Two participants that must agree on a byte layout share one module, beside them.** (`R7-A05`) A
 copy on each side is the worst option, because drift between the copies is a bug that no type checker
 and no linter reports.

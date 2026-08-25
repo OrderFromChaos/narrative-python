@@ -70,12 +70,6 @@ def readRules(rules_path: Path) -> ReconcileRules:
     return reconcile_rules
 
 
-def canonicaliseRegion(region: RegionName, reconcile_rules: ReconcileRules) -> RegionName:
-    # The file maps one spelling to the other and states neither direction, so a region the file
-    # does not name is already canonical and stands for itself.
-    return reconcile_rules.region_aliases.get(region, region)
-
-
 def aboveGrace(finding: Finding, reconcile_rules: ReconcileRules) -> bool:
     # Grace answers whether a finding is worth failing the run over, and only a billing line that
     # bought nothing is. A region mismatch carries a cost too, and no cost excuses it.

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from reconciler import rules
 from reconciler.logs import LOG
 from reconciler.vocabulary import (
     Finding,
@@ -67,11 +66,13 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
         )
 
     region_mismatch = []
+    # A region the file does not name is already canonical and stands for itself.
+    aliases = reconcile_rules.region_aliases
     for resource_id in sorted(billed.keys() & scanned.keys()):
         billing_line = billed[resource_id]
         scanned_resource = scanned[resource_id]
-        billed_canonical = rules.canonicaliseRegion(billing_line.region, reconcile_rules)
-        scanned_canonical = rules.canonicaliseRegion(scanned_resource.region, reconcile_rules)
+        billed_canonical = aliases.get(billing_line.region, billing_line.region)
+        scanned_canonical = aliases.get(scanned_resource.region, scanned_resource.region)
         if billed_canonical == scanned_canonical:
             continue
         region_mismatch.append(

@@ -1,0 +1,75 @@
+{
+  "grace_cents": 500,
+  "findings": [
+    {
+      "kind": "billed_not_found",
+      "resource_id": "i-0004",
+      "sku": "compute-gpu",
+      "monthly_cents": 250000,
+      "team": null,
+      "billed_region": "us-east-1",
+      "scanned_region": null,
+      "above_grace": true
+    },
+    {
+      "kind": "billed_not_found",
+      "resource_id": "i-0006",
+      "sku": "object-store",
+      "monthly_cents": 120,
+      "team": null,
+      "billed_region": "us-east-1",
+      "scanned_region": null,
+      "above_grace": false
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "i-0009",
+      "sku": "compute-std",
+      "monthly_cents": null,
+      "team": "archive",
+      "billed_region": null,
+      "scanned_region": "use1",
+      "above_grace": false
+    },
+    {
+      "kind": "found_not_billed",
+      "resource_id": "i-0008",
+      "sku": "object-store",
+      "monthly_cents": null,
+      "team": "search",
+      "billed_region": null,
+      "scanned_region": "us-west-2",
+      "above_grace": false
+    },
+    {
+      "kind": "region_mismatch",
+      "resource_id": "i-0003",
+      "sku": "object-store",
+      "monthly_cents": 900,
+      "team": "archive",
+      "billed_region": "us-west-2",
+      "scanned_region": "eu-west-1",
+      "above_grace": false
+    }
+  ],
+  "files": [
+    {
+      "path": "fixture/edge.scan.json",
+      "accepted_lines": 0,
+      "rejected_lines": 0,
+      "error": "not valid JSON: Expecting property name enclosed in double quotes, line 5"
+    },
+    {
+      "path": "fixture/prod.billing.csv",
+      "accepted_lines": 6,
+      "rejected_lines": 1,
+      "error": null
+    },
+    {
+      "path": "fixture/prod.scan.json",
+      "accepted_lines": 6,
+      "rejected_lines": 0,
+      "error": null
+    }
+  ]
+}

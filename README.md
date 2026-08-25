@@ -9,7 +9,7 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 275 forced choices between
+Every rule cites the decision that produced it. The decisions came from 276 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
@@ -171,7 +171,7 @@ measured it still resolve. (`R8-NAR008`)
 |---|---|
 | `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
 | `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
-| `benchmark/decisions.jsonl` | all 275 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 276 decisions, each with its reasoning and evidence |
 | `benchmark/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |

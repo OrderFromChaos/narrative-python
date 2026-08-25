@@ -25,7 +25,7 @@
     "mypy": 0,
     "checks": 0,
     "modules": 12,
-    "lines": 968,
+    "lines": 963,
     "format_clean": true,
     "min_python": "3.10"
   }

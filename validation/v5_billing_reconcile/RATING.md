@@ -135,6 +135,27 @@ re-export façade and `__all__`, and both reported having to invent that.
 application or a library. Two independent arms on two unrelated tasks have now paid for it. It is
 ready to settle.
 
+## One edit after scoring
+
+`full/reconciler/` is **not exactly what the agent produced.** After the round was scored and rated,
+the author read `rules.py:73` and objected to it:
+
+```python
+def canonicaliseRegion(region: RegionName, reconcile_rules: ReconcileRules) -> RegionName:
+    return reconcile_rules.region_aliases.get(region, region)
+```
+
+That became `R9-12`, and the function was inlined at its two call sites in `join.py`, which also
+removed a now-unused `from reconciler import rules`. The gate still passes all six checks, the
+fixture still exits 1, and two independent probes return byte-identical findings and exit codes
+before and after. **Every score and defect count in this file predates the edit and none of them
+move**, because the edit changed three lines of one function and no behaviour.
+
+The V3 full arm was left unedited under the same circumstances, for the opposite reason: its
+`ruff format` failure is a *finding*, and fixing it would delete the evidence. This edit deletes no
+evidence — `R9-12` records the defect permanently — and it keeps the arm usable as a reference
+implementation.
+
 ## Limitations
 
 **One task, one agent per arm, no repeats.** `base` writing well on V5 and poorly on V3 is agent
