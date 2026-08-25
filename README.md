@@ -87,14 +87,9 @@ Docstrings are written for a professional developer who has the file open, so tr
 correct and a plain-English circumlocution around it is not. `SKILL.md` carries the rules: what a
 docstring body may say, what it may not, and the tests that cut a sentence.
 
-**No linter checks this.** The style used ASD-STE100 here until round 9 measured it against the
-prose it was meant to produce. It does not ban developer jargon, which an earlier reading of this
-claimed and which testing refuted. What it does is prefer the passive-free, longer sentence, and its
-gate is a rate per 100 words, so cutting words while holding violations flat made a strictly better
-docstring score 8 times worse. Measured per sentence, every true positive it found on a real package
-was already caught by the rules in `SKILL.md`, and every sentence it still disagreed with after the
-rewrite was one where it wanted the longer form. Redundant where right, wrong where it differed.
-`NAR011` catches the one mechanical trap that remained. (`R9-09`)
+**No tool checks prose, and none is coming.** Docstring quality is review judgement; `verify.py`
+reads Python files only. `NAR011` catches the one mechanical trap — a docstring body indented past
+its own column, which `ruff format` flattens and which silently destroys a pasted sample. (`R9-09`)
 
 ### Python version
 
@@ -160,10 +155,9 @@ match and fails any file that uses no 3.11-only feature.
 
 `NAR000` is not a style rule. It reports a file that could not be read or parsed.
 
-`NAR008` was withdrawn. It asked for a blank line after any statement of three or more lines, and
-measured at 42% precision and 22% recall against hand-marked whitespace, so the rule it stood for is
-now review judgement. `checks.py` keeps the code in a `RETIRED` registry so the writeups that
-measured it still resolve. (`R8-NAR008`)
+**Blank lines inside a function are review judgement, and no check enforces them.** `NAR008` is
+withdrawn and its code stays in a `RETIRED` registry, so a document naming it still resolves while
+`--select` never offers it. (`R8-NAR008`)
 
 ## What is in this repository
 
@@ -188,58 +182,84 @@ measured it still resolve. (`R8-NAR008`)
 
 Ready for real work. Two things are worth knowing before you rely on it.
 
-**The blind validation was never done.** Six implementations exist across two held-out tasks and
-`RATING.md` is still an empty form. Nobody judged the comparison that matters, skill against the
-prior style doc, so the project has no answer to its own stated bar. The reported line counts had
-already compromised the blinding by going out before any rating.
+### The result
 
-**The mechanical scores were wrong, and are now regenerated.** `SCORES.json` recorded `checks: 0`
-for an arm that has a finding, and a line count that was off by one — both wrong when written,
-confirmed against the checker as shipped at the time (`R8-D36`). It also recorded `mypy: 0` for an
-arm that needs `hypothesis`, which was not in `requirements-lock.txt`, so the toolchain could not
-check code the style mandates (`R8-F05`). Current numbers, all six arms, one checker:
+The current comparison is **V5**, a held-out billing reconciler: read two inventory formats, join
+them, report what fails to match on either side. Both arms got the same spec, at the same time, and
+neither was asked for tests. `base` got the task and nothing else; `full` got the whole skill.
 
-| | lines | ruff | pylint | mypy | checks |
-|---|---|---|---|---|---|
-| v1 skill | 497 | **0** | 0 | 0 | **1** |
-| v1 doc | 534 | 4 | 0 | 0 | 8 |
-| v1 base | 656 | 185 | 12 | 23 | 2 |
-| v2 skill | 513 | 2 | 0 | 0 | **1** |
-| v2 doc | 336 | 10 | 0 | 0 | 5 |
-| v2 base | 758 | 230 | 39 | 0 | 7 |
+| | modules | lines | ruff | format | pylint | mypy | checks |
+|---|---|---|---|---|---|---|---|
+| `base` | 12 | 1317 | 321 | FAIL | 36 | 0 | 14 |
+| **`full`** | 12 | **963** | **0** | **ok** | **0** | **0** | **0** |
 
-The skill arm wins on `checks` and on `ruff` in both tasks. **One ordering inverted**: on `v1`
-`checks`, base now scores better than doc, because most of what the doc arm was penalised for was
-`NAR008`, which has since been withdrawn. Read the whole table as measuring today's checker, not the
-one that produced the original numbers.
+Split by line kind, the same two programs:
 
-**Does the style make code longer?** Measured over four tasks against unguided Claude. Both arms
-got identical instructions and neither was asked for tests.
-
-| | unguided | Narrative |
+| | `base` | **`full`** |
 |---|---|---|
-| total | 899 | 1144 |
-| **code** | **612** | **572** |
-| docstring | 140 | 274 |
-| comment | 5 | 66 |
-| blank | 142 | 232 |
+| **code** | 879 | **590** |
+| docstring | 232 | 184 |
+| comment | 0 | 11 |
+| blank | 206 | 178 |
 
-Read that aggregate with three caveats, because it is weaker than it looks.
+The guided arm is 354 lines shorter, and **289 of those are code**. It gives up a third of the
+executable lines and keeps the documentation.
 
-**The sign flips per task.** Narrative wrote *more* logic on two of the four:
+### What the 289 lines would have bought
 
-| | t1 | t2 | t3 | t4 |
-|---|---|---|---|---|
-| code, unguided → Narrative | 204 → 210 | 101 → 107 | 166 → **129** | 141 → **126** |
+The two programs were compared module by module and probed on twenty-two edge cases. They agree on
+every finding their own fixtures produce, on both exit codes, and on the malformed-file path. They
+diverge on four things, and only the last is a gap:
 
-The 6.5% aggregate rests entirely on t3 and t4.
+| | `base` | `full` |
+|---|---|---|
+| region name `ZONE1` vs `zone1` | same region | **different** |
+| alias chain `a→b`, `b→c` | follows it, `a` = `c` | **one hop, `a` ≠ `c`** |
+| stderr on a clean run | silent | one `INFO` line |
+| SQLite columns | 11 | **7** |
 
-**The sample is four, one run per cell, no repeats and no variance measured.** It is a direction,
-not a number.
+The first two are where the spec is silent, and `full` is the more literal reading of it — an alias
+is defined as a pair of names, so transitive closure is a rule nobody asked for. Neither is a defect.
 
-**The Narrative arm was edited after the run.** The module-docstring rule landed later, and
-retrofitting it added 117 lines to these four files. So 1144 is a post-hoc artefact rather than a
-one-pass result. The `code` count did not move, which is the reason to trust that figure and not
-the total.
+The fourth is real. `base` stores `above_grace`, `sources`, `first_seen_at` and `last_seen_at`;
+`full` stores none of them, so a query against `full`'s table cannot say which findings set the exit
+code, or when a mismatch first appeared, or whether it is still present. That is the one place the
+extra code buys something.
 
-What survives all three caveats: **the style adds documentation and whitespace, not logic.**
+Going the other way, `base` ships one dead function — `read_findings`, 14 lines, defined and
+exported and never called — and `full` ships none.
+
+**Neither can tell a consumer that a run was degraded.** When an inventory file fails to parse, both
+emit `billed_not_found` for every resource that file would have matched, write them to SQLite
+indistinguishable from real findings, and exit 1. That defect is shared, unrelated to style, and the
+first thing worth fixing in either program.
+
+Two earlier rounds, `v3_manifest_audit` and `v4_quota_reconcile`, ran against older versions of the
+skill and are kept as history. Both reproduce the same mechanical shape: `base` at 324 and 367 ruff
+findings, the guided arms at zero.
+
+### How far this evidence goes
+
+One task, one agent per arm, no repeats. Agent variance is visibly larger than arm variance, and
+**no arm wrote tests** — real use would ask for tests and iterate, which plausibly closes most of
+what remains. `benchmark/round9/README.md` holds the verdict and the rest of its limits.
+
+### What is still open
+
+**The comparison is not blind.** The directory names identify the arms, and normalising the layout
+would destroy what the round measures.
+
+**The subjective rating forms are empty.** Each `RATING.md` holds the analysis and the measurements;
+the human judgement rows at the bottom — "is this how I would want it written", "lines I would change
+in review" — are unfilled. The project still has no answer to its own stated bar.
+
+**Nothing mechanical justifies `architecture.md`.** A third arm gets `SKILL.md` without it, and ties
+`full` at zero on every tool in every round. The case for it rests on the ratings, on the count of
+inter-module questions the reduced arm had to invent answers to (17 on V5), and on one functional
+result: on V5 that arm was the sole outlier of three on input hardening, with **zero `.strip()` calls
+in the package** against 9 in `base` and 6 in `full`, which cost it a join split in two by a padded
+identifier and a table that clobbers its own alias mapping.
+
+An older four-task experiment in `experiment/length/` reached the same code-versus-prose conclusion
+from a different direction, with weaker evidence — one run per cell, and the arm was edited after the
+run. V5 supersedes it.

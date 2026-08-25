@@ -1,0 +1,139 @@
+{
+  "generated_at": "2026-08-25T03:42:59+00:00",
+  "input_dir": "fixture",
+  "rules": {
+    "ignored_skus": [
+      "support-plan",
+      "tax-adjustment"
+    ],
+    "region_aliases": {
+      "us-east-1": "use1",
+      "eu-west-1": "euw1"
+    },
+    "grace_cents": 500,
+    "source": "fixture/reconcile.json"
+  },
+  "totals": {
+    "billing_lines": 9,
+    "scanned_resources": 9,
+    "ignored_billing": 1,
+    "ignored_scanned": 2,
+    "matched": 6,
+    "findings": 4,
+    "above_grace": 1,
+    "by_kind": {
+      "billed_not_found": 2,
+      "found_not_billed": 1,
+      "region_mismatch": 1
+    }
+  },
+  "findings": [
+    {
+      "key": "billed_not_found:i-0a4",
+      "kind": "billed_not_found",
+      "resource_id": "i-0a4",
+      "sku": "compute-gpu",
+      "monthly_cents": 86000,
+      "team": null,
+      "billed_region": "us-east-1",
+      "scanned_region": null,
+      "above_grace": true,
+      "sources": [
+        "prod.billing.csv"
+      ]
+    },
+    {
+      "key": "billed_not_found:i-0a5",
+      "kind": "billed_not_found",
+      "resource_id": "i-0a5",
+      "sku": "block-store",
+      "monthly_cents": 300,
+      "team": null,
+      "billed_region": "use1",
+      "scanned_region": null,
+      "above_grace": false,
+      "sources": [
+        "prod.billing.csv"
+      ]
+    },
+    {
+      "key": "found_not_billed:i-0c7",
+      "kind": "found_not_billed",
+      "resource_id": "i-0c7",
+      "sku": "compute-gpu",
+      "monthly_cents": null,
+      "team": "ml",
+      "billed_region": null,
+      "scanned_region": "use1",
+      "above_grace": false,
+      "sources": [
+        "prod.scan.json"
+      ]
+    },
+    {
+      "key": "region_mismatch:i-0b1",
+      "kind": "region_mismatch",
+      "resource_id": "i-0b1",
+      "sku": "compute-std",
+      "monthly_cents": 7300,
+      "team": "payments",
+      "billed_region": "eu-west-1",
+      "scanned_region": "us-east-1",
+      "above_grace": false,
+      "sources": [
+        "prod.billing.csv",
+        "prod.scan.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "broken.scan.json",
+      "kind": "scan",
+      "status": "failed",
+      "records": 0,
+      "problems": [
+        "file is not valid JSON: Illegal trailing comma before end of array: line 4 column 78 (char 141)"
+      ]
+    },
+    {
+      "path": "edge.scan.json",
+      "kind": "scan",
+      "status": "partial",
+      "records": 2,
+      "problems": [
+        "resources[2]: team is absent"
+      ]
+    },
+    {
+      "path": "legacy.billing.csv",
+      "kind": "billing",
+      "status": "partial",
+      "records": 2,
+      "problems": [
+        "line 3: i-0d2: monthly_cents is not a whole number: 'not-a-number'",
+        "i-0d1: already billed in legacy.billing.csv, line dropped"
+      ]
+    },
+    {
+      "path": "prod.billing.csv",
+      "kind": "billing",
+      "status": "ok",
+      "records": 7,
+      "problems": []
+    },
+    {
+      "path": "prod.scan.json",
+      "kind": "scan",
+      "status": "ok",
+      "records": 7,
+      "problems": []
+    }
+  ],
+  "exit_code": 1,
+  "store": {
+    "inserted": 4,
+    "updated": 0,
+    "total_rows": 4
+  }
+}

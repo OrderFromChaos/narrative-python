@@ -1,0 +1,32 @@
+{
+  "base": {
+    "ruff": 324,
+    "pylint": 41,
+    "mypy": 0,
+    "checks": 5,
+    "modules": 13,
+    "lines": 1347,
+    "format_clean": false,
+    "min_python": "3.10"
+  },
+  "skill_r2": {
+    "ruff": 0,
+    "pylint": 0,
+    "mypy": 0,
+    "checks": 0,
+    "modules": 11,
+    "lines": 890,
+    "format_clean": true,
+    "min_python": "3.11"
+  },
+  "full_r2": {
+    "ruff": 0,
+    "pylint": 0,
+    "mypy": 0,
+    "checks": 0,
+    "modules": 12,
+    "lines": 846,
+    "format_clean": true,
+    "min_python": "3.10"
+  }
+}
