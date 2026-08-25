@@ -1,0 +1,5 @@
+resource_id,sku,monthly_cents,region
+i-0d1,compute-std,15200,use1
+i-0d2,compute-std,not-a-number,use1
+i-0d1,compute-std,15200,use1
+i-0d3,archive-store,12000,euw1

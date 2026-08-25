@@ -1,0 +1,8 @@
+{
+  "host": "store-03",
+  "entries": [
+    {"path": "/srv/platform/cache", "bytes": 161061273600, "team": "platform"},
+    {"path": "/srv/media/renders", "bytes": 139586437120, "team": "media"},
+    {"path": "/srv/archive/2025", "bytes": 12884901888, "team": "archive"}
+  ]
+}

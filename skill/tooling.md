@@ -13,7 +13,7 @@ Tested with ruff 0.16.3, pylint 4.0.7, mypy 2.3.1 and vermin 1.8.0, against the 
 | `ruff check` | imports, annotations presence, bugbear, quotes, banned APIs, bare except |
 | `pylint` (naming only) | `mixedCase` functions — **no other linter can require this** |
 | `mypy --strict` | type correctness |
-| `checks.py` | the nine residual rules no tool implements |
+| `checks.py` | the residual rules no tool implements |
 | `verify.py` | running all of the above correctly, with the toolchain and config guards |
 
 Run order matters: `ruff check --fix`, then `ruff format`, then `pylint`, `mypy`, `checks.py`.
@@ -99,6 +99,26 @@ parens instead, Q03), so multiline quotes only ever appear in docstrings.
 **`ruff format` deletes the blank line between `class X:` and its first method**, and collapses two
 blank lines between methods to one. Take the formatter defaults rather than fight them: 2 blank
 lines between top-level definitions, 1 between methods, none after the `class` statement.
+
+**`ruff format` strips the common leading indent from a docstring body.** A docstring whose body is
+*entirely* an indented block therefore loses the indent, and a pasted table, log line or conversion
+sample loses its alignment:
+
+```python
+"""Summary line.          -->    """Summary line.
+
+    TEAM      USED                TEAM      USED
+    platform  800G                platform  800G
+"""                             """
+```
+
+One line of the body at the docstring's own column anchors it, and then the block is left alone.
+`NAR011` checks this, and it agrees with `ruff format` on every form tested: a module docstring whose
+body is all indented, a function docstring whose body is indented past the `def`, and an anchored
+block that ruff leaves alone (R9-08).
+
+A second trap comes with pasting a real file: a blank line inside the sample becomes a
+whitespace-only line once the block is indented, which is ruff `W293`. Strip the trailing space.
 
 **mypy reports `import-not-found` for banned libraries** before ruff gets to say why. Read the ruff
 message, not the mypy one.

@@ -35,9 +35,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('task_directory', type=Path, help='a validation task holding base/, skill/ and full/')
     parser.add_argument('--venv', type=Path, default=ROOT / '.lintenv')
+    parser.add_argument('--arms', default=','.join(ARMS), help='comma-separated arm directories to score')
     arguments = parser.parse_args()
 
     task_directory = arguments.task_directory.resolve()
+    arms = tuple(arguments.arms.split(','))
 
     binaries = {tool: arguments.venv / 'bin' / tool for tool in TOOLS}
     absent = [tool for tool, path in binaries.items() if not path.is_file()]
@@ -46,7 +48,7 @@ def main() -> int:
         return EXIT_MISSING
 
     scores = {}
-    for arm in ARMS:
+    for arm in arms:
         directory = task_directory / arm
         if not directory.is_dir():
             print(f'missing arm: {directory}', file=sys.stderr)
@@ -55,16 +57,20 @@ def main() -> int:
         scores[arm] = scoreArm(directory, binaries)
 
     report = task_directory / 'scores.json'
+    if arms != ARMS:
+        report = task_directory / f'scores-{"-".join(arms)}.json'
     report.write_text(json.dumps(scores, indent=2) + '\n')
 
-    width = max(len(arm) for arm in ARMS)
-    print(f'{"arm":{width}}  {"modules":>7} {"lines":>6} {"ruff":>5} {"pylint":>6} {"mypy":>5} {"checks":>6}')
+    width = max(len(arm) for arm in arms)
+    header = f'{"modules":>7} {"lines":>6} {"ruff":>5} {"fmt":>4} {"pylint":>6} {"mypy":>5} {"checks":>6}'
+    print(f'{"arm":{width}}  {header}')
     for arm, score in scores.items():
-        row = ' '.join(
-            f'{score[k]:>{w}}'
-            for k, w in (('modules', 7), ('lines', 6), ('ruff', 5), ('pylint', 6), ('mypy', 5), ('checks', 6))
-        )
-        print(f'{arm:{width}}  {row}')
+        counts = ' '.join(f'{score[k]:>{w}}' for k, w in (('modules', 7), ('lines', 6), ('ruff', 5)))
+        # `format_clean` is the one boolean among the counts. Printing the counts alone let a
+        # formatting failure read as a clean arm for three rounds.
+        formatting = 'ok' if score['format_clean'] else 'FAIL'
+        rest = ' '.join(f'{score[k]:>{w}}' for k, w in (('pylint', 6), ('mypy', 5), ('checks', 6)))
+        print(f'{arm:{width}}  {counts} {formatting:>4} {rest}')
 
     print(f'\nwritten to {report.relative_to(ROOT)}')
     return EXIT_SUCCESS

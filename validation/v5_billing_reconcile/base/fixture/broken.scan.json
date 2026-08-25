@@ -1,0 +1,5 @@
+{
+  "scanned_at": "2026-08-01T03:17:00+00:00",
+  "resources": [
+    {"id": "i-0e1", "sku": "compute-std", "team": "search", "region": "use1"},
+  ]

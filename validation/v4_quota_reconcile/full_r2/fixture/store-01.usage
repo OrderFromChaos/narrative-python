@@ -1,0 +1,6 @@
+# store-01, nightly sweep. This format names no owning team.
+/srv/exports/nightly.tar	1.5G
+/srv/exports/2026-08-01.tar	800M
+
+/var/log/audit/audit.log	2G
+/var/tmp/scratch	4096

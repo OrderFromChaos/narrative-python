@@ -1,7 +1,7 @@
 """Report Narrative style violations that ruff, pylint and mypy do not implement.
 
 Each rule is one check. NAR001 and NAR006 cover module state. NAR002 covers class attributes.
-NAR003 covers layout. NAR004 and NAR009 cover documentation. NAR005 covers annotation
+NAR003 covers layout. NAR004, NAR009 and NAR011 cover documentation. NAR005 covers annotation
 complexity. NAR007 covers boolean grouping. NAR010 covers FIXME reachability.
 
 See tooling.md for what the other tools own.
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-### The ten rules that no off-the-shelf tool implements. Everything else is ruff, pylint or mypy;
+### The rules that no off-the-shelf tool implements. Everything else is ruff, pylint or mypy;
 ### see tooling.md for the split and for the evidence that each of those actually fires.
 ### Stdlib only, so this runs anywhere python3 does.
 
@@ -44,6 +44,7 @@ RULES = {
     'NAR007': '`and` inside `or` without parentheses -- do not make the reader apply precedence',
     'NAR009': 'module docstring missing, or runnable module without a usage example',
     'NAR010': 'FIXME in reachable code -- a merge blocker, not a danger sign',
+    'NAR011': 'docstring body is entirely indented -- `ruff format` will flatten the sample',
     'NAR000': 'file could not be read or parsed',
 }
 
@@ -630,6 +631,34 @@ def enclosingFunction(tree: ast.Module, line: int) -> str | None:
     return None
 
 
+def checkDocstringSample(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    """Flag a docstring whose body is entirely indented.
+
+    `ruff format` strips the common leading indent from a docstring body, so a body that is all
+    sample loses its alignment and the pasted table, log line or conversion becomes prose. One line
+    at column 0 anchors the block.
+    """
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        docstring = ast.get_docstring(node, clean=False)
+        if docstring is None:
+            continue
+
+        body = [line for line in docstring.splitlines()[1:] if line.strip()]
+        if not body:
+            continue
+
+        literal = node.body[0]
+        base = literal.col_offset
+        if min(len(line) - len(line.lstrip()) for line in body) > base:
+            detail = f'add one body line at column {base}, or ruff format will flatten the sample'
+            findings.append(Finding(checked_file, literal.lineno, 'NAR011', detail))
+
+    return findings
+
+
 def checkFixmeReachability(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
     """Flag a FIXME sitting in code that runs.
 
@@ -709,6 +738,7 @@ def checkFile(checked_file: Path) -> list[Finding]:
         *checkBoolOpParens(tree, source, checked_file),
         *checkModuleDocstring(tree, checked_file),
         *checkFixmeReachability(tree, source, checked_file),
+        *checkDocstringSample(tree, checked_file),
     ]
 
     return [f for f in findings if not (suppressed.get(f.line, set()) & {f.code, 'ALL'})]

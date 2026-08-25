@@ -83,6 +83,26 @@ is better than V3's bare `path` and it is not the name the rule asked for. **`R9
 fields, so `UsageEntry.path` and `UsageReport.source` are unruled in both arms. Recorded as a
 question, not patched to fit this result.
 
+### A third defect, found after this round was scored
+
+The author read the arms again and reported that the docstrings are still not right. `R9-02` cut
+style-guide justification; what survives is milder and separate: **the docstring explains where it
+could show.** Across both guided arms every module that *reads* a format pastes a sample of it, and
+every module that *produces* text describes it in prose instead — `summary_table.py`, `overages.py`,
+`logs.py` and `byte_size.py` all carry a description of their own output and no sample of it. The
+cause is `R3a-11`'s condition, which scoped the show-an-example rule to file moves and path
+manipulation, so both arms read it as covering input formats only.
+
+Two further cuts came from the same reading: the summary line should name what the module produces
+by its real name (`construct a QuotaPolicy`, not `answer what it states about a team and about a
+path`), and a docstring should stop at the fact rather than adding the sentence that justifies the
+design.
+
+That is `R9-08`, and **the arms in this directory predate it.** They are the record of what round 9's
+first pass produced, so they are not edited. Rewriting five of `full`'s docstrings under the new rule
+took them from 5, 5, 6, 8 and 13 lines to 19, 9, 8, 9 and 10 — the rule costs lines in four cases of
+five, which refuted the reason first written for it and is now stated as its known cost.
+
 ## Where the code went
 
 | arm | modules | code | docstring | comment | blank |

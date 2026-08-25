@@ -1,0 +1,5 @@
+{
+  "ignored_skus": ["support-plan"],
+  "region_aliases": {"us-east-1": "use1", "us-west-2": "usw2"},
+  "grace_cents": 500
+}

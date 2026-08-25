@@ -1,0 +1,8 @@
+resource_id,sku,monthly_cents,region
+i-0001,compute-std,120000,us-east-1
+i-0002,compute-std,45000,use1
+i-0003,object-store,900,us-west-2
+i-0004,compute-gpu,250000,us-east-1
+i-0005,support-plan,30000,us-east-1
+i-0006,object-store,120,us-east-1
+i-0007,compute-std,not-a-number,us-east-1

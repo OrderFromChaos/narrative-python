@@ -1,0 +1,8 @@
+{
+  "host": "node-d",
+  "entries": [
+    {"path": "/mnt/archive/2025", "bytes": 85899345920, "team": "archive"},
+    {"path": "/mnt/archive/2024", "bytes": 42949672960, "team": "archive"},
+    {"path": "/srv/index/shard-02", "bytes": 536870912000, "team": "search"}
+  ]
+}

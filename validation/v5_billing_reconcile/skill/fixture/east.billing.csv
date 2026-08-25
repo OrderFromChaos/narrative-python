@@ -1,0 +1,7 @@
+resource_id,sku,monthly_cents,region
+vm-101,compute-std,42000,us-east-1
+vm-102,compute-std,150,use1
+db-201,postgres-ha,89000,eu-west-1
+cache-301,redis-small,1200,us-east-1
+nic-501,network-eip,300,us-east-1
+sup-001,support-plan,25000,us-east-1

@@ -1,0 +1,9 @@
+{
+  "host": "node-b",
+  "entries": [
+    {"path": "/srv/build/artifacts", "bytes": 322122547200, "team": "platform"},
+    {"path": "/srv/build/cache", "bytes": 268435456000, "team": "platform"},
+    {"path": "/var/log/audit/2026-08", "bytes": 5368709120, "team": "platform"},
+    {"path": "/srv/index/shard-01", "bytes": 751619276800, "team": "search"}
+  ]
+}

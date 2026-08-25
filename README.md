@@ -9,7 +9,7 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 265 forced choices between
+Every rule cites the decision that produced it. The decisions came from 275 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
@@ -81,36 +81,20 @@ cp ~/.claude/skills/narrative/pyproject-snippet.toml pyproject.toml   # new proj
 The settings are not defaults and several are load-bearing. `tooling.md` records why each one is
 there and what breaks without it.
 
-### Simplified Technical English, for prose only
+### Docstring prose
 
-Write module docstrings in STE: one idea per sentence, active voice, one word for one thing.
-Narrative defers to the `ste-writing` skill for that prose, which implements ASD-STE100 Issue 9
-(January 2025).
+Docstrings are written for a professional developer who has the file open, so trade vocabulary is
+correct and a plain-English circumlocution around it is not. `SKILL.md` carries the rules: what a
+docstring body may say, what it may not, and the tests that cut a sentence.
 
-Source: [ste-writing-skill.md](https://github.com/woosal1337/blog/blob/main/videos/ep01-the-cure-for-ai-slop/ste-writing-skill.md).
-Install it alongside its two companion files, `ste-lint.py` and `ste-recurring-errors.md`:
-
-```bash
-mkdir -p ~/.claude/skills/ste-writing   # then add SKILL.md, ste-lint.py, ste-recurring-errors.md
-```
-
-It has two modes. **STE-flavored** covers docstrings, comments and READMEs. **Strict** covers
-runbooks and safety text. The linter takes a file argument, not `--help`, which tracebacks:
-
-```bash
-python3 ~/.claude/skills/ste-writing/ste-lint.py src/loader.py
-python3 ~/.claude/skills/ste-writing/ste-lint.py --strict RUNBOOK.md
-```
-
-This is a **soft dependency**. Without it the rule still stands and `NAR009` still enforces that the
-docstring exists. Only the wording guidance is absent.
-
-`verify.py` looks for it at that path and takes `--ste-lint <path>` if you keep it elsewhere. When it
-is missing, the run reports `SKIPPED, prose was not checked` and still exits 0. Read that row: a
-skipped check is not a clean one.
-
-STE governs docstrings, comments and READMEs. It never governs code, and it never governs
-identifiers.
+**No linter checks this.** The style used ASD-STE100 here until round 9 measured it against the
+prose it was meant to produce. It does not ban developer jargon, which an earlier reading of this
+claimed and which testing refuted. What it does is prefer the passive-free, longer sentence, and its
+gate is a rate per 100 words, so cutting words while holding violations flat made a strictly better
+docstring score 8 times worse. Measured per sentence, every true positive it found on a real package
+was already caught by the rules in `SKILL.md`, and every sentence it still disagreed with after the
+rewrite was one where it wanted the longer form. Redundant where right, wrong where it differed.
+`NAR011` catches the one mechanical trap that remained. (`R9-09`)
 
 ### Python version
 
@@ -127,11 +111,10 @@ Run `verify.py`. Do not call the tools by hand.
 cd your-project                                          # both defaults are relative
 python3 ~/.claude/skills/narrative/verify.py .           # rewrites files: runs --fix and format
 python3 ~/.claude/skills/narrative/verify.py . --no-fix  # reports only, changes nothing
-python3 ~/.claude/skills/narrative/verify.py . --ste-lint path/to/ste-lint.py
 ```
 
-One command covers the project. It sorts Python files from prose, runs the six code checks on the
-first and the STE linter on the second, so nothing has to choose a workflow.
+One command covers the project. Give it any path and it finds every Python file below it, so
+nothing has to choose a workflow.
 
 **Run it from your project root.** `--venv .lintenv` and `--config pyproject.toml` are relative to
 the working directory, not to the script. Invoking it by absolute path from elsewhere exits 2.
@@ -158,7 +141,7 @@ It runs the tools in the order that converges: `ruff check --fix`, `ruff format`
 The `vermin` call uses `-t=3.11-` with a trailing hyphen. Without it `vermin` asserts an exact
 match and fails any file that uses no 3.11-only feature.
 
-## The nine custom rules
+## The ten custom rules
 
 `checks.py` implements what no off-the-shelf tool does.
 
@@ -173,6 +156,7 @@ match and fails any file that uses no 3.11-only feature.
 | `NAR007` | `and` inside `or` without parentheses |
 | `NAR009` | a missing module docstring, or a runnable module with no usage example. An empty `__init__.py` and a single-def module are exempt |
 | `NAR010` | a `FIXME` in code that runs, which is a merge blocker rather than a danger sign |
+| `NAR011` | a docstring body indented past the docstring's own column, which `ruff format` flattens, destroying a pasted sample |
 
 `NAR000` is not a style rule. It reports a file that could not be read or parsed.
 
@@ -187,7 +171,7 @@ measured it still resolve. (`R8-NAR008`)
 |---|---|
 | `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
 | `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
-| `benchmark/decisions.jsonl` | all 265 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 275 decisions, each with its reasoning and evidence |
 | `benchmark/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |

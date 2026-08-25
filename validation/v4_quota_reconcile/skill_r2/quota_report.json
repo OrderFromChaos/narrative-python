@@ -1,0 +1,80 @@
+{
+  "teams": [
+    {
+      "team": "platform",
+      "used_bytes": 590558003200,
+      "quota_bytes": 536870912000,
+      "over_bytes": 53687091200,
+      "paths": [
+        {
+          "path": "/srv/build/artifacts",
+          "size_bytes": 322122547200
+        },
+        {
+          "path": "/srv/build/cache",
+          "size_bytes": 268435456000
+        }
+      ]
+    },
+    {
+      "team": "archive",
+      "used_bytes": 128849018880,
+      "quota_bytes": 107374182400,
+      "over_bytes": 21474836480,
+      "paths": [
+        {
+          "path": "/mnt/archive/2025",
+          "size_bytes": 85899345920
+        },
+        {
+          "path": "/mnt/archive/2024",
+          "size_bytes": 42949672960
+        }
+      ]
+    },
+    {
+      "team": "search",
+      "used_bytes": 1288490188800,
+      "quota_bytes": 2199023255552,
+      "over_bytes": 0,
+      "paths": [
+        {
+          "path": "/srv/index/shard-01",
+          "size_bytes": 751619276800
+        },
+        {
+          "path": "/srv/index/shard-02",
+          "size_bytes": 536870912000
+        }
+      ]
+    }
+  ],
+  "exempt_bytes": 5368721408,
+  "unattributed_bytes": 2449477632,
+  "reports": [
+    {
+      "report": "fixture/node-a.usage",
+      "status": "read",
+      "entry_count": 4,
+      "detail": ""
+    },
+    {
+      "report": "fixture/node-b.usage.json",
+      "status": "read",
+      "entry_count": 4,
+      "detail": ""
+    },
+    {
+      "report": "fixture/node-c.usage",
+      "status": "malformed",
+      "entry_count": 0,
+      "detail": "line 3: expected 2 tab-separated fields"
+    },
+    {
+      "report": "fixture/node-d.usage.json",
+      "status": "read",
+      "entry_count": 3,
+      "detail": ""
+    }
+  ]
+}

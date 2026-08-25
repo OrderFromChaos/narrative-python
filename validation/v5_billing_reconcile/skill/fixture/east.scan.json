@@ -1,0 +1,10 @@
+{
+  "scanned_at": "2026-08-24T09:00:00Z",
+  "resources": [
+    {"id": "vm-101", "sku": "compute-std", "team": "platform", "region": "use1"},
+    {"id": "vm-102", "sku": "compute-std", "team": "platform", "region": "us-east-1"},
+    {"id": "db-201", "sku": "postgres-ha", "team": "payments", "region": "us-east-1"},
+    {"id": "gpu-401", "sku": "gpu-a100", "team": "research", "region": "eu-west-1"},
+    {"id": "sup-001", "sku": "support-plan", "team": "finance", "region": "us-east-1"}
+  ]
+}

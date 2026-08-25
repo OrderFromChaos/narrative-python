@@ -5,14 +5,14 @@ output, so a missing or misresolved binary produces empty output and reads as a 
 resolves every tool to an absolute path and exits 2 if any one of them is absent, so a green result
 means the tools ran.
 
-This is the whole pipeline. Give it any path. It sorts Python files from prose and runs the right
-checks on each, so nothing has to decide a workflow at run time.
+This is the whole pipeline. Give it any path and it finds every Python file below it, so nothing
+has to decide a workflow at run time.
 
 Order matters. `ruff check --fix` and `ruff format` converge in that order and not the other.
 
 Usage:
-    $ python3 verify.py src/                 # every .py and every .md below src/
-    $ python3 verify.py src/ docs/README.md
+    $ python3 verify.py src/                 # every .py below src/
+    $ python3 verify.py src/loader.py src/report.py
     $ python3 verify.py . --no-fix           # report only, change nothing
 
 Exit codes:
@@ -35,8 +35,6 @@ from pathlib import Path
 
 TOOLS = ('ruff', 'pylint', 'mypy', 'vermin')
 PYTHON_FLOOR = '3.11'
-STE_LINT_DEFAULT = Path.home() / '.claude/skills/ste-writing/ste-lint.py'
-MAX_STE_PER_100_WORDS = 2.5
 SKIPPED = frozenset({'.venv', 'venv', '.lintenv', '.git', 'build', 'dist', '__pycache__'})
 EXIT_SUCCESS = 0
 EXIT_FINDINGS = 1
@@ -54,7 +52,6 @@ def main() -> int:
     parser.add_argument('--venv', type=Path, default=Path('.lintenv'))
     parser.add_argument('--config', type=Path, default=Path('pyproject.toml'))
     parser.add_argument('--no-fix', action='store_true', help='report only, do not rewrite files')
-    parser.add_argument('--ste-lint', type=Path, default=STE_LINT_DEFAULT, help='path to ste-lint.py')
     args = parser.parse_args()
 
     toolchain = resolveToolchain(args.venv)
@@ -79,9 +76,9 @@ def main() -> int:
 
         return EXIT_NO_TOOLCHAIN
 
-    code, prose = splitByKind(args.paths)
-    if not code and not prose:
-        print('nothing to check: no .py or .md files found', file=sys.stderr)
+    code = discoverPython(args.paths)
+    if not code:
+        print('nothing to check: no .py files found', file=sys.stderr)
         return EXIT_NO_TOOLCHAIN
 
     targets = [str(p) for p in code]
@@ -103,9 +100,6 @@ def main() -> int:
     vermin_cmd = [toolchain.paths['vermin'], '--no-tips', f'-t={PYTHON_FLOOR}-', '--violations']
     results.append(gradeVermin(run([*vermin_cmd, *targets])))
 
-    if prose:
-        results.append(gradeProse(prose, args.ste_lint))
-
     width = max(len(r.tool) for r in results)
     for result in results:
         print(f'{result.tool:<{width}}  {result.summary}')
@@ -125,58 +119,18 @@ def main() -> int:
     return EXIT_SUCCESS
 
 
-def splitByKind(paths: list[Path]) -> tuple[list[Path], list[Path]]:
-    """Sort the given paths into Python files and prose files.
+def discoverPython(paths: list[Path]) -> list[Path]:
+    """Find every Python file at or below the given paths.
 
-    A directory expands to everything below it. This is what lets one command cover a whole
-    project: the caller never decides which checker a file needs.
-
-    Args:
-        paths: Files or directories named on the command line.
-
-    Returns:
-        The Python files, and the Markdown files.
+    A directory expands to everything below it, which is what lets one command cover a whole
+    project.
     """
     code: list[Path] = []
-    prose: list[Path] = []
-
-    for path in paths:
-        found = sorted(path.rglob('*')) if path.is_dir() else [path]
+    for target in paths:
+        found = sorted(target.rglob('*.py')) if target.is_dir() else [target]
         code.extend(f for f in found if f.suffix == '.py' and not SKIPPED & set(f.parts))
-        prose.extend(f for f in found if f.suffix == '.md' and not SKIPPED & set(f.parts))
 
-    return code, prose
-
-
-def gradeProse(paths: list[Path], linter: Path) -> Result:
-    """Run the STE linter over every prose file, when that skill is installed.
-
-    Prose quality is a rule of this style, so the pipeline must cover it. The skill is a soft
-    dependency, so its absence is reported rather than treated as a failure.
-
-    Args:
-        linter: The ste-lint.py to run the files through.
-
-    Returns:
-        One result covering every prose file, not one result per file.
-    """
-    if not linter.is_file():
-        # Loud on purpose. A skipped prose check that reports success is a green run over
-        # unchecked prose, which is the same false pass verify.py exists to prevent (R8-D34).
-        detail = f'{linter} not found. Install ste-writing, or pass --ste-lint <path>.'
-        return Result('ste (prose)', True, 'SKIPPED, prose was not checked', detail)
-
-    noisy: list[str] = []
-    for path in paths:
-        output = run([sys.executable, str(linter), str(path)])
-        rate = re.search(r'per100w=\s*([0-9.]+)', output.text)
-        if rate and float(rate.group(1)) > MAX_STE_PER_100_WORDS:
-            noisy.append(f'{path}: {rate.group(1)} violations per 100 words')
-
-    if noisy:
-        return Result('ste (prose)', False, f'{len(noisy)} of {len(paths)} files over threshold', '\n'.join(noisy))
-
-    return Result('ste (prose)', True, f'{len(paths)} files clean', '')
+    return code
 
 
 def missingConfigSections(pyproject_path: Path) -> list[str]:

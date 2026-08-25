@@ -107,20 +107,109 @@ one that produced the rule — invented `UNATTRIBUTED_TEAM`, gave it `default_qu
 as a team over quota. That is `R9-01`'s failure mode, reproduced independently. Both guided arms
 avoided it, and `skill` generalised the rule to a case nobody wrote down.
 
+## The V4 re-run
+
+Reading V4's output produced three more rules — `R9-08`, `R9-09` and `R9-10`, on what a docstring
+body may say — so V4's own arms predate them. `skill_r2/` and `full_r2/` are the same spec run again
+against the current skill text. Identical spec, identical arms, only the rules changed.
+
+Module-docstring prose fell from 689 to 395 words in `skill` and 676 to 345 in `full`, which
+corroborates the 60% obtained by hand-applying the same tests. **The code delta is not
+rule-attributable**: no docstring rule touches code, and `full_r2` chose 12 modules where `full`
+chose 14.
+
+The strongest transfer is `full_r2/reconcile.py` writing `Teams sort by (-overage, -used, team).` —
+the state-an-ordering-as-its-sort-key rule applied to a sort the worked example does not cover.
+`store.py` pasted real `SELECT` output, which nothing in the ruleset suggests. Discounted:
+`quotas.py` opens with the worked example verbatim, which is copying rather than generalising.
+
+## V5
+
+`validation/v5_billing_reconcile/` is the held-out test of the docstring rules, and it is a
+**different computation shape on purpose**. V3 and V4 both read two formats, aggregate, and compare
+against a threshold. V5 is a join with leftovers on both sides — two of its three finding kinds *are*
+the leftovers — so a rule that only works on aggregate-and-threshold programs shows up here.
+
+`RATING.md` in that directory holds the result. The naming and data rules transferred: bare
+`path:` parameters, `base` 9 against 0 in both guided arms, and `R9-01` reached a shape it was never
+derived on. **Prose concision did not transfer** — both guided arms wrote more prose than `base`,
+which on this task writes well unprompted.
+
+V5 also surfaced a trap `R9-01` creates rather than fixes: optional fields put `NULL` into records
+that are then used as dedup keys, and **a SQLite `UNIQUE` index spanning a nullable column does not
+deduplicate**. Three identical inserts, three rows. All three arms dodged it by different routes and
+only `skill` named it.
+
 ## Counter-argument, stated fairly
 
 **This round had one reader, not four agents.** Round 8's method was adversarial and blind. Round 9
 is one person reading one program's output and reporting what annoyed them. That finds real defects
 — every one here reproduced under measurement — but it has no claim to coverage.
 
-**Four of the five rules were written after seeing the failure they fix.** V4 is the held-out test
-and it is one task with one agent per arm. V3 and V4 agreeing is two points, not a trend.
+**Every rule here was written after seeing the failure it fixes.** V5 is the held-out test, and it is
+one task with one agent per arm. Three rounds agreeing is three points, not a trend.
 
-**The prose rewrite is unmeasured.** Cutting 52 instances of the `X, not Y` sentence frame and
-restating four circular rules is a judgement about readability with no instrument behind it. The
-defect counts test the rules; nothing tests whether the document reads better.
+**The prose rewrite is only half measured.** The defect counts test the rules. The V4 re-run tests
+whether they change what an agent writes, and they do: docstring prose fell 43% in `skill` and 49%
+in `full` on an identical spec. Nothing tests whether the document reads better, and **the concision
+result did not hold on V5**, where both guided arms wrote *more* prose than `base`. One round for,
+one round neutral.
 
-**`skill` and `full` still tie at zero.** Both guided arms score clean on every tool in both rounds,
-so nothing mechanical separates them, and the case for `architecture.md` rests on the rating and on
-the count of questions the `skill` arm had to invent answers to — 9 on V3, 18 on V4, of which
-`architecture.md` answers 10.
+**`skill` and `full` still tie at zero.** Every guided arm of every round scores clean on every tool,
+so nothing mechanical separates them. The case for `architecture.md` rests on the ratings, on the
+count of questions the `skill` arm had to invent answers to — 9 on V3, 18 on V4, 17 on V5 — and now
+on one functional result: see the verdict below.
+
+## Verdict on the programme
+
+**The style's measured functional cost was severe once, was traced to one rule, and has not recurred
+in the two rounds since.**
+
+V3 is the bad case and it was bad. Running `full`'s code against `base`'s fixture, it reported
+**none** of three banned packages and exited **0** where `base` exited 1. Six causes: no PEP 503 name
+folding, a mandatory `source` field that discarded whole files, `belowMinimum('v2.31.0', '2.31.0')`
+returning `True`, a fabricated `_ASSUMED_SOURCE = 'pypi'`, an uncaught `write_text`, and the audit
+re-reading its own outputs. **Exactly one of the six was the style's fault** — the fabricated source,
+which came from guidance that let a parser substitute a plausible default. That became `R9-01`.
+
+Since the rule changed, the unguided arm has reproduced that failure mode independently twice —
+`UNATTRIBUTED_TEAM` in V4, given `default_quota` and reported as a team over quota — and no guided
+arm has repeated it.
+
+V4: the guided arm is 24% smaller and gives up one PARTIAL, exempt bytes counted but not reported.
+`base` shipped the round's only dangerous defect, a traceback exiting 1 where its own docstring
+defines 1 as "at least one team is over quota".
+
+V5: `base` and `full` are functionally equivalent, diverging only where the spec is silent — `base`
+folds case and follows alias chains, `full` does neither. Neither is a defect.
+
+**The reproducible effect across all three rounds is the gate, not the bug count.** `base` scored
+324–367 ruff findings and 33–41 pylint findings in every round; every guided arm scored zero in every
+round. That has never wobbled. The bug counts have.
+
+### What this verdict does not cover
+
+- **Three tasks, one agent per arm, no repeats.** Agent variance is visibly larger than arm
+  variance: V5's `base` wrote good docstrings unprompted, V3's did not.
+- **It measures capability loss, not bug injection.** Different questions. V3's `full` had both;
+  V4's and V5's had neither.
+- **No arm wrote tests.** Real use would ask for tests and iterate, which plausibly closes most of
+  the gap that remains.
+- **One defect appears in every arm of every round and has nothing to do with style**: no arm can
+  tell a downstream consumer that a run was degraded. No run table, no per-finding provenance. In
+  V5 both arms emit phantom `billed_not_found` findings when a scan file fails to parse, write them
+  to SQLite indistinguishable from real ones, and `base` then advances `last_seen_at` on the phantom
+  so a dashboard shows it as freshly confirmed. That is the first thing worth fixing in any of these
+  programs, and the style has nothing to say about it.
+
+### The ablation that mattered
+
+`skill` — the arm with `architecture.md` withheld — is not a shipping configuration and its results
+should not be read as the style's. On V5 it was the sole outlier of three arms on input hardening:
+**zero `.strip()` calls in the whole package** against 9 in `base` and 6 in `full`, which cost it a
+join split in two by a padded id, false `region_mismatch` on a trailing space, and an alias table
+that clobbers its own mapping. It also rejects a whole file for one bad row, turning one missing
+`team` field into **eight** phantom findings where `base` produced two and `full` one.
+
+Every severe V5 finding is `skill`-only. The document that reads as being about module layout is
+what produced the input hardening.

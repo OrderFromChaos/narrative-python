@@ -417,12 +417,14 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 **Every module opens with a docstring. Anything runnable shows how to run it.** A reader meets it
 first, before `main()`, so it carries what the program is *for*, not how it works. (R5-02, NAR009)
 
-Write it in **STE** (ASD-STE100): one idea per sentence, active voice, one word for one thing, no
-synonyms. Use the `ste-writing` skill in **STE-flavored** mode if it is installed. Check with
-`python3 ~/.claude/skills/ste-writing/ste-lint.py <file>`.
+**Write for a professional developer who has the file open.** That reader knows the language and the
+vocabulary of the trade, so `API`, `idempotent` and `tuple` are the right words and a plain-English
+circumlocution around them is worse. One idea per sentence. **One word for one thing, and the word
+is the identifier the code uses** — a docstring that says `unassigned` where the code says
+`unattributed` sends a reader to grep for something that is not there. (R9-09)
 
-This is the one place in the file where prose quality is load-bearing. STE governs docstrings and
-comments, never code or identifiers.
+This is the one place in the file where prose quality is load-bearing, and no tool checks it.
+It governs docstrings and comments, never code or identifiers.
 
 ```python
 """Load a CSV file into a SQLite table.
@@ -450,6 +452,122 @@ Required:
 
 `NAR009` enforces the docstring. For a module with a `__main__` block, `NAR009` also enforces the
 example.
+
+### Show the thing, do not describe it
+
+**Where a module reads or writes concrete text, paste a real sample of that text.** A rendered
+table, a log line, a report, a converted value, an input format. **Delete the prose the sample
+replaces** rather than keeping both. (R9-08)
+
+**Never invent a sample.** Run the program and paste what it printed, or paste the `repr` of what
+the function returned. A format that appears nowhere in the program is a lie in the shape of
+documentation, and it is worse than the prose it replaced, because a reader cannot tell an invented
+sample from a real one. This is the docstring case of the boundary rule above: **do not state what
+you did not observe.** A module that computes records rather than rendering text pastes the records.
+
+**Show one line of each shape, not the whole output.** One team row, one over-quota line, one file
+outcome, and no repeats. The reader needs every shape the module can emit and needs no volume.
+
+**A sample goes stale and no tool catches it**, which is the cost the `__main__.py` module map
+already pays under `R9-02`. Keep it small for that reason, and re-paste it when the output changes.
+
+**Expect it to cost lines.** Measured over five modules of a working program, pasting the sample
+took their docstrings from 4, 4, 5, 7 and 12 lines to 20, 8, 7, 10 and 9. Only the one carrying
+paraphrase and justification got shorter. The sample buys exactness, not brevity: a reader learns
+the column order, the units and the alignment from three rows of a table and cannot learn them from
+a sentence that says the table has columns.
+
+This generalises `R3a-11`, which said the same thing for file moves and path manipulation.
+
+```python
+"""Format the result of a reconciliation as a table for a terminal.
+
+    TEAM              USED     QUOTA   OVERAGE
+    platform        550.0G    500.0G     50.0G
+    archive         120.0G    100.0G     20.0G
+    search            1.2T      2.0T         -
+
+Teams over quota come first, worst first. A team within its quota shows `-`.
+"""
+```
+
+**Keep at least one line of the body at column 0**, as the last line above does. `ruff format`
+strips the common leading indent from a docstring body, so a docstring whose body is *entirely*
+indented gets flattened and the sample loses its alignment. One unindented line anchors it.
+`tooling.md` records the check.
+
+Not this, which is the same table said slowly:
+
+```python
+"""Format the result of a reconciliation as a table for a terminal.
+
+The table holds one row for each team, then the largest paths of each team above its quota, then
+the bytes that no team owns, then the outcome of every file. Every size carries a unit suffix.
+"""
+```
+
+A conversion takes a table of cases rather than a sentence per case:
+
+```python
+"""Convert a size with a unit suffix to a count of bytes, and back.
+
+    4096   ->          4096
+    12K    ->         12288
+    1.5G   ->    1610612736
+    2T     -> 2199023255552
+
+A unit is a power of 1024. A number with no suffix is a count of bytes.
+"""
+```
+
+### What a body may say, and what it may not
+
+The summary line is mandatory. **A body is not, and usually does not earn its place.** Applying the
+tests below to a working 14-module package cut its docstring prose by 60%, and one module lost its
+body entirely. (R9-09)
+
+**Cut a sentence when any of these is true:**
+
+- **It is visible in the file.** `frozen=True` is on the line above. `| None` is in the signature.
+  A reader who has the file open does not need either restated.
+- **Its negation would be a bug, an absurdity, or an implementation nobody would ship.** Negate the
+  sentence and read it back. `it never holds a value that the file did not state` negates to a bug.
+  `An empty line holds nothing` negates to an absurdity. `Other files are skipped, so the quota file
+  can share the directory` negates to a scanner that dies on a stray file, which nobody would ship.
+  All three are free sentences and all three go. **Assume the reader expects competent code, and
+  document only the departures.**
+- **It explains a language feature.** `Such a field holds None` restates what optional means.
+- **It goes stale and nothing checks it**, unless it is a sample you accept that cost for.
+
+**Compress what survives:**
+
+- **Name the property, do not explain it.** `Rows are keyed on team, total and quota, so runs are
+  idempotent` replaces three sentences describing idempotence.
+- **State an ordering as its sort key.** Prose about a multi-level sort cannot say whether it is one
+  composite key or two separate sorts. `Teams sort by (-over, -used, team); the paths inside a team
+  sort by (-size, path)` says which, and shows that the tie-break on `team` runs ascending while the
+  numbers run descending. Prose cannot carry that without becoming longer than the key.
+- **The summary line names what the code produces, by its real name.** `Read the quota file, and
+  construct a QuotaPolicy accordingly` beats `Read the quota file, and answer what it states about a
+  team and about a path`, which paraphrases a type that already has a name.
+- **Stop at the fact.** `The first malformed field stops the read.` is the rule. The sentence after
+  it explaining why stopping is right is not functionality. This is `R9-02` one step further in: the
+  ban is not only on style-guide justification but on justifying the design at all. Where a reason
+  has to survive, it is a `#` comment at the line that needs it.
+
+**A body earns its place for these, and in practice for nothing else:**
+
+- an **ordering or tie-break**, which is invisible without reading a sort key
+- a **unit, a nullability or a provenance** that the annotation cannot carry — `Sizes are plain byte
+  counts`, `host is null when the report that gave the entry named none`
+- **where the leftover, default and failure cases go**. Most awkward docstrings are awkward because
+  they circle an unstated default.
+- a **sample** of concrete text the module reads or writes
+- a **constraint from outside the program** — `the standard formatter of logging discards extra`
+- a **guarantee a caller needs** — `The call writes no file, prints nothing, and records nothing`
+
+Seven cuts with no counterweight would drive every docstring to a bare summary line. That list is
+the counterweight, and it is what every surviving sentence in the measured package sits on.
 
 - **A function gets a docstring when its contract is complex**: it takes more than three
   parameters, or it exceeds 20 lines. Below both, `#` comments carry the contract. Raising is not a
@@ -488,7 +606,8 @@ example.
   order to use this file. (R9-02)
 
 - Where semantics vary by implementation (file moves, copies, path manipulation), **show a
-  concrete before/after example**, not prose. (R3a-11)
+  concrete before/after example**, not prose. (R3a-11) That is one case of the general rule above:
+  show the thing rather than describe it.
 
 - **Comments carry why the program behaves this way**: the tribal knowledge, the constraint from
   outside, the link to the source. Never restate the line, and never explain why the file conforms

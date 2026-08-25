@@ -1,0 +1,89 @@
+{
+  "teams": [
+    {
+      "team": "search",
+      "used_bytes": 2528876743884,
+      "quota_bytes": 2199023255552,
+      "overage_bytes": 329853488332,
+      "paths": [
+        {
+          "path": "/srv/index/shard-0",
+          "bytes": 1319413953331,
+          "host": "store-02"
+        },
+        {
+          "path": "/srv/index/shard-1",
+          "bytes": 1209462790553,
+          "host": "store-02"
+        }
+      ]
+    },
+    {
+      "team": "platform",
+      "used_bytes": 590558003200,
+      "quota_bytes": 536870912000,
+      "overage_bytes": 53687091200,
+      "paths": [
+        {
+          "path": "/srv/platform/artifacts",
+          "bytes": 429496729600,
+          "host": "store-02"
+        },
+        {
+          "path": "/srv/platform/cache",
+          "bytes": 161061273600,
+          "host": "store-03"
+        }
+      ]
+    },
+    {
+      "team": "media",
+      "used_bytes": 139586437120,
+      "quota_bytes": 107374182400,
+      "overage_bytes": 32212254720,
+      "paths": [
+        {
+          "path": "/srv/media/renders",
+          "bytes": 139586437120,
+          "host": "store-03"
+        }
+      ]
+    },
+    {
+      "team": "archive",
+      "used_bytes": 12884901888,
+      "quota_bytes": 107374182400,
+      "overage_bytes": 0,
+      "paths": [
+        {
+          "path": "/srv/archive/2025",
+          "bytes": 12884901888,
+          "host": "store-03"
+        }
+      ]
+    }
+  ],
+  "unattributed_bytes": 2449477632,
+  "files": [
+    {
+      "source": "fixture/store-01.usage",
+      "entry_count": 4,
+      "error": null
+    },
+    {
+      "source": "fixture/store-02.usage.json",
+      "entry_count": 4,
+      "error": null
+    },
+    {
+      "source": "fixture/store-03.usage.json",
+      "entry_count": 3,
+      "error": null
+    },
+    {
+      "source": "fixture/store-04.usage",
+      "entry_count": 0,
+      "error": "store-04.usage:3: unusable size '12X'"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "scanned_at": "2026-08-01T03:15:00+00:00",
+  "resources": [
+    {"id": "i-0a1", "sku": "compute-std", "team": "platform", "region": "use1"},
+    {"id": "i-0a2", "sku": "compute-std", "team": "platform", "region": "us-east-1"},
+    {"id": "i-0a3", "sku": "object-store", "team": "data", "region": "eu-west-1"},
+    {"id": "i-0a9", "sku": "support-plan", "team": "finance", "region": "us-east-1"},
+    {"id": "i-0b1", "sku": "compute-std", "team": "payments", "region": "us-east-1"},
+    {"id": "i-0c7", "sku": "compute-gpu", "team": "ml", "region": "use1"},
+    {"id": "i-0c8", "sku": "tax-adjustment", "team": "finance", "region": "use1"}
+  ]
+}

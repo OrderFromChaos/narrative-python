@@ -1,0 +1,11 @@
+{
+  "scanned_at": "2026-08-24T03:00:00Z",
+  "resources": [
+    {"id": "i-0001", "sku": "compute-std", "team": "platform", "region": "use1"},
+    {"id": "i-0002", "sku": "compute-std", "team": "platform", "region": "us-east-1"},
+    {"id": "i-0003", "sku": "object-store", "team": "archive", "region": "eu-west-1"},
+    {"id": "i-0005", "sku": "support-plan", "team": "platform", "region": "us-east-1"},
+    {"id": "i-0008", "sku": "object-store", "team": "search", "region": "us-west-2"},
+    {"id": "i-0009", "sku": "compute-std", "team": "archive", "region": "use1"}
+  ]
+}
