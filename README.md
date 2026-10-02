@@ -5,22 +5,22 @@ human-like comments.**
 
 ## What you get
 
-- **A third less code to review.** Programs Claude writes (based on a realistic spec) with the skill have
+- ✂️ **A third less code to review.** Programs Claude writes (based on a realistic spec) with the skill have
   33% fewer executable lines. With a highly detailed output spec contract, the savings are 9%.
-- **Passes mypy --strict.** Contains an opinionated linting pipeline including ruff, pylint, `mypy --strict`, 18 custom AST checks, and NLP inanimate agent-verb compliance.
-- **No loss in spec correctness.** Guided and unguided programs pass the same blind conformance tests.
-- **Comments a reviewer wants.** Most of Claude's writing tics fall to the human rate or below, and comments are added for good reasons only.
-- **Does not cause catastrophic tech debt problems.** Two consecutive change requests cost 329 changed lines with the
+- ✅ **Passes mypy --strict.** Contains an opinionated linting pipeline including ruff, pylint, `mypy --strict`, 18 custom AST checks, and NLP inanimate agent-verb compliance.
+- 🎯 **No loss in spec correctness.** Guided and unguided programs pass the same blind conformance tests.
+- 💬 **Comments a reviewer wants.** Most of Claude's writing tics fall to the human rate or below, and comments are added for good reasons only.
+- 🔧 **Does not cause catastrophic tech debt problems.** Two consecutive change requests cost 329 changed lines with the
   skill against 365 without it, over 14 files against 12.
-- **One command for the whole toolchain.** `verify.py` runs every tool in the right order, and
+- ⚡ **One command for the whole toolchain.** `verify.py` runs every tool in the right order, and
   exits 2 when a tool is missing, so a missing tool never passes as a clean run.
-- **Transferrable to other languages.** The rules and checks are for Python, but the principles carry over. In my
+- 🌐 **Transferrable to other languages.** The rules and checks are for Python, but the principles carry over. In my
   experience, asking Claude to take the good parts of `/narrative` into another language works
   well.
 
 Rules come from 423 human-selected choices between real working programs.
 
-NOTE: this skill has an opinionated ordering for code (`main()` first, then the steps it calls in call order, then the types). This does produce readable and pleasing code, but may lead to a large refactor on first use. If you ask Claude to scope it to just your changes, it will do so.
+⚠️ This skill has an opinionated ordering for code (`main()` first, then the steps it calls in call order, then the types). This does produce readable and pleasing code, but may lead to code differences between your PRs and the rest of your codebase. It will not force migrate the rest of your codebase to this style unless you tell it to.
 
 ## Before and after
 
