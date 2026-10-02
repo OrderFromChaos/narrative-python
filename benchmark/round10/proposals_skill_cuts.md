@@ -1,5 +1,7 @@
 # Dead, duplicate and superseded clauses in SKILL.md
 
+Applied: items 1 to 24, and item 25 as (b) (R10-other-modules). Item 26 stays as it is: `NAR010` covers a FIXME in reachable code. Item 27 is open.
+
 `skill/SKILL.md` is 914 lines and 8,163 words. Below are 27 cuts or trims. Together they remove
 about 75 lines. Each item gives the line, what is wrong with it, and the proposal. Nothing here
 changes a rule. Items 25 to 27 are contradictions, which need a decision rather than a cut.

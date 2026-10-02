@@ -1,0 +1,103 @@
+# Sent lines start with '> ', expected replies with '< '. A '*' stands for any CLIENT_ERROR message.
+# The server runs with --max-bytes 300.
+> set a 5 0 3
+> foo
+< STORED
+> add a 0 0 3
+> bar
+< NOT_STORED
+> gets a
+< VALUE a 5 3 1
+< foo
+< END
+> cas a 0 0 3 99
+> baz
+< EXISTS
+> cas a 7 0 3 1
+> baz
+< STORED
+> cas nokey 0 0 1 1
+> x
+< NOT_FOUND
+> set old 0 1000000000 2
+> hi
+< STORED
+> get old
+< END
+> set month 0 2592000 2
+> ok
+< STORED
+> set gone 0 -1 1
+> x
+< STORED
+> get gone a month
+< VALUE a 7 3
+< baz
+< VALUE month 0 2
+< ok
+< END
+> set n 0 0 20
+> 18446744073709551615
+< STORED
+> incr n 2
+< 1
+> decr n 5
+< 0
+> set w 0 0 3
+> abc
+< STORED
+> incr w 1
+< CLIENT_ERROR *
+> delete w
+< DELETED
+> set b 0 0 2
+> abcd
+< CLIENT_ERROR *
+> get b
+< END
+> set q 0 0 1 noreply
+> z
+> get q
+< VALUE q 0 1
+< z
+< END
+> delete a
+< DELETED
+> delete month
+< DELETED
+> delete n
+< DELETED
+> delete q noreply
+> delete q
+< NOT_FOUND
+> set k1 0 0 50
+> xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< STORED
+> set k2 0 0 50
+> xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< STORED
+> get k1
+< VALUE k1 0 50
+< xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< END
+> set k3 0 0 50
+> xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< STORED
+> get k1 k2 k3
+< VALUE k1 0 50
+< xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< VALUE k3 0 50
+< xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< END
+> set big 0 0 260
+> yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+< SERVER_ERROR object too large for cache
+> get k1 k3
+< VALUE k1 0 50
+< xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< VALUE k3 0 50
+< xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+< END
+> frobnicate
+< ERROR
+> quit

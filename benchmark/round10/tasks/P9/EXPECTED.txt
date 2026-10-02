@@ -1,0 +1,11 @@
+fixture/cases.json is itself the expected result.
+traps:
+  日本語のテキストです at width 7: each line holds three 2-column characters, because a fourth would cross the edge at column 8
+  cafe + U+0301: the accent is part of the e's cluster and takes no column, so "café" fits in 4
+  inter + U+00AD + national at width 8: the break at the soft hyphen shows "-", which counts as the 6th column; unused in "a\u00adb", it is removed
+  10 + U+00A0 + km: a no-break space is not a break, so "10 km" stays whole at exactly 5 columns
+  bold across a break: line 1 ends with ESC[0m, line 2 starts with ESC[1m again, and line 2 ends with no ESC[0m because the style was reset inside it
+  a  b   c at width 4: inner spaces are kept ("a  b" is 4 columns), and the run of three at the break is dropped
+  ab + U+200B + cd: a zero width space is part of a cluster, not a break, so the word is 4 columns
+  a tab raises ValueError in both functions; width 1 raises ValueError
+Computed by hand and checked against a separate reference implementation.

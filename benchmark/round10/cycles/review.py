@@ -25,15 +25,27 @@ def commentBlocks(path: Path) -> list[tuple[int, int]]:
     return blocks
 
 
+def inBase(path: Path, block: tuple[int, int], run: Path, base: Path | None) -> bool:
+    if base is None or not (base / path.relative_to(run)).is_file():
+        return False
+    lines = path.read_text().splitlines()
+    text = [line.strip() for line in lines[block[0] - 1 : block[1]]]
+    base_lines = {line.strip() for line in (base / path.relative_to(run)).read_text().splitlines()}
+    return all(line in base_lines for line in text)
+
+
 def main() -> None:
-    output, runs = Path(sys.argv[1]), [Path(arg) for arg in sys.argv[2:]]
+    # `RUN::BASE` lists only the blocks whose text is not in the same file under BASE
+    output = Path(sys.argv[1])
+    pairs = [arg.split('::') if '::' in arg else [arg, ''] for arg in sys.argv[2:]]
     out = ['# Comments for review', '',
            f'Every `#` comment block, numbered, with {BEFORE} lines before and {AFTER} after. '
            'The comment lines are marked `>>`. Pragmas and `###` dividers are left out.', '']
     count = 0
-    for run in runs:
+    for raw_run, raw_base in pairs:
+        run, base = Path(raw_run), Path(raw_base) if raw_base else None
         files = sorted(p for p in run.rglob('*.py') if '.venv' not in p.parts)
-        blocks = [(f, b) for f in files for b in commentBlocks(f)]
+        blocks = [(f, b) for f in files for b in commentBlocks(f) if not inBase(f, b, run, base)]
         out += [f'## {run.name}: {len(blocks)} comments', '', f'`{run}`', '']
         for path, (first, last) in blocks:
             count += 1

@@ -1,0 +1,17 @@
+Unchanged fields are as in tasks/P7/EXPECTED.txt. sonata.mid, unchanged fields: format 0, 1 track, division 96, 1.7 s, 4/4, 2 tempo events, 3 notes G3..E4, longest G3 ch3 start 0.5 for 1.2 s, polyphony 2.
+new fields, no filter:
+  etude.mid    key null      bpm 80..120   (500,000 then 750,000)
+  groove.mid   key null      bpm 100..150  (600,000 at tick 0, so the default is never in effect)
+  overlap.mid  key null      bpm 120..120  (no tempo event: the default throughout)
+  sonata.mid   key "C minor" bpm 120..150  (default until tick 96, then 400,000; the 1,000,000 at tick 384 is on the end-of-track tick and does not count)
+  report "channel": null; totals 6 files, 2 unreadable, 15 notes, 4 drum hits
+--channel 1: etude 5 notes, groove 0 notes (bass on 2, E5 on 16), overlap 4, sonata 2 notes C4..E4, longest C4 ch1 start 0.0 for 0.9 s, polyphony 1 (C4 ends on the tick E4 starts); totals 11 notes, 0 drum hits
+--channel 3: sonata 1 note G3..G3, longest G3 for 1.2 s, polyphony 1; every other file 0 notes; totals 1 note, 0 drum hits
+--channel 10: groove 4 drum hits, 0 notes; totals 0 notes, 4 drum hits
+traps:
+  sf = 9 at tick 0 is ignored, so the first valid key signature is at tick 48
+  sf = 0xFD read unsigned is 253, which is out of range, so sonata would report null
+  counting the default 120 in groove gives no change (120 lies inside 100..150); counting it where a tempo event is at tick 0 is still wrong
+  counting the 60 BPM tempo on the end-of-track tick gives sonata a min of 60
+  --channel N is the musician's number: channel byte 0 is channel 1, and channel 10 is byte 9
+Computed by hand. The unchanged fields come from the base package, which matched tasks/P7/EXPECTED.txt.

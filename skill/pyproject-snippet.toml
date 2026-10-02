@@ -36,19 +36,16 @@ docstring-quotes = 'double'
 ban-relative-imports = 'all'
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-# An ORM is the wrong tool on a hot path: it re-validates at run time what the database and Python
-# both already know. It is a fine tool for a one-off healing or maintenance script, where developer
-# time matters more than per-request cost. The ban is therefore lifted per directory, below.
+# These ORMs validate in Python what the database already checks: on construction, on save, or on
+# every row read. SQLAlchemy, peewee, Piccolo and Django models do none of that and are allowed
+# (R10-orm-validation). A one-off script may still use a banned one, with `# ruff: noqa: TID251` in
+# its module.
 'pydantic'.msg = 'Validate once at a boundary gate. Use a frozen dataclass.'
-'sqlalchemy.orm'.msg = 'No ORM. Use sqlite3 and SQL directly.'
-'sqlmodel'.msg = 'No ORM, and it is pydantic-backed. Use sqlite3 and SQL directly.'
-'peewee'.msg = 'No ORM. Use sqlite3 and SQL directly.'
-'tortoise'.msg = 'No ORM. Use sqlite3 and SQL directly.'
-'pony'.msg = 'No ORM. Use sqlite3 and SQL directly.'
-'ormar'.msg = 'No ORM. Use sqlite3 and SQL directly.'
-'piccolo'.msg = 'No ORM. Use sqlite3 and SQL directly.'
-'sqlobject'.msg = 'No ORM. Use sqlite3 and SQL directly.'
-'django.db.models'.msg = 'No ORM. Use sqlite3 and SQL directly.'
+'sqlmodel'.msg = 'Pydantic-backed ORM. Use SQLAlchemy, or sqlite3 and SQL.'
+'ormar'.msg = 'Pydantic-backed ORM. Use SQLAlchemy, or sqlite3 and SQL.'
+'tortoise'.msg = 'Validates fields in Python on save. Use SQLAlchemy, or sqlite3 and SQL.'
+'pony'.msg = 'Validates in Python on write and on every row read. Use SQLAlchemy, or sqlite3 and SQL.'
+'sqlobject'.msg = 'Validates in Python on write and on every row read. Use SQLAlchemy, or sqlite3 and SQL.'
 
 # No per-file-ignores. A lint exception is a property of the module that needs it, so it is declared
 # there as a file-level `# ruff: noqa: TID251` and not in a central glob list that drifts from the

@@ -9,7 +9,7 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 418 forced choices between
+Every rule cites the decision that produced it. The decisions came from 423 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install

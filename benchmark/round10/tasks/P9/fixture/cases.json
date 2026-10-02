@@ -1,0 +1,138 @@
+{
+  "displayWidth": [
+    {
+      "text": "\u65e5\u672c",
+      "width": 4
+    },
+    {
+      "text": "e\u0301",
+      "width": 1
+    },
+    {
+      "text": "\u001b[31mred\u001b[0m",
+      "width": 3
+    },
+    {
+      "text": "a\u200bb",
+      "width": 2
+    },
+    {
+      "text": "\u00a0",
+      "width": 1
+    },
+    {
+      "text": "x\u00ady",
+      "width": 2
+    },
+    {
+      "text": "a\tb",
+      "raises": "ValueError"
+    }
+  ],
+  "wrap": [
+    {
+      "text": "the quick brown fox jumps",
+      "width": 10,
+      "lines": [
+        "the quick",
+        "brown fox",
+        "jumps"
+      ]
+    },
+    {
+      "text": "\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8\u3067\u3059",
+      "width": 7,
+      "lines": [
+        "\u65e5\u672c\u8a9e",
+        "\u306e\u30c6\u30ad",
+        "\u30b9\u30c8\u3067",
+        "\u3059"
+      ]
+    },
+    {
+      "text": "cafe\u0301 au lait",
+      "width": 4,
+      "lines": [
+        "cafe\u0301",
+        "au",
+        "lait"
+      ]
+    },
+    {
+      "text": "inter\u00adnational",
+      "width": 8,
+      "lines": [
+        "inter-",
+        "national"
+      ]
+    },
+    {
+      "text": "a\u00adb",
+      "width": 5,
+      "lines": [
+        "ab"
+      ]
+    },
+    {
+      "text": "10\u00a0km to go",
+      "width": 5,
+      "lines": [
+        "10\u00a0km",
+        "to go"
+      ]
+    },
+    {
+      "text": "\u001b[1mbold text here\u001b[0m done",
+      "width": 9,
+      "lines": [
+        "\u001b[1mbold text\u001b[0m",
+        "\u001b[1mhere\u001b[0m done"
+      ]
+    },
+    {
+      "text": "one\n\ntwo three",
+      "width": 5,
+      "lines": [
+        "one",
+        "",
+        "two",
+        "three"
+      ]
+    },
+    {
+      "text": "supercalifragilistic",
+      "width": 8,
+      "lines": [
+        "supercal",
+        "ifragili",
+        "stic"
+      ]
+    },
+    {
+      "text": "a  b   c",
+      "width": 4,
+      "lines": [
+        "a  b",
+        "c"
+      ]
+    },
+    {
+      "text": "ab\u200bcd ef",
+      "width": 4,
+      "lines": [
+        "ab\u200bcd",
+        "ef"
+      ]
+    },
+    {
+      "text": "tab\there",
+      "width": 10,
+      "raises": "ValueError"
+    },
+    {
+      "text": "anything",
+      "width": 1,
+      "raises": "ValueError"
+    }
+  ]
+}

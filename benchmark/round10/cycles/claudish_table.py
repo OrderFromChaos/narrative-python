@@ -1,12 +1,12 @@
-"""Recompute the Claudish feature table, per 100 comment blocks, for human code and recent cycles.
+"""Recompute the Claudish feature table, per 100 comment blocks, with 95% intervals in brackets.
 
 Usage:
     $ python3 claudish_table.py 7     # cycles 7 and later
 """
 
 import io
+import math
 import re
-import statistics
 import sys
 import sysconfig
 import tokenize
@@ -43,23 +43,80 @@ FEATURES = [
     ('possessive `own`', r"\b(?:its|their|\w+'s) own\b"),
 ]
 CASE_SENSITIVE = {'TODO, NOTE, FIXME, XXX, HACK', 'first person: we, our, us, I'}
+Z = 1.96
+# `Claude #` of the README's Claudish section: Claude's comments from the user's private transcripts
+CLAUDE_BLOCKS = 2578
+CLAUDE_RATES = {
+    'median words': 24,
+    'p90 words': 83,
+    'blocks of more than one sentence': 45,
+    '`, not` contrast': 10.7,
+    'dash (` -- ` or `—`)': 23.9,
+    'absolutes: every, never, whole, exactly': 31.1,
+    '`the one` / `one place`': 2.2,
+    'deliberately, on purpose, by design': 2.1,
+    '`rather than` / `instead of`': 18.2,
+    '`, so` joining clauses': 32.9,
+    'semicolon': 18.5,
+    'agentive verb: finds, knows, wants, sees, asks, decides, owns': 2.3,
+    'container verb: holds, carries, lives, keeps, names, states': 11.3,
+    'intensifier: genuine, real, actually, really, truly': 8.3,
+    'article before a backticked identifier': 2.8,
+    '`because`': 9.2,
+    'passive (`is`/`are`/`was`/`be` + `-ed`)': 26.0,
+    'changelog: now, no longer, used to, the old': 2.9,
+    'hedge: usually, likely, probably, might, seems': 0.3,
+    'first person: we, our, us, I': 2.0,
+    'TODO, NOTE, FIXME, XXX, HACK': 0.1,
+}
 
 
 def main() -> None:
     human = humanBlocks()
     recent = recentBlocks()
-    print('| feature | human | Claude, this skill |\n|---|---|---|')
-    print(f'| blocks | {len(human):,} | {len(recent)} |')
-    lengths = [sorted(len(b.split()) for b in s) for s in (human, recent)]
-    print(f'| median words | {statistics.median(lengths[0])} | {statistics.median(lengths[1])} |')
-    print(f'| p90 words | {lengths[0][int(len(lengths[0]) * 0.9)]} | {lengths[1][int(len(lengths[1]) * 0.9)]} |')
-    multi = [sum(sentenceCount(b) > 1 for b in s) / len(s) * 100 for s in (human, recent)]
-    print(f'| blocks of more than one sentence | {multi[0]:.0f}% | {multi[1]:.0f}% |')
+    print('| feature | Claude, no skill | human | Claude, this skill |\n|---|---|---|---|')
+    print(f'| blocks | {CLAUDE_BLOCKS:,} | {len(human):,} | {len(recent)} |')
+    for label, quantile in (('median words', 0.5), ('p90 words', 0.9)):
+        cells = [quantileCell(sorted(len(b.split()) for b in s), quantile) for s in (human, recent)]
+        print(f'| {label} | {CLAUDE_RATES[label]:g} | {cells[0]} | {cells[1]} |')
+    label = 'blocks of more than one sentence'
+    cells = [rateCell(sum(sentenceCount(b) > 1 for b in s), len(s)) for s in (human, recent)]
+    print(f'| {label} (%) | {claudeCell(label)} | {cells[0]} | {cells[1]} |')
     for label, pattern in FEATURES:
         rx = re.compile(pattern) if label in CASE_SENSITIVE else re.compile(pattern, re.IGNORECASE)
-        rates = [sum(bool(rx.search(b)) for b in s) / len(s) * 100 for s in (human, recent)]
-        counts = sum(bool(rx.search(b)) for b in recent)
-        print(f'| {label} | {rates[0]:.1f} | {rates[1]:.1f} ({counts}) |')
+        cells = [rateCell(sum(bool(rx.search(b)) for b in s), len(s)) for s in (human, recent)]
+        print(f'| {label} | {claudeCell(label)} | {cells[0]} | {cells[1]} |')
+
+
+def wilson(hits: int, total: int) -> tuple[float, float]:
+    """Wilson score interval at 95%, as percentages."""
+    if total == 0:
+        return (0.0, 100.0)
+    share = hits / total
+    centre = (share + Z**2 / (2 * total)) / (1 + Z**2 / total)
+    half = Z * math.sqrt(share * (1 - share) / total + Z**2 / (4 * total**2)) / (1 + Z**2 / total)
+    return (max(0.0, centre - half) * 100, min(1.0, centre + half) * 100)
+
+
+def rateCell(hits: int, total: int) -> str:
+    low, high = wilson(hits, total)
+    return f'{hits / total * 100:.1f} [{low:.1f}, {high:.1f}]'
+
+
+def claudeCell(label: str) -> str:
+    # the transcripts are private, so the interval comes from the published rate and its block count
+    if label not in CLAUDE_RATES:
+        return ''
+    return rateCell(round(CLAUDE_RATES[label] * CLAUDE_BLOCKS / 100), CLAUDE_BLOCKS)
+
+
+def quantileCell(values: list[int], quantile: float) -> str:
+    """The quantile with a distribution-free 95% interval from binomial order statistics."""
+    count = len(values)
+    spread = Z * math.sqrt(count * quantile * (1 - quantile))
+    low = values[max(0, math.floor(count * quantile - spread))]
+    high = values[min(count - 1, math.ceil(count * quantile + spread))]
+    return f'{values[min(count - 1, int(count * quantile))]} [{low}, {high}]'
 
 
 def sentenceCount(block: str) -> int:

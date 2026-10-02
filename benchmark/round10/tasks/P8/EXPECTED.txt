@@ -1,0 +1,12 @@
+fixture/session.txt is itself the expected result: every '< ' line, in order, with '*' matching any CLIENT_ERROR message.
+traps:
+  set old 0 1000000000: an exptime above 2,592,000 is an absolute Unix time (2001-09-09), so the item is expired at once; read as relative seconds it lives 31 years and 'get old' returns it
+  set month 0 2592000: exactly 30 days is still relative, so the item lives
+  set gone 0 -1: a negative exptime is expired at once
+  incr n 2 on 18446744073709551615 wraps to 1; decr n 5 on 1 stops at 0
+  set b 0 0 2 with 'abcd': the two bytes after the block are not \r\n, so CLIENT_ERROR, and the rest of the line is discarded
+  noreply: 'set q … noreply' and 'delete q noreply' send nothing
+  LRU: 'get k1' makes k2 the least recently used, so 'set k3' evicts k2; first-in-first-out evicts k1
+  set big: 3 + 260 + 50 = 313 > 300 gets SERVER_ERROR and evicts nothing, so k1 and k3 survive
+  item size is key + data + 50: k1, k2, k3 are 102 each, so two fit in 300 and three do not
+Computed by hand from the specification. Not run against a real memcached: its eviction is slab-based and it sends no SERVER_ERROR for 'big' at this limit.

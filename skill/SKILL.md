@@ -1,6 +1,6 @@
 ---
 name: narrative
-description: Write or review Python in the Narrative house style — mixedCase functions, main() first with types last, parse-at-the-boundary dataclasses, no ORM, explicit global on mutation, exhaustive match without a fallback arm, and a verified ruff/pylint/mypy toolchain. Covers multi-module architecture too: which module may import which, when one file becomes several, what a package __init__.py holds, where a shared type lives, and when to take or contain a third-party dependency. Use for any Python written in or for this codebase, when laying out modules or packages, and when reviewing a diff against this style.
+description: Write or review Python in the Narrative house style — mixedCase functions, main() first with types last, parse-at-the-boundary dataclasses, no ORM that re-validates what the database checks, explicit global on mutation, exhaustive match without a fallback arm, and a verified ruff/pylint/mypy toolchain. Covers multi-module architecture too: which module may import which, when one file becomes several, what a package __init__.py holds, where a shared type lives, and when to take or contain a third-party dependency. Use for any Python written in or for this codebase, when laying out modules or packages, and when reviewing a diff against this style.
 ---
 
 # Narrative Python
@@ -47,7 +47,7 @@ DEFAULT_DB_PATH = Path('app.db')
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
                                      # one blank line
-LOG = logging.getLogger('app')       # globals baked into the design sit apart
+LOG = logging.getLogger(__name__)    # globals baked into the design sit apart
 
 
 def main() -> int:                   # FIRST. The beating heart; where a reader goes first.
@@ -89,7 +89,7 @@ class ScanHeader: ...
   only meaning here. Deliberately grouped short guards stay grouped, and two adjacent two-line
   `if ...: raise` checks belong together. No blank line after a docstring. (R3a-01)
 
-  **No tool checks this. It does not depend on statement length, and no threshold on length works.**
+  **No tool checks this.**
   Place a blank line by these five rules: (`R8-NAR008`, `R8-NAR008-rule`)
 
   - a body of **8 lines or under takes no internal blanks at all**
@@ -144,8 +144,6 @@ class ScanHeader: ...
 - Merge branches that share a body **only where the type checker's narrowing survives the merge.**
   If you merge two `isinstance` branches, even with parentheses, mypy widens the subject back to a
   union and loses the narrowing. Two explicit branches beat one clever condition. (R2b-B5)
-
-- A value that is a path has type `Path`, not `str`. (R3a-10)
 
 - Collection literals get one item per line **wherever `ruff format` explodes them**, which is any
   literal it cannot fit on one line. This is how the formatter behaves, not a further rule: a short
@@ -207,8 +205,7 @@ The latter is an implementation detail and belongs **inside** the function, stil
 function inside. A log path, an archive directory, a glob, exit codes and operator-tunable timeouts
 stay at module level. (R3a-12)
 
-*No tool checks this, and the obvious proxy does not work: "used by exactly one function" flags
-almost every constant, including the ones that belong at module level. This is review judgement.*
+*No tool checks this. This is review judgement.*
 
 ## Types
 
@@ -222,7 +219,7 @@ almost every constant, including the ones that belong at module level. This is r
 
 - **A file path is a `Path`** from the boundary inward. A `str` path only where an outside API
   requires one, or for an argument echoed exactly as typed, named `raw_…`: `raw_input_dir`.
-  (R10-path-type)
+  (R3a-10, R10-path-type)
 
 - **Money is integer cents**, named `…_cents`: parse to `int` at the input, format at the output.
   A computation that yields fractions of a cent, such as rate × minutes × multiplier, stays in
@@ -247,10 +244,6 @@ almost every constant, including the ones that belong at module level. This is r
   `dict[str, list[tuple[float, float]]]` contains five, and above four, give the annotation a name.
   A callable becomes a `Protocol`; anything else becomes a dataclass. (`NAR005`, `R8-D27`)
 
-  Count names rather than nesting depth or argument width. Depth alone admits
-  `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` and width alone admits
-  `tuple[dict[str, str], list[str]]`. One number covers both.
-
   **The DB-API is the standing exception.** `sqlite3.executemany` takes a sequence per row and
   raises `ProgrammingError: parameters are of unsupported type` on a dataclass. Instead, use a
   `NamedTuple` for rows: it is a tuple, so `executemany` takes it, and its fields have names. Use
@@ -270,13 +263,8 @@ almost every constant, including the ones that belong at module level. This is r
       connection.commit()
   ```
 
-  The type then decides the fix. **A callable becomes a `Protocol`.** **Anything else — any kind of
-  iterable — becomes a dataclass.**
-
-  The reason is comprehension and shared vocabulary, not type safety. A `Point` dataclass does not
-  make `mypy --strict` catch swapped coordinates, and neither does `tuple[float, float]`; only
-  `NewType` does, which is Q15's job. Expect the dataclass to give the thing a name, not to find a
-  bug.
+  The reason is a shared name, not type safety: only `NewType` makes swapped coordinates a type
+  error (Q15).
 
 - Composition over inheritance, always.
 
@@ -292,7 +280,7 @@ def severityFor(outcome: Outcome) -> LogLevel:
         # no `case _`. Adding a member now gives: error: Missing return statement
 ```
 
-When you omit `case _`, mypy catches a new variant. **A `case _: raise RuntimeError(...)`
+**A `case _: raise RuntimeError(...)`
 one-liner looks equivalent and is not. It type-checks clean and silently accepts the missing
 case.** No helper, no `assert_never`. (Q18, R3a-07)
 
@@ -303,9 +291,7 @@ gets no protection. Restructure it to return something.
 member goes unhandled. A `dict` lookup and an `IntEnum` both type-check clean and fail at run time
 with `KeyError`.
 
-Speed does not change this. A module-level mapping is faster than the `match` by tens of
-nanoseconds per call and a function-local dict is several times slower than either, so end to end
-the spread between the forms is smaller than run-to-run noise. (R4-03)
+Speed does not change this: the difference between the forms is below run-to-run noise. (R4-03)
 
 `IntEnum` is not a substitute. It makes `json.dumps({'level': LogLevel.INFO})` silently emit `20`
 where a plain `Enum` raises `TypeError`, and its `str()` changed across releases. **`StrEnum` is
@@ -317,7 +303,7 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 
 - Parse untrusted input into a **frozen dataclass at one boundary gate**, then never validate
   again. The objection to Pydantic/ORMs is *pervasive runtime validation*, not a single gate.
-  (Q14, Q17)
+  (Q02, Q14, Q17)
 
 - **A parsed record contains only what its input contained.** Where one input format has a field and
   another does not, the field is optional on the shared record, and the check that reads it skips an
@@ -329,14 +315,14 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   that allows only `internal`, an invented source turns every line of every lockfile into a finding
   that the manifest never justified.
 
-  This bites hardest where one shared record serves two formats, which is what `architecture.md`
-  asks for. The fix is the optional field, not a second record type.
+- **Pydantic can be used for standardizing user input, at the boundary gate, and nowhere else.**
+  `TID251` bans the import, so declare `# ruff: noqa: TID251` in the gate module, and name the gate
+  function in its module docstring. A second suppression in one program means validation is no
+  longer at one gate. (R8-D10, R10-pydantic)
 
-- The config enforces that **more bluntly than the rationale**. `TID251` bans the `pydantic` import
-  outright, because whether a model is used once at a gate or on every request is not visible to a
-  linter. A genuine single-gate use is therefore a per-module `# ruff: noqa: TID251` with the gate
-  named in the module docstring. Writing that suppression twice in one program means the validation
-  is no longer at one gate. (R8-D10)
+- **No framework should validate output.** FastAPI makes a route's return annotation its response
+  model, so every response is validated at run time. Pass `response_model=None` in the route
+  decorator, and keep the annotation for mypy. (R10-pydantic)
 
 - **`frozen=True` is the default for every dataclass.** It has nothing to do with boundaries: a
   record built and consumed inside one function is frozen for the same reason a parsed one is.
@@ -346,11 +332,7 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   a decision. Reach for a `tuple` where you would write a `list`. A frozen wrapper around mutable
   contents is a half-guarantee: `dataclasses` will not stop you writing through it, so the bug grows
   quietly and surfaces at run time with nothing to catch it. The standing exception is the
-  schemaless remainder below, where a `Mapping` field is the prescribed shape and its cost is
-  already recorded.
-
-- A dataclass, never a dict of parsed fields. (Q02) That rule is about **the type of the record
-  itself**, not about what type a field may have. A mapping-typed *field* is fine.
+  schemaless remainder below, where a `Mapping` field is the prescribed shape.
 
 - **Genuinely schemaless input**: promote the fields the program actually computes on to typed
   attributes, and put the remainder in one `Mapping[str, object]` field. To flatten it to a JSON
@@ -366,15 +348,15 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   - `frozen=True` plus a mapping field is **not hashable**. `set(entries)` raises `TypeError` at
     run time with no linter warning. Fine until someone dedupes.
 
-- **No ORM on a hot path.** A request handler that returns database values must not pay run-time
-  validation for information already guaranteed by the database schema and the Python types. Use
-  `sqlite3` and SQL. (Q17, R6-03)
-- **An ORM is a fine tool off the hot path.** A healing script, a migration or a one-off backfill
-  runs once, so developer time outweighs per-request cost. **Declare the exception in the module
-  that uses the ORM**, with a file-level `# ruff: noqa: TID251`. There is no `per-file-ignores`
-  list: an exception is a property of the module, not of a glob that drifts from the tree it
-  matches. Conformance owes no explanation, so the suppression stands bare. (R6-07, R7-D04,
-  R7-D04-generalised)
+- **An ORM is fine where it makes database work easier, as long as it adds no run-time validation
+  that the database already does.** The cost is per row and per request, and worst on a hot path,
+  such as an endpoint that returns database values. SQLAlchemy, peewee, Piccolo and Django models
+  run no validation on write or on read. `TID251` bans the ORMs that do: SQLModel, ormar, Tortoise,
+  Pony and SQLObject. A migration, a healing script or a one-off backfill can still use one:
+  declare `# ruff: noqa: TID251` in that module. There is no `per-file-ignores` list: an exception
+  is a property of the module, not of a glob that drifts from the tree it matches. Conformance owes
+  no explanation, so the suppression stands bare. (Q17, R6-03, R6-07, R7-D04, R7-D04-generalised,
+  R10-orm-validation)
 
 ## Errors
 
@@ -427,13 +409,9 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 - Python already forces `global` to rebind. Python does not police in-place mutation, and no linter
   catches it: `CONFIG.clear()`, `CONFIG['k'] = v`, `CONFIG.attr = v`. That is `NAR001`.
 
-- **The check goes further than those three forms.** It also matches any method whose name *starts
-  with* a configuration verb: `set`, `add`, `remove`, `register`, `unregister`, `reset`, `delete`,
-  `insert`, `enable`, `disable`, `configure`, `install`, `attach`, `detach`, `bind`, `unbind`,
-  `truncate`, `flush`, `commit`, `rollback`, `execute`, `close`. So `LOG.addHandler(...)` is a
-  mutation, and a function that configures a module-level logger declares `global LOG` even though
-  it never rebinds it. The check under-reports rather than crying wolf: a domain method can mutate
-  without saying so in its name. (V-03)
+- `NAR001` also counts a call to a method whose name starts with a configuration verb, such as
+  `set`, `add`, `register` or `close`. So a function that calls `LOG.addHandler(...)` declares
+  `global LOG` even though it never rebinds it. (V-03)
 
 - Every attribute declared in `__init__`. `hasattr(self, ...)` is a red flag. (Q04)
 
@@ -492,16 +470,12 @@ you did not observe.** A module that computes records rather than rendering text
 **Show one line of each shape, not the whole output.** One team row, one over-quota line, one file
 outcome, and no repeats. The reader needs every shape the module can emit and needs no volume.
 
-**A sample goes stale and no tool catches it**, which is the cost the `__main__.py` module map
-already pays under `R9-02`. Keep it small for that reason, and re-paste it when the output changes.
+**A sample goes stale and no tool checks it.** Keep it small, and re-paste it when the output
+changes.
 
-**Expect it to cost lines.** Measured over five modules of a working program, pasting the sample
-took their docstrings from 4, 4, 5, 7 and 12 lines to 20, 8, 7, 10 and 9. Only the one carrying
-paraphrase and justification got shorter. The sample buys exactness, not brevity: a reader learns
+**Expect it to cost lines.** The sample buys exactness, not brevity: a reader learns
 the column order, the units and the alignment from three rows of a table and cannot learn them from
 a sentence about the table having columns.
-
-`R3a-11` is the same rule for file moves and path manipulation.
 
 ```python
 """Format the result of a reconciliation as a table for a terminal.
@@ -546,9 +520,7 @@ A unit is a power of 1024. A number with no suffix is a count of bytes.
 
 ### What a body may say, and what it may not
 
-The summary line is mandatory. **A body is not, and usually does not earn its place.** Applying the
-tests below to a working 14-module package cut its docstring prose by 60%, and one module lost its
-body entirely. (R9-09)
+The summary line is mandatory. **A body is not, and usually does not earn its place.** (R9-09)
 
 **Cut a sentence when any of these is true:**
 
@@ -590,9 +562,6 @@ body entirely. (R9-09)
 - a **constraint from outside the program** — `the standard formatter of logging discards extra`
 - a **guarantee a caller needs** — `The call writes no file, prints nothing, and records nothing`
 
-Seven cuts with no counterweight would drive every docstring to a bare summary line. That list is
-the counterweight, and it is what every surviving sentence in the measured package sits on.
-
 - **A function gets a docstring when its contract is complex**: it takes more than three parameters,
   or it exceeds 20 lines. Below both, the contract goes in `#` comments. Raising is not a trigger,
   because the style routes raise sites through a `reject*()` helper and every two-line guard that
@@ -618,11 +587,6 @@ the counterweight, and it is what every surviving sentence in the measured packa
 - Write nothing in a docstring that the code does not do, and no consequence that an earlier
   sentence already implies. (Q05)
 
-- **Write in a docstring what the code does, not why the code is shaped the way this style guide
-  requires.** `Two audits can hold two databases at once` is behaviour and belongs.
-  `so this is a class and not a module` is an argument with the style guide and does not. The
-  reader wants the program explained, not the rulebook. (R9-02)
-
 - **A docstring is about its file alone.** Do not assert what another module does, do not claim to
   be the only place something happens, and do not count callers.
   `nothing outside this module imports sqlite3` and `this is the one place that builds it` are
@@ -630,22 +594,7 @@ the counterweight, and it is what every surviving sentence in the measured packa
   reader of *this* file needs the name in order to use this file. (R9-02)
 
 - Where semantics vary by implementation (file moves, copies, path manipulation), **show a
-  concrete before/after example**, not prose. (R3a-11) That is one case of the general rule above:
-  show the thing rather than describe it.
-
-- **`FIXME:` means one of two things, and only one of them may merge.** (R6-12, NAR010)
-  - In code that runs, a `FIXME` is a **merge blocker**. `NAR010` fails the gate on it.
-  - In code that nothing calls, a `FIXME` is a **danger sign**. It is a note on a known correctness
-    problem parked in an orphaned section, for whoever next considers wiring that section into the
-    hot loop. This use is allowed, and it is the reason the marker exists.
-
-  Reachability separates the two, so `NAR010` walks the call graph from `main` and from module
-  level. It over-approximates reachability on purpose. Calling an orphan live is the safer error
-  than letting a running `FIXME` through.
-
-  **A module with no `main` and no `__main__` block is a library module**, and every function in it
-  counts as reachable, because its callers are in files outside this per-file check.
-  (R8-D02)
+  concrete before/after example**, not prose. (R3a-11)
 
 ## Comments
 
@@ -701,7 +650,10 @@ Before writing or rewording a comment, in order:
   - `SIZE_PATTERN = re.compile(...)  # number, then an optional binary unit suffix`
   - `# fsum() for accurate floating point math`
 - **Marker**: no test needed. (R10-candor, R10-Q03, R10-Q05, R10-Q36, R10-Q38, R6-12, R8-block-comments)
-  - `FIXME:` incorrect behaviour, or behaviour that breaks soon after deploy
+  - `FIXME:` incorrect behaviour, or behaviour that breaks soon after deploy. In reachable code it
+    blocks the merge (`NAR010`). In code nothing calls, it is a warning to whoever wires that code
+    in. Every function of a module with no `main` and no `__main__` block counts as reachable.
+    (R8-D02)
   - `TODO:` tech debt, future improvement
   - a stated assumption: `# vendor documents no encoding, UTF-8 assumed`
   - a label on a block of at least 4 lines, ideally 6 or more: `# parse data` (R10-block-label-size)
@@ -711,14 +663,14 @@ Before writing or rewording a comment, in order:
 **Never, even when a kind's test passes:**
 - what the next line or a single call does (R10-Q01, R10-Q06, R10-Q39, R10-Q47, R10-Q54)
 - standard library or language behaviour the reader knows: `<=`, case sensitivity, `None` (R10-Q19, R10-Q21, R10-Q26, R10-Q49)
-- why the file follows this style guide (R9-02, R10-Q01)
+- why the file follows this style guide: `so this is a class and not a module` (R9-02, R10-Q01)
 - decision ids such as `(Q08)` (R7-D04-comments, `NAR012`)
 - changelog: an earlier state of the code, or a fixed bug with nothing left of it (R10-Q04, R10-Q08, R10-Q52, `NAR015`)
 - alternatives never in the code (`rather than`, `instead of`), except in architecture discussion (R10-Q07, R10-rather-than)
 - risks far outside the task's scale, and decisions too inconsequential for a later reader to reconsider (R10-Q13, R10-rating)
 - future needs nobody has documented or planned (R10-Q15)
 - reassurance that a weakness is fine; `deliberately`, `on purpose` (R10-candor, R10-Q20, `NAR014`)
-- guarantees about other modules. Put them in the module docstring or `architecture.md`. (R10-Q24, R10-Q11)
+- guarantees about other modules. Put them in the project's architecture document. (R10-Q24, R10-Q11, R10-other-modules)
 - how one function uses a type, written on the type: `member order is the order plan.json lists a
   snapshot's rules` belongs with the function that writes plan.json, or nowhere if the order is
   already plain in that function (R10-usage-placement)
@@ -729,11 +681,11 @@ Before writing or rewording a comment, in order:
 mean, more on a novel method. When the reader needs the consequence or the action as well as the
 fact, write a second sentence, as a block of full sentences:
 ```python
-# logging.NullHandler() stops the last-resort handler from printing this package's warnings.
-# They reach stderr only when the calling program configures logging.
-LOG.addHandler(logging.NullHandler())
+# The vendor API returns at most 100 rows per page and no total count.
+# Keep requesting until a page comes back short.
+while len(page := fetchPage(cursor)) == PAGE_SIZE:
 ```
-A one-line comment stays one clause. (R10-Q16, R10-seed-2, R10-depth-sentences)
+A one-line comment stays one clause. (R10-Q16, R10-seed-2, R10-depth-sentences, R10-depth-example)
 
 **Sentence form:**
 - a one-line `#` comment: lowercase start, no period. Several lines, and every docstring: sentences. (R10-Q26, R10-Q35, R10-docstrings)
@@ -791,11 +743,13 @@ against the restatement gate. Fix what fails and run `verify.py` again. (R10-pro
 One stable event name plus structured `extra={...}` fields, never an f-string of prose. The
 message is a queryable key. (Q08)
 
+**Get each module's logger with `logging.getLogger(__name__)`.** In a package used as a library, add
+`logging.NullHandler()` to the package logger once, in its top-level `__init__.py`. Without it, the
+last-resort handler prints the package's warnings to stderr in a program that configures no logging.
+In a program, configure logging once, in `main()`, and add no NullHandler. (R10-nullhandler)
+
 **JSONL output is for a service, not for every script. Decide by who reads the logs.** (R5-03,
 R8-D23-resolved) A collector that queries them wants JSONL; a person at a terminal does not.
-
-Decide by the reader, not by the line count of either formatter. JSONL logging belongs in an
-importable library that every program shares, and then it costs one import.
 
 - **A service, or any program whose logs someone collects**: JSONL, from a shared module. In a
   monorepo each program imports it and never re-pastes it. That is what makes it worth having.
@@ -867,22 +821,14 @@ asyncio is the default for I/O-bound work. (R2-04)
 
 `ruff` targets `py311`. Check with `vermin -t=3.11- --violations`. (R7-E07-floor)
 
-**3.10 reaches end of life in October 2026.** `asyncio.TaskGroup` also arrives at 3.11, and it is
-the right tool for supervising several long-lived tasks; hand-rolling its cancellation is what
-fails silently.
-
-- `datetime.UTC`, `typing.assert_never`, `enum.StrEnum`, `asyncio.TaskGroup`, `asyncio.timeout()`,
-  `typing.Self` and `tomllib` are all available. No workaround is needed for any of them.
+Supervise several long-lived tasks with `asyncio.TaskGroup`. Hand-rolled cancellation fails
+silently.
 
 - **`except TimeoutError` is correct** around `asyncio.wait_for`. At 3.11 `asyncio.TimeoutError`
   *is* the builtin, so the two are one class. (R3a-06)
 
 - Not available, so out: anything added in 3.12 or later, including the `type` statement and
   PEP 695 generics.
-
-## Avoid the usual traps
-
-Bare `except:`. Mutable default arguments. See `wtfpython` for the rest.
 
 ## Verify
 
@@ -892,8 +838,7 @@ Run `verify.py`. Do not call the tools by hand.
 python3 verify.py .
 ```
 
-Give it any path. It sorts Python files from prose and runs the right checks on each, so nothing
-has to decide a workflow at run time. There is one command, not a sequence to remember.
+Give it any path, and every Python file below it is checked.
 
 It resolves every tool to an absolute path and exits 2 if one is missing or if `pyproject.toml` is
 absent. **Do not replace it with a loop that greps tool output for findings**: a missing binary or a

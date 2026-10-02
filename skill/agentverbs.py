@@ -87,6 +87,8 @@ NOQA = re.compile(r'#\s*noqa(?::\s*(?P<codes>[A-Z0-9, ]+))?')
 # a quoted span is code or an example, not a sentence of the comment
 QUOTED = re.compile(r"`[^`]*`|(?<!\w)'[^'\n]+'(?!\w)")
 AGREEMENT_WINDOW = 5
+# Google-style docstring sections, whose indented entries are prose
+SECTION_HEADER = re.compile(r'(?:Args|Arguments|Returns|Yields|Raises|Attributes|Notes?):$')
 
 
 def main() -> int:
@@ -198,11 +200,35 @@ def docstringLines(tree: ast.Module) -> list[tuple[int, str]]:
         literal = node.body[0].value
         if not isinstance(literal, ast.Constant) or not isinstance(literal.value, str):
             continue
-        for offset, text in enumerate(literal.value.splitlines()):
-            stripped = text.strip()
-            if stripped and not stripped.startswith(('$', '>>>')):
-                lines.append((literal.lineno + offset, stripped))
+        lines.extend((literal.lineno + offset, text) for offset, text in proseLines(literal.value))
     return lines
+
+
+def proseLines(docstring: str) -> list[tuple[int, str]]:
+    """Pick the sentences out of a docstring, leaving out pasted samples.
+
+    A line indented past the body is a sample, such as a table or program output, unless it is an
+    entry under a section header such as `Returns:`.
+
+    Returns:
+        Line offset within the docstring, and the stripped line.
+    """
+    raw_lines = docstring.splitlines()
+    body = [line for line in raw_lines[1:] if line.strip()]
+    margin = min((len(line) - len(line.lstrip()) for line in body), default=0)
+    picked: list[tuple[int, str]] = []
+    in_section = False
+    for offset, line in enumerate(raw_lines):
+        stripped = line.strip()
+        if not stripped or stripped.startswith(('$', '>>>')):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if offset == 0 or indent <= margin:
+            in_section = SECTION_HEADER.match(stripped) is not None
+            picked.append((offset, stripped))
+        elif in_section:
+            picked.append((offset, stripped))
+    return picked
 
 
 ### vocabulary #########################################################################################
