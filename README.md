@@ -9,7 +9,7 @@ human-like comments.**
   33% fewer executable lines. With a highly detailed output spec contract, the savings are 9%.
 - **Passes mypy --strict.** Contains an opinionated linting pipeline including ruff, pylint, `mypy --strict`, 18 custom AST checks, and NLP inanimate agent-verb compliance.
 - **No loss in spec correctness.** Guided and unguided programs pass the same blind conformance tests.
-- **Comments a reviewer wants.** Most of Claude's writing tics fall to the human rate or below.
+- **Comments a reviewer wants.** Most of Claude's writing tics fall to the human rate or below, and comments are added for good reasons only.
 - **Does not cause catastrophic tech debt problems.** Two consecutive change requests cost 329 changed lines with the
   skill against 365 without it, over 14 files against 12.
 - **One command for the whole toolchain.** `verify.py` runs every tool in the right order, and
@@ -24,44 +24,64 @@ NOTE: this skill has an opinionated ordering for code (`main()` first, then the 
 
 ## Before and after
 
-A Streamlit tab from [gtnh-seedlib](https://github.com/OrderedSet86/gtnh-seedlib/blob/cd3a4a4c333e7b0b01923339365bfa41be3310d5/browser/app.py#L1465). Both versions are unedited.
+The caption of a map preview card from [gtnh-seedlib](https://github.com/OrderedSet86/gtnh-seedlib/blob/a2e868884ac8e4bb4ab4eb5460bdd849e523fd1a/tools/make_preview.py#L68).
+Both versions draw the same image.
 
 **Without the skill:**
 
 ```python
-st.subheader("Everything that fed the score")
-# "(top scorer)" is a sentinel rather than a seed id, so it re-resolves every run and follows the
-# ranking as the metric is edited — which is what you want while tinkering. Picking an explicit
-# seed pins it, because the selectbox is keyed and Streamlit keeps a keyed widget's value across
-# reruns. Two behaviours, one widget, no extra checkbox to get out of sync.
-seed_opts = [TOP_SCORER, "(all seeds combined)"] + [r["seed"] for r in rows]
-if st.session_state.get("loot_breakdown") not in seed_opts:
-    st.session_state["loot_breakdown"] = TOP_SCORER  # source or limit changed; the pin is stale
-which = st.selectbox(
-    "Breakdown for", seed_opts, key="loot_breakdown",
-    help="Defaults to whichever seed currently ranks first and follows it as you edit the "
-          "metric. Select a specific seed to pin it across reruns.")
+def caption(card: Image.Image, title: str, subtitle: str) -> None:
+    """Draw the title block over a bottom-up gradient scrim.
+
+    The scrim is not decoration. The text sits over whatever terrain happens to be at the bottom
+    of the crop -- snow, desert, a village roof -- and light-on-light is unreadable on the one
+    surface where it matters most.
+    """
+    scrim_h = 240
+    scrim = Image.new("L", (1, scrim_h))
+    for y in range(scrim_h):
+        # Ramp to 94% rather than fully opaque: the map should still read through the darkest
+        # part. The exponent stays near-linear on purpose -- a steeper curve keeps the scrim
+        # nearly clear until it is level with the text, which is exactly where it is needed.
+        scrim.putpixel((0, y), int(240 * (y / (scrim_h - 1)) ** 1.15))
+    scrim = scrim.resize((CARD_W, scrim_h))
+    card.paste(Image.new("RGB", (CARD_W, scrim_h), BG), (0, CARD_H - scrim_h), scrim)
+
+    d = ImageDraw.Draw(card)
+    d.text((48, CARD_H - 118), title, font=_font("DejaVuSans-Bold.ttf", 46), fill=FG)
+    d.text((48, CARD_H - 58), subtitle, font=_font("DejaVuSans.ttf", 24), fill=DIM)
+    # A thin accent rule anchors the text block to the left edge so it does not float.
+    d.rectangle((48, CARD_H - 140, 48 + 76, CARD_H - 136), fill=ACCENT)
 ```
 
 **With the skill:**
 
 ```python
-st.subheader('Score breakdown by item')
-breakdown_options = [TOP_SCORER, ALL_SEEDS, *(row['seed'] for row in rows)]
-# after a change of source, seed limit or Min requirements, a pinned seed can be absent from the options
-if st.session_state.get(BREAKDOWN_KEY) not in breakdown_options:
-    st.session_state[BREAKDOWN_KEY] = TOP_SCORER
-# Streamlit restores a keyed widget's value on every rerun, so a seed id as the default would stay
-# selected after the ranking changes. TOP_SCORER is mapped to the current first seed on each run.
-selection = st.selectbox(
-    'Breakdown for',
-    breakdown_options,
-    key=BREAKDOWN_KEY,
-    help=(
-        f'{TOP_SCORER} is the seed in first place on each run, so it changes as you edit the metric. '
-        'Select a seed to pin the breakdown to it across reruns.'
-    ),
-)
+def caption(card: Image.Image, title: str, subtitle: str) -> None:
+    """Draw the title, the subtitle and an accent rule at the card's bottom left, over a dark scrim."""
+    SCRIM_HEIGHT = 240
+    SCRIM_PEAK_ALPHA = 240  # 94% opaque at the card's bottom edge
+    SCRIM_EXPONENT = 1.15
+    TEXT_LEFT = 48
+    TITLE_TOP = CARD_H - 118
+    TITLE_FONT_SIZE = 46
+    SUBTITLE_TOP = CARD_H - 58
+    SUBTITLE_FONT_SIZE = 24
+    RULE_TOP = CARD_H - 140
+    RULE_WIDTH = 76
+    RULE_THICKNESS = 4
+
+    # without the scrim, light text is unreadable over snow or desert at the card's bottom edge
+    alphas = [int(SCRIM_PEAK_ALPHA * (y / (SCRIM_HEIGHT - 1)) ** SCRIM_EXPONENT) for y in range(SCRIM_HEIGHT)]
+    scrim_column = Image.new('L', (1, SCRIM_HEIGHT))
+    scrim_column.putdata(alphas)
+    scrim_mask = scrim_column.resize((CARD_W, SCRIM_HEIGHT))
+    card.paste(Image.new('RGB', scrim_mask.size, BG), (0, CARD_H - SCRIM_HEIGHT), scrim_mask)
+
+    draw = ImageDraw.Draw(card)
+    draw.text((TEXT_LEFT, TITLE_TOP), title, font=_font('DejaVuSans-Bold.ttf', TITLE_FONT_SIZE), fill=FG)
+    draw.text((TEXT_LEFT, SUBTITLE_TOP), subtitle, font=_font('DejaVuSans.ttf', SUBTITLE_FONT_SIZE), fill=DIM)
+    draw.rectangle((TEXT_LEFT, RULE_TOP, TEXT_LEFT + RULE_WIDTH, RULE_TOP + RULE_THICKNESS), fill=ACCENT)
 ```
 
 ## Claude's comments, with and without the skill
