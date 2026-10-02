@@ -1,7 +1,7 @@
 # Narrative Python
 
-**Python from Claude that you can review fast: a third less code, zero linter findings, and
-comments worth reading.**
+**Makes Python Claude outputs pleasing to read: ~33% less code, zero mypy findings, and
+human-like comments.**
 
 Narrative is a Claude Code skill. With it, Claude writes each module as a document you read from the
 top down: `main()` first, then the steps it calls in call order, then the types. A pipeline of
