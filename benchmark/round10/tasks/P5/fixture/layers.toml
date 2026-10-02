@@ -1,0 +1,7 @@
+current_version = "1.10.0"
+secret_key_pattern = "(?i)(password|secret|token)$"
+
+[environments]
+staging = ["base", "staging"]
+prod = ["base", "staging", "prod"]
+canary = ["base", "prod", "canary"]

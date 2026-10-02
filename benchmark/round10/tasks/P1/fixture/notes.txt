@@ -1,0 +1,1 @@
+reader R2 was offline 2026-03-04 14:50 to 15:20 and retransmitted on reconnect

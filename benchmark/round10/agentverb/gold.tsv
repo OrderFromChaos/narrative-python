@@ -1,0 +1,332 @@
+ok	Bill subscription customers for one calendar month.
+ok	Bill each customer for one calendar month of a subscription service, prorated to the second.
+ok	Bill the month, write invoices.json and the database, and print the summary table.
+ok	Bill every customer for one calendar month, prorated to the second.
+ok	Bill every customer of an input directory for one month.
+ok	Prorate a customer's plan stretches over one month and add tax.
+ok	Read every events file of an input directory into one EventLog.
+ok	Parse and classify every event line of the input directory.
+ok	Parse one line of an events file, or report it as malformed.
+ok	None unless raw_at is an ISO 8601 date and time with a UTC offset
+ok	The package logger, and a formatter that prints the structured fields of each record.
+ok	Convert between dollar strings and integer cents, and round fractions of a cent.
+ok	None when the text is not a dollar amount with exactly two decimal places
+ok	Read the reference data a month is billed against: the price list and the customer list.
+ok	Parse the price list.
+ok	Parse the customer list, in file order.
+ok	newline='' leaves a newline quoted inside a field intact
+ok	Render a BillingResult as the text of invoices.json.
+ok	Record each billed customer-month in a SQLite database.
+ok	Open the database, and create its two tables where they are absent.
+ok	Rewrite the customer-month of every customer of the result, in one transaction.
+ok	Render a BillingResult as a table for a terminal.
+ok	Render the table, with columns as wide as their widest cell.
+ok	Replay each customer's events into the stretches of time spent on one plan.
+ok	Replay the events of every customer.
+ok	a cancel's plan is None, so a cancel leaves no active plan
+ok	Types shared between the modules of the invoicing package.
+ok	The customers, the prices or an events file is unusable, so no month can be billed.
+agent	basename, as the report names it
+ok	One subscription event. Two resent copies of an event compare equal.
+ok	None exactly when kind is CANCEL
+agent	None when a malformed line names no customer as a string
+ok	read order, problems and duplicates removed
+ok	None while the plan is still active after the last event
+ok	in the customer's zone
+ok	sorted by customer_id
+ok	sorted by (file, line)
+ok	every customer of customers.csv, invoiced or not
+ok	Bill a month of subscription events into invoices, and report the events that could not be billed.
+ok	Bill each customer for one calendar month of a subscription, and report the events not billed.
+ok	Bill the month, write the outputs, and return the exit code.
+ok	Bill one calendar month of an input directory, and return the invoices and the problems.
+agent	Bill every customer of input_dir for the month raw_month names, as YYYY-MM.
+ok	Parse YYYY-MM.
+ok	Read the customer file into Customer records, keyed by customer_id.
+ok	Parse the customer file.
+ok	Read every event file of an input directory into an EventLog.
+ok	Classify every line of every event file.
+ok	read_text() would fail the whole file on one line that is not UTF-8
+ok	Parse one line, and check it against the customers and the price list.
+agent	Build the event that a JSON object states, or None when the object is malformed.
+ok	Return None unless the value is an ISO 8601 date and time with a UTC offset.
+ok	without tz=None, a time with no offset parses as UTC
+ok	The shared logger of the invoicing package, its stderr formatter, and the rejection of a bad input.
+ok	Convert dollar amounts to integer cents and back, and round fractions of a cent.
+ok	\d would admit non-ASCII digits
+ok	Return None when the text is not a dollar amount with exactly two decimal places.
+ok	Read the prices file into a PriceList.
+ok	Parse the prices file.
+ok	Prorate a customer's plan stretches over the billing month into an Invoice.
+ok	Bill the part of each stretch that falls inside the month.
+ok	Replay one customer's events into the stretches of time spent on each plan.
+ok	Render a Billing as the text of invoices.json, one invoice and one problem shown.
+ok	Render the report, stamped with the current time.
+ok	Record each customer-month of a Billing in a SQLite database.
+ok	Upsert the month's invoices, and delete the rows of customers without one.
+ok	Render a Billing as a summary table for a terminal.
+ok	Types that the invoicing modules pass between them.
+ok	An input that the run depends on is unreadable, malformed or inconsistent.
+ok	source is left out of comparison and hashing, so a resent event compares equal to the first copy
+ok	An event line that was not billed.
+ok	Every event file of an input directory, classified.
+ok	A span of time on one plan. end is None while the plan is still active.
+ok	The result of billing one month.
+agent	Decide which backup snapshots a retention policy keeps.
+ok	Prune backup snapshots by a retention policy, and report every file that could not be judged.
+ok	Build the plan, write plan.json, record the history, delete with --apply, and print the summary.
+ok	Parse an ISO 8601 instant with a UTC offset, for argparse.
+ok	tz=None leaves a string with no offset naive, so the offset test below rejects it
+agent	Delete the snapshot files a plan marks for deletion.
+ok	Delete each snapshot file, and return the paths that could not be deleted.
+ok	Record a plan's decisions in a SQLite database, one row per judged file per run.
+ok	Insert the plan's rows, creating the database and its table when absent.
+ok	a connection's context manager commits or rolls back and does not close; closing() closes
+agent	canonical JSON, so policy files that differ only in layout name one policy
+ok	now, snapshot_dir, policy, file, local, decision, rules, problem
+ok	Configure the shared logger to write one line per record to stderr, with the record's fields.
+ok	Build the retention plan for a snapshot directory as of an instant.
+agent	Decide what the policy keeps and deletes in the directory, and which files cannot be judged.
+ok	Read a policy file, and construct a Policy from it.
+ok	Read and validate the policy file.
+ok	without the bool test, JSON true passes as 1
+ok	without OSError, a tzdata directory name such as America crashes with IsADirectoryError
+ok	Render a plan as the plan.json document, and as a summary for a terminal.
+ok	Return the plan.json document, with its keys in output order.
+ok	Return one line per judged file with its decision, then a line of counts.
+agent	Decide which snapshots a policy keeps, and which rules keep each one.
+agent	Map each kept snapshot to the rules that keep it, in Rule order.
+ok	local.start_of('hour') would split a repeated hour in two: DateTime equality compares instants
+ok	List a snapshot directory, and sort its entries into snapshots and problem files.
+ok	List the directory, and judge each snapshot-shaped regular file as of `now`.
+ok	is_file() follows a symbolic link, so it alone admits a link to a snapshot
+agent	Return the UTC instant a snapshot name states, or None when it names no real instant, such as 31 November.
+ok	Name the records and errors that the modules of the snapshot pruner pass between them.
+agent	member order is the order plan.json lists a snapshot's rules
+agent	A retention policy. Each count is the number of most recent periods its rule keeps.
+ok	A snapshot file. `at` is its instant in UTC, and `local` is that instant in the policy's timezone.
+ok	The judged entries of a snapshot directory. Snapshots sort newest first, problems by file name.
+ok	The decisions for one snapshot directory as of `now`, which is in UTC.
+agent	The policy file is unreadable or malformed, or names an unknown timezone.
+ok	The snapshot directory cannot be listed.
+ok	The history database cannot be opened or written.
+agent	Decide which backup snapshots a retention policy keeps.
+agent	Decide which backup snapshots a retention policy keeps, delete the rest on --apply, and report problems.
+ok	Parse the arguments, then plan, record, delete on --apply, and summarise.
+ok	tz=None leaves a value without an offset naive, where the default would read it as UTC
+agent	Delete the snapshots a plan marks for deletion.
+ok	Delete every file in plan.delete, continuing past a failure.
+ok	Record each run's decisions in a SQLite database, one row per file per run.
+ok	Add the plan's decisions to the database, creating its tables on first use.
+agent	List a snapshot directory into the snapshots a policy can judge and the problems it cannot.
+ok	db-YYYYMMDDTHHMMSSZ.tar.zst; \d would also match non-ASCII digits such as '٣'
+ok	Sort the directory's entries into snapshots and problems, in file name order.
+ok	The shared logger of the snapshot pruner, and a formatter that prints its structured fields.
+ok	Read a retention policy file into a Policy.
+ok	Read and validate the policy file.
+ok	zoneinfo raises IsADirectoryError for a region such as 'America', so test membership first
+ok	without the bool test, JSON true passes as 1
+ok	Render a plan as plan.json and as the summary printed on stdout.
+ok	Render one line per file in plan order, then the counts.
+agent	Decide which snapshots a retention policy keeps as of an instant, and which it deletes.
+ok	Read the policy and the snapshot directory, and decide every snapshot as of now.
+agent	a period ranks by its newest snapshot, and newest-first input inserts periods in that order
+ok	Types shared by the modules of the snapshot pruner.
+ok	UTC
+ok	UTC
+ok	Audit pinned dependencies against a license policy, from another program.
+ok	Check every pinned dependency of several services against a license policy.
+ok	Audit the input directory, record the verdicts, write audit.json and print the summary table.
+ok	Audit every pinned dependency in an input directory against a license policy.
+ok	Audit the lock files of `input_dir` against its licenses.json and a policy.
+agent	Judge one pinned release. A release that licenses.json does not list is an unknown license.
+ok	Read licenses.json into a LicenseCatalog, keyed by normalised package name and exact version.
+ok	Parse the license file.
+ok	Parse the calendar dates of the audit, from `--today` and from the `until` of a policy exception.
+agent	raises ValueError for a string that is not YYYY-MM-DD or names no real day
+ok	Parse an SPDX license expression, and test whether a set of license ids satisfies it.
+ok	a parenthesis, or a run of anything else up to whitespace
+ok	Build the tree of one license expression.
+ok	Read one lock file into its pinned entries and its malformed lines.
+ok	Parse every line of one lock file.
+ok	name, '==', version, then an optional '; marker' and an optional '# comment'
+ok	Shared logger of the license audit, with a formatter that prints every extra field.
+ok	Normalise package names and license ids to the forms the audit compares.
+ok	Read policy.json into a Policy, and judge a license expression against it.
+ok	Parse the policy file.
+ok	Judge one license expression of one package against the policy on a date.
+ok	Render an audit as the audit.json document and as the summary table for stdout.
+ok	Lay out every entry that is not allowed, then the totals.
+ok	Record the verdicts of an audit in a SQLite database.
+ok	Insert one row per audited entry.
+ok	Types that the modules of the license audit pass between them.
+ok	PEP 503 normalised: lower case, separators folded to '-'
+ok	case-folded SPDX license id, for comparison only
+ok	file name of a lock file inside the input directory
+ok	as written in licenses.json
+ok	as written in policy.json
+agent	None when licenses.json lists no expression for the release
+ok	The input directory, a lock file, licenses.json or policy.json cannot be used, so no audit runs.
+ok	A license expression does not follow the grammar of ids, AND, OR and parentheses.
+ok	Audit pinned dependencies against a license policy, as a library.
+ok	Audit the pinned dependencies of several services against a license policy.
+ok	Run the audit named on the command line and write its outputs.
+ok	echoed into audit.json as typed
+ok	Audit every lock file of an input directory against a license policy.
+ok	Audit the *.lock files of input_dir against licenses.json and the policy as it stands today.
+agent	Judge one pin, or give it an unknown license when the catalog lists no license for its release.
+ok	Render an Audit as the text of audit.json.
+ok	Render audit, with raw_input_dir echoed as the input_dir the user typed.
+ok	Parse a YYYY-MM-DD calendar date.
+ok	Read licenses.json into the license expression of each release.
+ok	Read licenses.json, keyed by release with the package name normalised.
+ok	Read an input file of the audit, and reject one that cannot be used.
+agent	stacklevel=2 attributes the record to the raise site in the caller
+ok	Parse an SPDX license expression, and decide whether it can be satisfied.
+ok	Parse expression_text, or return None when it is not well formed.
+ok	Decide whether the ids that usable() accepts satisfy expression without any other id.
+ok	one precedence level: operands joined by operator
+ok	an OR operand is an AND chain, so AND binds tighter
+ok	index of the first token after the expression
+ok	Read the pins of one lock file.
+ok	Read the pins and the malformed lines of one lock file, both in line order.
+ok	environment marker
+ok	inline comment
+ok	splitlines() would also split at form feeds and other separators, which shifts line numbers
+ok	Log to stderr as an event name followed by key=value fields, sorted by key.
+ok	Validate a package name and normalise it by the PEP 503 rule.
+ok	PEP 508
+ok	Read policy.json into a Policy, and judge a license expression against it.
+ok	Read policy.json.
+ok	Judge one license expression of package against the policy as it stands today.
+agent	denied when every way to satisfy the expression needs a denied id
+ok	Decide whether license_id is allowed, or excepted for package through today.
+ok	Read one entry of the exceptions list.
+ok	Record the verdicts of an Audit in a SQLite database, one row per entry.
+ok	Insert one row per audit entry, creating the table on first use.
+agent	COALESCE: a unique index treats every NULL as distinct, so unknown-license rows would repeat
+ok	Render the entries of an Audit that are not allowed, then its totals, as a table for a terminal.
+ok	Render the flagged entries in audit order, then the totals line.
+ok	The types that the modules of the license audit pass between them.
+ok	PEP 503 normalised
+ok	file name of a lock file, without its directory
+ok	lower case
+agent	None when licenses.json lists no license for the release
+ok	Merge layered TOML configuration per environment and audit the result.
+ok	Merge layered TOML configuration files per environment, and report every problem in the result.
+ok	Audit the input directory, print the summary and write audit.json.
+ok	Audit every environment of an input directory.
+ok	Merge each environment's layers and collect the findings on the result.
+ok	Read an input directory into AuditInputs.
+agent	Read and validate every file the audit needs.
+ok	stacklevel=2 puts the raise site's function and line in the record
+ok	Parse one TOML file.
+ok	Parse the `[[key]]` entries of deprecated.toml.
+ok	Send log records to stderr as an event name followed by sorted fields.
+ok	Merge an environment's layers into one configuration, and report each type change.
+ok	Apply one layer's table to the merged table at `prefix`.
+ok	inserting the layer's own table would make a later merge write into a parsed document
+ok	shared by every environment with this layer
+ok	Render an Audit as summary lines and as the text of audit.json.
+ok	Return the text of audit.json.
+ok	Check a merged configuration for deprecated keys, secrets and bad rollouts.
+ok	Report bad arm shares, and experiments whose shares do not sum to 100.
+ok	without the bool test, TOML true passes as 1
+ok	Name the TOML type of a parsed value.
+ok	bool subclasses int and datetime subclasses date, so each subclass must match first
+ok	Types shared by the modules of config_audit.
+ok	The keys from the root table down to one setting.
+ok	The parsed contents of an input directory.
+ok	One environment's layers merged in order.
+ok	The merged configuration of one environment and its findings, sorted by (path, kind).
+ok	Every environment's audit, sorted by name.
+ok	Audit layered TOML configuration: auditLayers() returns the Audit and writes nothing.
+ok	Merge layered TOML configuration per environment, and audit each merged result.
+ok	Audit an input directory of configuration layers, and return the Audit.
+ok	Merge every environment's layers and collect the findings of each.
+ok	Parse the TOML files of an input directory into AuditInputs.
+ok	Read layers.toml, deprecated.toml and the file of every layer listed in an environment.
+ok	Provide the layer audit's logger and its formatter for a terminal.
+ok	Merge one environment's layers into a MergedConfig, and report each type change.
+ok	bool subclasses int and datetime subclasses date, so each subclass is tested first
+ok	dotted form, as in deprecated.toml and in the audit's findings
+ok	Merge `layer_table` into `merged_table`, the table at `prefix` of the tree.
+ok	without the copy, merging a later layer alters this layer's parsed table for the next environment
+ok	Render an Audit as the audit.json document and as a summary for a terminal.
+ok	Render one line per finding with the columns aligned, then a line of totals.
+ok	Check a MergedConfig for removed and deprecated keys, secrets and bad rollouts.
+ok	Check each flag's rollout, and the shares of each experiment's arms and their sum.
+ok	without the bool test, true passes as the integer 1
+ok	Define the types passed between the modules of the layer audit.
+ok	The parsed contents of an input directory.
+ok	One environment's merged configuration.
+ok	Replay chess games from PGN text without a chess library.
+ok	Replay the chess games in a directory of PGN files, write games.json, and print a summary.
+ok	Replay every PGN file of the input directory, write games.json, and print the summary.
+ok	read as UTF-8; the PGN standard specifies ISO 8859-1, identical to UTF-8 on ASCII
+ok	Read and write a Position in Forsyth-Edwards Notation.
+ok	Parse the six fields of a FEN into a Position.
+ok	Parse the piece placement field: rank 8 first, and file a first in each rank.
+ok	isdecimal() alone admits non-ASCII digits such as '٣'
+ok	Reject a position with a misplaced king, pawn, castling right or en passant square.
+ok	Split PGN text into PgnGame records: five tags, and the main line of SAN moves.
+ok	a result token ends at whitespace or a bracket
+ok	Split PGN text into games, in text order.
+ok	\" and \\ in a tag value become " and \
+ok	Replay every game of PGN text and report how each one ends.
+ok	Replay one game's main line up to its ending.
+ok	with castling legal, the king's one-square step toward the rook is legal too, so mate tests skip castling
+ok	Assemble the outcome of a game and compare its result with the Result tag.
+ok	Build the games.json report and the stdout summary from replayed files.
+ok	Generate the moves of a chess Position, and compute the Position after one.
+ok	moves that may leave the mover's king in check
+ok	Generate the moves of a knight or a king, one step along each of steps.
+ok	Generate the moves of a bishop, a rook or a queen, along each of directions up to a piece.
+ok	the squares along a direction, up to and including the first occupied one
+ok	a FEN can leave the side not to move in check; capturing its king would leave a board without one
+ok	a position always has one king of each color
+ok	Explain why castling is illegal here, or return None when it is legal.
+ok	Make a move without testing its legality.
+ok	a move from or onto the king's or the rook's home square ends the right
+ok	(file step, rank step) pairs
+ok	Resolve a move in standard algebraic notation to the one legal Move that matches it.
+ok	Return the one legal Move that matches a SAN move in this position.
+ok	Parse a SAN move without its suffixes, or return None when it does not parse.
+ok	Match a SAN piece or pawn move against the pseudo-legal moves, then against the legal ones.
+ok	Index and name the 64 squares of the board.
+ok	callers pass a name that matched [a-h][1-8]
+ok	Types shared between the modules of the PGN replayer.
+ok	a1 = 0, b1 = 1, a2 = 8, h8 = 63
+ok	indexed by Square
+ok	set only when an en passant capture onto it is legal
+ok	None when the start position is unusable and the game has no moves
+ok	None when the start position is unusable
+ok	Replay chess games from PGN text, and report how each game ends.
+ok	Replay the chess games in a directory of PGN files, and report how every game ends.
+ok	Replay every PGN file in the input directory, write games.json, and print the summary.
+ok	Parse a Position from Forsyth-Edwards Notation (FEN), and format one back.
+ok	Parse and validate a six-field FEN.
+ok	Return the board of a FEN placement field, or None when a rank does not fill 8 squares.
+ok	Return why the position cannot arise in a game, or None when it can.
+ok	Convert between a Square, its file and rank indexes, and its algebraic name.
+ok	Return the square a step away, or None when the step leaves the board.
+ok	the caller has matched square_name against [a-h][1-8]
+ok	Name the chess and replay types that the pgnreplay modules pass between them.
+agent	Resolve a move in standard algebraic notation (SAN) to the one legal Move it names.
+ok	Return the legal Move for the SAN in this position, or the Violation that makes it illegal.
+agent	Return what a SAN without suffixes states about its move, or None when it does not parse.
+ok	Split PGN text into games, each with its tag pairs and the SAN moves of its main line.
+ok	List the games of PGN text in text order.
+ok	PGN escapes a quote or a backslash in a tag value with a backslash
+ok	Replay the main line of every game in PGN text, and decide how each game ends.
+ok	Replay every game in PGN text, in text order.
+ok	Replay one game from its start position until an ending, an illegal move, or its last move.
+ok	Return the standard start position, or the FEN tag's position when SetUp is "1".
+ok	Return how the game ends at this position, or None when it continues.
+ok	Build the ReplayedGame for a game that stopped at this position after this many plies.
+ok	Generate the legal moves of a chess Position, and apply a Move to it.
+ok	List the moves of the side to move by piece movement alone, without castling.
+ok	Return why the side to move may not castle by this right, or None when it may.
+ok	Return the Position after a legal move, with castling rights, clocks and en passant updated.
+ok	a FEN may start with the side not to move in check; capturing that king would make inCheck() raise ValueError
+agent	The contract belongs in the docstring, and only when the return type does not already say it.

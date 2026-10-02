@@ -1,0 +1,7 @@
+# api service, generated 2028-06-01
+Requests==2.31.0
+redis==7.4.0
+flask-sqlalchemy==3.1.1
+psycopg2==2.9.9 ; sys_platform != "win32"  # binary wheel on CI
+ujson==5.9.0
+pyqt6==6.6.1

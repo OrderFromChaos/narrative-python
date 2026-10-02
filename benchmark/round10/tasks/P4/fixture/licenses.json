@@ -1,0 +1,12 @@
+{
+  "packages": {
+    "Requests": {"2.31.0": "Apache-2.0"},
+    "redis": {"4.6.0": "MIT", "7.4.0": "RSALv2 OR SSPL-1.0"},
+    "Flask_SQLAlchemy": {"3.1.1": "BSD-3-Clause"},
+    "psycopg2": {"2.9.9": "LGPL-3.0-or-later"},
+    "ujson": {"5.9.0": "GPL-3.0-only AND MIT OR Apache-2.0"},
+    "PyQt6": {"6.6.1": "GPL-3.0-only"},
+    "chardet": {"5.2.0": "LGPL-2.1-or-later"},
+    "pyyaml": {"6.0.1": "mit"}
+  }
+}

@@ -180,6 +180,37 @@ adds `//` languages, mostly Java and TypeScript.
 | first person: we, our, us, I | 2.0 | 3.6 | 22.8 | 0.1 |
 | TODO, NOTE, FIXME, XXX, HACK | 0.1 | 0.1 | 3.7 | 0.03 |
 
+The same features after round 10, per 100 comment blocks. `human` is recomputed from the same
+sources (21,977 blocks against 22,891; first person comes out at 16.4 against 22.8, the other rows
+within 0.4). `this skill` is every `#` comment block in the review files of cycles 7 to 11
+(`cycles/`), written under the round 10 rules; `cycles 10 to 11` is the latest skill copy alone. Counts
+in brackets. The semicolon rows predate R10-no-semicolon.
+
+| feature | Claude # | human | this skill | cycles 10 to 11 |
+|---|---|---|---|---|
+| blocks | 2,578 | 21,977 | 87 | 28 |
+| median words | 24 | 9 | 10 | 11 |
+| p90 words | 83 | 29 | 15 | 20 |
+| blocks of more than one sentence | 45% | 15% | 0% | 0% |
+| `, not` contrast | 10.7 | 0.4 | 0.0 (0) | 0.0 (0) |
+| dash (` -- ` or `—`) | 23.9 | 1.0 | 0.0 (0) | 0.0 (0) |
+| absolutes: every, never, whole, exactly | 31.1 | 1.5 | 8.0 (7) | 3.6 (1) |
+| `the one` / `one place` | 2.2 | 0.1 | 0.0 (0) | 0.0 (0) |
+| deliberately, on purpose, by design | 2.1 | 0.1 | 0.0 (0) | 0.0 (0) |
+| `rather than` / `instead of` | 18.2 | 1.1 | 0.0 (0) | 0.0 (0) |
+| `, so` joining clauses | 32.9 | 2.9 | 13.8 (12) | 10.7 (3) |
+| semicolon | 18.5 | 2.3 | 6.9 (6) | 10.7 (3) |
+| agentive verb: finds, knows, wants, sees, asks, decides, owns | 2.3 | 0.3 | 0.0 (0) | 0.0 (0) |
+| container verb: holds, carries, lives, keeps, names, states | 11.3 | 1.8 | 3.4 (3) | 0.0 (0) |
+| intensifier: genuine, real, actually, really, truly | 8.3 | 1.4 | 1.1 (1) | 0.0 (0) |
+| article before a backticked identifier | 2.8 | 0.5 | 0.0 (0) | 0.0 (0) |
+| `because` | 9.2 | 2.3 | 0.0 (0) | 0.0 (0) |
+| passive (`is`/`are`/`was`/`be` + `-ed`) | 26.0 | 12.5 | 1.1 (1) | 3.6 (1) |
+| changelog: now, no longer, used to, the old | 2.9 | 2.4 | 1.1 (1) | 0.0 (0) |
+| hedge: usually, likely, probably, might, seems | 0.3 | 2.0 | 0.0 (0) | 0.0 (0) |
+| first person: we, our, us, I | 2.0 | 16.4 | 0.0 (0) | 0.0 (0) |
+| TODO, NOTE, FIXME, XXX, HACK | 0.1 | 3.6 | 0.0 (0) | 0.0 (0) |
+
 **Words and pairs Claude overuses most**, by Dunning log-likelihood: `rather than`, `so the`,
 `is the`, `is what`, `its own`, `which is`, `reads as`, `the whole`, `what makes`, `does not`,
 `nothing`, `against`, `every`, `own`, `per`.
@@ -450,7 +481,7 @@ matches neither`.
 
 ### Cycle 6
 
-Task P1, timesheet to payroll (spec and fixture in the session scratchpad, `task_P1/`): punches
+Task P1, timesheet to payroll (spec, fixture and expected result in `tasks/P1/`): punches
 across a daylight saving change, weeks in local time, a shift length halfway between rounding steps
 (where `round()` rounds to even), and a half-cent gross pay (where `Decimal.quantize()` defaults to
 half-even). None of these appears among the SKILL.md examples. Two runs of the shipped section.
@@ -460,6 +491,65 @@ kept 17 of their 20 comments (R10-rating8); three reuse SKILL.md example wording
 situation recurs. The review also produced six rules outside the comment rules, listed in
 `proposals_payroll.md`: R10-raw-names, R10-path-type, R10-money-cents, R10-pendulum, R10-uv and the
 container-verb check `NAR016` (R10-nar016).
+
+### Cycle 7
+
+Task P2, subscription invoices (spec, fixture and expected result in `tasks/P2/`): proration
+over a month in each customer's time zone, where March 2028 is an hour short in US zones; a tax of
+exactly half a cent; resent and out-of-order events. Two runs of the skill with the six rules from
+R10-rating8. Both billed the fixture correctly (65.14, 4 problems), and both used pendulum, integer
+cents with `Fraction`, `raw_` names and a `str` path only for the echoed input directory; neither
+wrote a container verb. Run 1 wrote 14 comments, nine of them end-of-line notes on dataclass fields;
+run 2 wrote 4. The user found most fine (R10-rating9). One placement error recurred: a comment on
+the `tz=None` argument sat below the `try` block instead of above the call.
+
+### Cycle 8
+
+Task P3, snapshot pruner (spec, fixture and expected result in `tasks/P3/`): retention periods
+in local time, an hour repeated on the night of 2028-11-05, a snapshot whose UTC date differs from
+its local date, and a symbolic link with a snapshot name. Two runs of the skill with R10-conclusion,
+R10-intensifiers, R10-clipped-terms and R10-argument-placement. Both produced the expected plan
+(6 kept, 7 deleted, 2 problems). Both put the `tz=None` comment above the call that passes it. Of 17
+comments the user faulted 4 (R10-rating10); two of the four used agent verbs the written rule bans
+(`policy files … name one policy`, `a period ranks`).
+
+### Cycle 9
+
+Task P4, dependency license audit (`tasks/P4/`): PEP 503 names, SPDX precedence, case-insensitive
+ids, an exception on its last day. Two runs of a skill copy in which `verify.py` lists every comment
+and docstring summary after a passing run, and SKILL.md tells the agent to read the list against
+**Sentence form** (the listing is `skill/checks.py --prose`). Both audits were correct. Agent verbs fell
+from about 8 in 136 lines (cycles 7-8) to 2 in 78 (R10-prose-inventory). The two left are what the
+parser-based check (`skill/agentverbs.py`, R10-agentverb-check) catches.
+
+Review files with the code around each comment, numbered as the user rated them, are in `cycles/`;
+`cycles/review.py` builds them, `cycles/comments.py` counts comment blocks, and
+`cycles/claudish_table.py` recomputes the feature table of the Claudish section.
+
+### Cycle 10
+
+Task P5, configuration layer audit (`tasks/P5/`): version comparison where `1.9.0` sorts after
+`1.10.0` as a string, `true == 1` and `25 == 25.0` in Python, arrays that replace, an environment
+that skips a layer. Two runs of a skill copy in which `verify.py` runs the agent-verb check as a
+seventh check and lists every comment and docstring summary after a passing run
+(`agentverb/cycle10_skill.patch`). Both audits were correct (13 errors, 3 warnings), and neither run
+silenced the check with `noqa`. Of 48 comment and docstring lines, one agent verb remained (`every
+file the audit needs`); the check now catches that form. Each run wrote 4 comments
+(`cycles/cycle10_review.md`).
+
+### Cycle 11
+
+Task P6, chess game replayer with no chess library (`tasks/P6/`): castling through an attacked
+square, en passant one move late, a pinned knight that removes the need to disambiguate, a
+threefold repetition that counts only once castling rights match, the fifty-move rule from a FEN
+start. Expected results computed with python-chess. Two runs of a skill copy with `NAR018`, the
+pendulum boundary rule, the agent-verb check and the comment listing
+(`agentverb/cycle11_skill.patch`). Both replayed all 13 games correctly, and both checked their move
+generators against published perft counts. Both found that the stalemate game started from an
+illegal position (`k7/8/2Q5/…` with Black in check); the fixture now starts it from
+`k7/8/8/2Q5/…`. Of 69 comment and docstring lines, two agent verbs remained, neither silenced with
+`noqa` (`the Move it names`, `what a SAN without suffixes states`); the check now catches the
+first. Review file: `cycles/cycle11_review.md`.
 
 ## Open
 
@@ -471,15 +561,28 @@ container-verb check `NAR016` (R10-nar016).
   the return-contract bullet (R10-return-contract), the Fence form and try placement
   (R10-fence-form), the footgun rule (R10-footgun) and the worked-example rule
   (R10-worked-example). Cycle 4 ran the first two inside the folded draft; cycles 5 and 6 ran the
-  shipped section. No run has used the six rules from R10-rating8 yet.
+  shipped section. Cycle 7 ran the six rules from R10-rating8.
 - R10-rating6 judged the wording of the 18 comments from the T runs; the user rated their style
   poorly overall.
-- Unconfirmed generalisations in **Sentence form** and **Depth**: "one step of reason" (from R10-Q16
-  and R10-seed-2; R10-Q16 made depth depend on the reader) and "drop articles where nothing is lost"
-  (one rewrite, R10-seed-10).
+- An unconfirmed generalisation in **Sentence form**: "drop articles where nothing is lost" (one
+  rewrite, R10-seed-10). "One step of reason" in **Depth** is replaced (R10-depth-sentences).
 - What the user keeps, from R10-rating3 to R10-rating5 and R10-F03: outside facts, rules for future
   changers, facts not visible from the comment's position, gotcha guards the reader does not already
   know (R10-audience), and a one-line summary above a dense comprehension.
 - `install.sh` has not been run, so `~/.claude/skills/narrative` holds the skill from before round 10.
-- Raw run outputs (cycle packages, validation runs, judge files, the session corpus) are in the
-  session scratchpad, not the repository.
+- The agent-verb check (R10-agentverb-check, `NAR017`) is `skill/agentverbs.py`. It reads spaCy's
+  `en_core_web_md` parse and two word lists that `agentverb/build_words.py` derives from WordNet 3.0
+  (`skill/words.json`, with WordNet's license), so it needs no NLTK at run time. spaCy 3.8.16 and
+  the model 3.8.0 are pinned in `skill/requirements-lock.txt`, and `verify.py` exits 2 when the lint
+  venv cannot import them. Scores: on the hand-labelled lines of cycles 7 to 11 (`agentverb/gold.tsv`,
+  tuned on), 29 of 32 agent verbs found and no false flags; on 40 sampled flags from the round 10
+  Claude corpus, about 35 correct; on 1,500 CPython stdlib comments, 33 flagged, about two thirds
+  personification humans write too ('socket knows', 'an algorithm wants'). Its misses: a plural
+  subject before a relative clause (`policy files that differ … name one policy`) and a
+  prepositional phrase between subject and verb (`a SAN without suffixes states`). Its false flags:
+  participles after a quantifier (`one denied id`), noun compounds (`the rules file`).
+- The comment listing (R10-prose-inventory) is `checks.py --prose`, which `verify.py` prints after a
+  passing run.
+- The task specs P1 to P4 are reworded so the agent-verb check flags only its two known false
+  flags in them. Earlier runs copied the old wording (`a retention policy keeps`) into docstrings.
+- The cycle packages are not kept; the review files in `cycles/` have every comment with its code.

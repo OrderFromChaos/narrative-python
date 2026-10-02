@@ -1,0 +1,20 @@
+[Event "Club night"]
+[White "Ada"]
+[Black "Grace"]
+[Result "1-0"]
+
+1. e4 e5 2. Bc4 {the bishop eyes f7} Nc6 3. Qh5 Nf6 (3... g6 4. Qf3 (4. Qe2) Nf6) 4. Qxf7# $1 1-0
+
+[Event "Club night"]
+[White "Edsger"]
+[Black "Barbara"]
+[Result "1/2-1/2"]
+
+1. e4 e5 2. Ke2 Ke7 3. Ke1 Ke8 4. Ke2 Ke7 5. Ke1 Ke8 6. Ke2 Ke7 7. Ke1 Ke8 8. Nf3 1/2-1/2
+
+[Event "Club night"]
+[White "Ada"]
+[Black "Alan"]
+[Result "*"]
+
+1. e4 Nf6 2. e5 d5 3. exd6 Qxd6 *

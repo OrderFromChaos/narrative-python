@@ -1,0 +1,140 @@
+===== cycle7/p2_S_1/invoicing
+Bill subscription customers for one calendar month.
+Bill each customer for one calendar month of a subscription service, prorated to the second.
+Bill the month, write invoices.json and the database, and print the summary table.
+Bill every customer for one calendar month, prorated to the second.
+Bill every customer of an input directory for one month.
+Prorate a customer's plan stretches over one month and add tax.
+Read every events file of an input directory into one EventLog.
+Parse and classify every event line of the input directory.
+Parse one line of an events file, or report it as malformed.
+None unless raw_at is an ISO 8601 date and time with a UTC offset
+The package logger, and a formatter that prints the structured fields of each record.
+Convert between dollar strings and integer cents, and round fractions of a cent.
+None when the text is not a dollar amount with exactly two decimal places
+Read the reference data a month is billed against: the price list and the customer list.
+Parse the price list.
+Parse the customer list, in file order.
+newline='' leaves a newline quoted inside a field intact
+Render a BillingResult as the text of invoices.json.
+Record each billed customer-month in a SQLite database.
+Open the database, and create its two tables where they are absent.
+Rewrite the customer-month of every customer of the result, in one transaction.
+Render a BillingResult as a table for a terminal.
+Render the table, with columns as wide as their widest cell.
+Replay each customer's events into the stretches of time spent on one plan.
+Replay the events of every customer.
+a cancel's plan is None, so a cancel leaves no active plan
+Types shared between the modules of the invoicing package.
+The customers, the prices or an events file is unusable, so no month can be billed.
+basename, as the report names it
+One subscription event. Two resent copies of an event compare equal.
+None exactly when kind is CANCEL
+None when a malformed line names no customer as a string
+read order, problems and duplicates removed
+None while the plan is still active after the last event
+in the customer's zone
+sorted by customer_id
+sorted by (file, line)
+every customer of customers.csv, invoiced or not
+===== cycle7/p2_S_2/invoicing
+Bill a month of subscription events into invoices, and report the events that could not be billed.
+Bill each customer for one calendar month of a subscription, and report the events not billed.
+Bill the month, write the outputs, and return the exit code.
+Bill one calendar month of an input directory, and return the invoices and the problems.
+Bill every customer of input_dir for the month raw_month names, as YYYY-MM.
+Parse YYYY-MM.
+Read the customer file into Customer records, keyed by customer_id.
+Parse the customer file.
+Read every event file of an input directory into an EventLog.
+Classify every line of every event file.
+read_text() would fail the whole file on one line that is not UTF-8
+Parse one line, and check it against the customers and the price list.
+Build the event that a JSON object states, or None when the object is malformed.
+Return None unless the value is an ISO 8601 date and time with a UTC offset.
+without tz=None, a time with no offset parses as UTC
+The shared logger of the invoicing package, its stderr formatter, and the rejection of a bad input.
+Convert dollar amounts to integer cents and back, and round fractions of a cent.
+\d would admit non-ASCII digits
+Return None when the text is not a dollar amount with exactly two decimal places.
+Read the prices file into a PriceList.
+Parse the prices file.
+Prorate a customer's plan stretches over the billing month into an Invoice.
+Bill the part of each stretch that falls inside the month.
+Replay one customer's events into the stretches of time spent on each plan.
+Render a Billing as the text of invoices.json, one invoice and one problem shown.
+Render the report, stamped with the current time.
+Record each customer-month of a Billing in a SQLite database.
+Upsert the month's invoices, and delete the rows of customers without one.
+Render a Billing as a summary table for a terminal.
+Types that the invoicing modules pass between them.
+An input that the run depends on is unreadable, malformed or inconsistent.
+source is left out of comparison and hashing, so a resent event compares equal to the first copy
+An event line that was not billed.
+Every event file of an input directory, classified.
+A span of time on one plan. end is None while the plan is still active.
+The result of billing one month.
+===== cycle8/p3_S_1/snapshot_pruner
+Decide which backup snapshots a retention policy keeps.
+Prune backup snapshots by a retention policy, and report every file that could not be judged.
+Build the plan, write plan.json, record the history, delete with --apply, and print the summary.
+Parse an ISO 8601 instant with a UTC offset, for argparse.
+tz=None leaves a string with no offset naive, so the offset test below rejects it
+Delete the snapshot files a plan marks for deletion.
+Delete each snapshot file, and return the paths that could not be deleted.
+Record a plan's decisions in a SQLite database, one row per judged file per run.
+Insert the plan's rows, creating the database and its table when absent.
+a connection's context manager commits or rolls back and does not close; closing() closes
+canonical JSON, so policy files that differ only in layout name one policy
+now, snapshot_dir, policy, file, local, decision, rules, problem
+Configure the shared logger to write one line per record to stderr, with the record's fields.
+Build the retention plan for a snapshot directory as of an instant.
+Decide what the policy keeps and deletes in the directory, and which files cannot be judged.
+Read a policy file, and construct a Policy from it.
+Read and validate the policy file.
+without the bool test, JSON true passes as 1
+without OSError, a tzdata directory name such as America crashes with IsADirectoryError
+Render a plan as the plan.json document, and as a summary for a terminal.
+Return the plan.json document, with its keys in output order.
+Return one line per judged file with its decision, then a line of counts.
+Decide which snapshots a policy keeps, and which rules keep each one.
+Map each kept snapshot to the rules that keep it, in Rule order.
+local.start_of('hour') would split a repeated hour in two: DateTime equality compares instants
+List a snapshot directory, and sort its entries into snapshots and problem files.
+List the directory, and judge each snapshot-shaped regular file as of `now`.
+is_file() follows a symbolic link, so it alone admits a link to a snapshot
+Return the UTC instant a snapshot name states, or None when it names no real instant, such as 31 November.
+Name the records and errors that the modules of the snapshot pruner pass between them.
+member order is the order plan.json lists a snapshot's rules
+A retention policy. Each count is the number of most recent periods its rule keeps.
+A snapshot file. `at` is its instant in UTC, and `local` is that instant in the policy's timezone.
+The judged entries of a snapshot directory. Snapshots sort newest first, problems by file name.
+The decisions for one snapshot directory as of `now`, which is in UTC.
+The policy file is unreadable or malformed, or names an unknown timezone.
+The snapshot directory cannot be listed.
+The history database cannot be opened or written.
+===== cycle8/p3_S_2/snapshot_pruner
+Decide which backup snapshots a retention policy keeps.
+Decide which backup snapshots a retention policy keeps, delete the rest on --apply, and report problems.
+Parse the arguments, then plan, record, delete on --apply, and summarise.
+tz=None leaves a value without an offset naive, where the default would read it as UTC
+Delete the snapshots a plan marks for deletion.
+Delete every file in plan.delete, continuing past a failure.
+Record each run's decisions in a SQLite database, one row per file per run.
+Add the plan's decisions to the database, creating its tables on first use.
+List a snapshot directory into the snapshots a policy can judge and the problems it cannot.
+db-YYYYMMDDTHHMMSSZ.tar.zst; \d would also match non-ASCII digits such as '٣'
+Sort the directory's entries into snapshots and problems, in file name order.
+The shared logger of the snapshot pruner, and a formatter that prints its structured fields.
+Read a retention policy file into a Policy.
+Read and validate the policy file.
+zoneinfo raises IsADirectoryError for a region such as 'America', so test membership first
+without the bool test, JSON true passes as 1
+Render a plan as plan.json and as the summary printed on stdout.
+Render one line per file in plan order, then the counts.
+Decide which snapshots a retention policy keeps as of an instant, and which it deletes.
+Read the policy and the snapshot directory, and decide every snapshot as of now.
+a period ranks by its newest snapshot, and newest-first input inserts periods in that order
+Types shared by the modules of the snapshot pruner.
+UTC
+UTC

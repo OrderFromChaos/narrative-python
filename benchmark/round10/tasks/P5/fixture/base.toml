@@ -1,0 +1,19 @@
+[cache]
+enabled = true
+hosts = ["cache-a.internal", "cache-b.internal"]
+token_ttl = "3600"
+
+[db]
+host = "db.internal"
+pool_size = 20
+
+[smtp]
+user = "mailer"
+smtp_password = ""
+
+[flags.search_v2]
+rollout = 0
+
+[experiments.checkout_button.arms]
+blue = { share = 50 }
+green = { share = 50 }

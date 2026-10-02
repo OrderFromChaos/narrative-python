@@ -1,0 +1,3 @@
+11 entries: allowed 7, unreviewed 2 (api:3 redis 7.4.0, worker:4 chardet), denied 1 (api:7 pyqt6), unknown license 1 (worker:8 requests 2.32.3)
+malformed: worker:6 celery>=5; expired exception: chardet; exit 1
+traps: OR-before-AND parse makes ujson denied; exception on its last day (psycopg2 allowed); names normalised; 'mit' lower case

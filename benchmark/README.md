@@ -67,9 +67,9 @@ produces material a later reader must see to judge the answer.
 
 9. **Round 10** — comments. A corpus of 478 comment blocks from the generated arms, the tooling's git
    history, and 27 edit and reversal runs; a profile of Claude's comments against human-written
-   Python; then 41 forced choices on what a comment says and how. The user's own rewrites are
+   Python; then 41 forced choices on what a comment says and how. The user's rewrites are
    recorded as seeds, listed in `round10/seeds.md`. The rules shipped as `SKILL.md`, **Comments**, with `NAR012` to
-   `NAR016`. Directory: `round10/`.
+   `NAR016` and `NAR018`. Directory: `round10/`.
 
 ## decisions.jsonl schema
 

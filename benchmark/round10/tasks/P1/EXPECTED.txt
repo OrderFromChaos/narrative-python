@@ -1,0 +1,6 @@
+11 shifts, 1 duplicate, 4 problems, gross 1740.27
+E104 week 2026-03-02: 2400 regular + 15 overtime minutes, 734.83 (exactly 734.825; Decimal's default half-even gives 734.82)
+E211 week 2026-03-02: 960 minutes, 348.00 (the shift across the DST change counts 480 elapsed minutes, not 540 on the wall clock)
+E211 week 2026-03-09: 975 minutes, 353.44 (the 487.5-minute shift rounds up to 495; round() gives 480)
+E305 week 2026-03-09: 960 minutes, 304.00
+problems: dock:4 E999 unknown badge, dock:7 E305 unpaired in, dock:10 E305 unpaired out, gate:9 E104 malformed. exit 1

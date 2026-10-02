@@ -17,6 +17,8 @@ FILES=(
     tooling.md
     checks.py
     verify.py
+    agentverbs.py
+    words.json
     requirements-lock.txt
     pyproject-snippet.toml
 )

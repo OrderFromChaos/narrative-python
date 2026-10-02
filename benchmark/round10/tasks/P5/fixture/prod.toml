@@ -1,0 +1,12 @@
+[cache]
+hosts = ["cache-prod.internal"]
+
+[db]
+host = "db-prod.internal"
+api_token = "prod-7f3a"
+
+[flags.search_v2]
+rollout = 25
+
+[flags.new_billing]
+rollout = 120

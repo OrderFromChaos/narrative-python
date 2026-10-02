@@ -1,0 +1,8 @@
+{
+  "site_timezones": {
+    "north": "America/Los_Angeles"
+  },
+  "overtime_after_minutes": 2400,
+  "overtime_multiplier": "1.5",
+  "round_to_minutes": 15
+}

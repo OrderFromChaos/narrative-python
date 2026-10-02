@@ -1,0 +1,8 @@
+# worker service, generated 2028-06-01
+redis==4.6.0
+flask.sqlalchemy==3.1.1
+chardet==5.2.0
+PyYAML==6.0.1
+celery>=5
+
+requests==2.32.3

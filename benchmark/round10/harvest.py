@@ -1,7 +1,7 @@
-"""Collect the comments the corpus holds into `corpus.jsonl`, one record per comment block.
+"""Collect the comments of the corpus into `corpus.jsonl`, one record per comment block.
 
 A block is one end-of-line comment, or a run of whole-line comments on consecutive lines at one
-column. Pragmas, dividers and shebangs keep their own `kind`, so a reader can filter them out.
+column. Pragmas, dividers and shebangs each get a separate `kind`, so a reader can filter them out.
 
 Sources:
     fresh    every Python file in the generated arms and the tooling, as it stands
@@ -12,7 +12,7 @@ Usage:
     $ python3 benchmark/round10/harvest.py
     $ python3 benchmark/round10/harvest.py --edits /path/to/edits
 
-An edit directory holds `pristine/<arm>/` and one `<arm>_<change>/` per run.
+An edit directory has `pristine/<arm>/` and one `<arm>_<change>/` per run.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def armOf(relative: Path) -> str:
             benchmark/round3/p1_scan_ingest/a_procedural.py       ->  round3
             validation/score_arms.py                              ->  tooling
 
-    A flat file under a validation task is a whole arm, so its stem names the arm.
+    A flat file under a validation task is a whole arm, so its stem is the arm's name.
     """
     parts = relative.parts
     if parts[0] == 'validation' and re.match(r'v\d+_', parts[1]):
@@ -112,7 +112,7 @@ def armOf(relative: Path) -> str:
 def harvestHistory() -> Iterator[Block]:
     """Yield the blocks each commit added to a tooling file that already existed.
 
-    A file a commit created is fresh writing, not an edit, and `harvestFresh` already holds its
+    A file a commit created is fresh writing, not an edit, and `harvestFresh` already reads its
     current text. The root commit has no parent to diff against and yields nothing.
     """
     commits = runGit('log', '--format=%h', '--', *HISTORY_PATHSPECS).split()
@@ -146,7 +146,7 @@ def harvestEdits(edits_root: Path) -> Iterator[Block]:
 
 def runGit(*arguments: str, cwd: Path = REPO_ROOT) -> str:
     # `git diff --no-index` exits 1 whenever the two sides differ, which is the expected case. A
-    # fixture can hold bytes that are not UTF-8, and only the Python hunks are read.
+    # fixture can contain bytes that are not UTF-8, and only the Python hunks are read.
     completed = subprocess.run(
         ['git', *arguments],
         capture_output=True,
@@ -274,7 +274,7 @@ def extractDocstrings(source_text: str, origin: Origin) -> list[Block]:
 
 def countCopies(blocks: list[Block]) -> list[tuple[Block, int]]:
     # The arms of one round share code, so one comment can sit in several files. The first copy
-    # stands for all of them. A source counts separately, since an edit can repeat a fresh comment.
+    # stands for all of them. A source counts separately, since a fresh comment can recur in an edit.
     copies: dict[CopyKey, list[Block]] = {}
     for block in blocks:
         key = CopyKey(source=block.origin.source, kind=block.kind, text=' '.join(block.text.lower().split()))

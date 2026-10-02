@@ -3,7 +3,8 @@
 Each rule is one check. NAR001 and NAR006 cover module state. NAR002 covers class attributes.
 NAR003 covers layout. NAR004, NAR009 and NAR011 cover documentation. NAR005 covers annotation
 complexity. NAR007 covers boolean grouping. NAR010 covers FIXME reachability. NAR012 to NAR016
-cover the wording of comments and docstrings.
+and NAR018 cover the wording of comments and docstrings. NAR019 covers a return contract written
+as a comment.
 
 See tooling.md for what the other tools own.
 
@@ -47,14 +48,16 @@ RULES = {
     'NAR010': 'FIXME in reachable code -- a merge blocker, not a danger sign',
     'NAR011': 'docstring body is entirely indented -- `ruff format` will flatten the sample',
     'NAR012': 'decision id in a comment or docstring -- unresolvable outside the repository that recorded it',
-    'NAR013': 'dash joining clauses in a comment or docstring -- write two sentences, or a semicolon if connected',
+    'NAR013': 'dash or semicolon joining clauses in a comment or docstring -- write two sentences',
     'NAR014': 'deliberately / on purpose / by design in a comment or docstring -- reassurance, no information',
     'NAR015': 'changelog wording in a comment or docstring -- state the current code or data plainly',
     'NAR016': 'container verb in a comment or docstring -- state the fact without making the subject hold or carry it',
+    'NAR018': 'possessive "own" in a comment or docstring -- drop "own", or name the owner',
+    'NAR019': 'return contract as a comment at the top of a function body -- move it to the docstring, or cut it',
     'NAR000': 'file could not be read or parsed',
 }
 
-### withdrawn codes: kept so documents naming them still resolve, excluded from --select and findings
+### withdrawn codes: kept so a reference to one in a document still resolves, excluded from --select and findings
 
 RETIRED = {
     'NAR008': 'withdrawn: blank lines inside a function are review judgement',
@@ -73,11 +76,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description='Style checks that ruff, pylint and mypy do not implement.')
     parser.add_argument('paths', nargs='+', type=Path)
     parser.add_argument('--select', action='append', choices=sorted(RULES), help='only report these rules')
+    parser.add_argument('--prose', action='store_true', help='list every comment and docstring summary line')
     args = parser.parse_args()
 
     targets: list[Path] = []
     for target in args.paths:
         targets.extend(sorted(discoverPython(target)) if target.is_dir() else [target])
+
+    if args.prose:
+        for checked_file in targets:
+            shown = checked_file.relative_to(Path.cwd()) if checked_file.is_relative_to(Path.cwd()) else checked_file
+            for number, text in proseInventory(checked_file):
+                print(f'{shown}:{number}: {text}')
+        return 0
 
     findings: list[Finding] = []
     for checked_file in targets:
@@ -292,15 +303,15 @@ def checkHasattrSelf(tree: ast.Module, checked_file: Path) -> list[Finding]:
 
 
 def checkArgsPerLine(tree: ast.Module, checked_file: Path) -> list[Finding]:
-    """Flag `def` signatures that keep more than three arguments on one line.
+    """Flag `def` signatures with more than three arguments on one line.
 
-    Signatures only; calls are exempt.
+    Signatures only. Calls are exempt.
 
     The formatter cannot do this. `ruff format` leaves a four-argument signature alone while it
     fits in 120 columns, and COM812 only fires once a construct has already been split.
 
     Only positional parameters count. Keyword-only parameters, after `*`, don't, so a function may
-    have as many of those as it needs. Marking the optional parameters keyword-only documents them
+    have any number of those. Marking the optional parameters keyword-only documents them
     and stops them counting.
     """
     findings: list[Finding] = []
@@ -322,7 +333,7 @@ def checkArgsPerLine(tree: ast.Module, checked_file: Path) -> list[Finding]:
 
 
 def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str, checked_file: Path) -> list[Finding]:
-    """Report a function that the docstring trigger caught and whose docstring omits `Raises:`.
+    """Report a function that the docstring trigger caught and whose docstring has no `Raises:`.
 
     A docstring can exist without stating the contract, so the trigger and the section check are
     two separate tests over the same function.
@@ -388,7 +399,7 @@ def checkDocstringThreshold(tree: ast.Module, checked_file: Path) -> list[Findin
 def annotationThings(node: ast.expr) -> int:
     """Count every name in an annotation, except the outermost one.
 
-    What makes an annotation impossible to say out loud is how many things it names, at any nesting.
+    An annotation is impossible to say out loud when it has too many names in it, at any nesting.
     Counting names rather than depth or width catches both
     `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]`, which is deep and narrow, and
     `tuple[dict[str, str], list[str]]`, which is wide and shallow.
@@ -403,15 +414,15 @@ def annotationThings(node: ast.expr) -> int:
 def checkAnnotationComplexity(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Flag an annotation too complex to say out loud.
 
-    The measure is how many things the annotation names below its outermost name, at any nesting.
-    That catches `dict[str, list[tuple[float, float]]]`, which is deep and narrow, and
+    The measure is the number of names in the annotation below its outermost name, at any nesting.
+    The count is high for `dict[str, list[tuple[float, float]]]`, which is deep and narrow, and
     `tuple[a, b, c, d, e, f, g, h, i, j]`, which is one level deep and still unnameable.
 
     The type decides the remedy. A callable becomes a Protocol, and anything else becomes a
     dataclass.
 
     Returns:
-        One finding per annotation over the threshold, each naming its own remedy.
+        One finding per annotation over the threshold, with the remedy for that annotation.
     """
     findings: list[Finding] = []
     for node in ast.walk(tree):
@@ -439,10 +450,10 @@ def checkAnnotationComplexity(tree: ast.Module, checked_file: Path) -> list[Find
 def checkBoolOpParens(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
     """Flag an `and` group inside an `or` that is not parenthesised.
 
-    `A and B or C and D` is correct, since `and` binds tighter, but reading it needs a precedence
-    lookup. Merging branches that share a body is fine; merging them by precedence isn't.
+    `A and B or C and D` is correct, since `and` binds tighter, but a reader has to look up the
+    precedence. Merging branches that share a body is fine. Merging them by precedence isn't.
 
-    The AST does not record parentheses, so this reads the source. Both sides must be checked: a
+    Parentheses are not in the AST, so this check reads the source. Both sides must be checked: a
     trailing `)` alone is ambiguous, because the last operand of a parenthesised multi-line
     expression is also followed by `)` without being grouped itself.
     """
@@ -502,8 +513,8 @@ def checkModuleDocstring(tree: ast.Module, checked_file: Path) -> list[Finding]:
     `argparse` calls further down.
 
     Returns:
-        One finding for a missing docstring, or one for a runnable module whose docstring shows no
-        example invocation.
+        One finding for a missing docstring, or one for a runnable module with no example invocation
+        in its docstring.
     """
     runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
 
@@ -568,8 +579,8 @@ def reachableFunctions(tree: ast.Module) -> set[str]:
     node. That over-approximates reachability, which is the safe direction: NAR010 would rather
     call an orphan reachable than let a live FIXME through.
 
-    A module with no `main` and no `__main__` block is a library module. Its callers live in files
-    this checker never sees, so every function in it counts as reachable.
+    A module with no `main` and no `__main__` block is a library module. Its callers are in files
+    outside this check, so every function in it counts as reachable.
     """
     defined = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
@@ -663,16 +674,17 @@ def checkFixmeReachability(tree: ast.Module, source: str, checked_file: Path) ->
 
 
 def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
-    """Flag five kinds of wording that no comment or docstring needs.
+    """Flag six kinds of wording that no comment or docstring needs.
 
     - NAR012: a decision id, unresolvable outside the repository that recorded it
-    - NAR013: a dash joining clauses
+    - NAR013: a dash or a semicolon joining clauses, outside backticked code
     - NAR014: reassurance words, listed in WORDING
     - NAR015: changelog wording about code that is gone
     - NAR016: a container verb on a subject that is not a container, listed in WORDING
+    - NAR018: a possessive followed by `own`, listed in WORDING
 
     `used to` counts as changelog only after a pronoun subject, since `the key used to sort` means
-    employed for. A bare `now` is not flagged; `now that X` and `until now` are common in correct
+    employed for. A bare `now` is not flagged. `now that X` and `until now` are common in correct
     prose. A dash after a list-item term is a separator, not a clause join. Pragmas, section dividers
     and pasted usage lines (`$`, `>>>`) are skipped.
 
@@ -689,8 +701,10 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
             re.IGNORECASE,
         ),
         'NAR016': re.compile(r'\b(?:carr(?:y|ies|ied|ying)|hold(?:s|ing)?|held)\b', re.IGNORECASE),
+        'NAR018': re.compile(r"\b(?:its|their|his|her|our|your|\w+'s) own\b", re.IGNORECASE),
     }
 
+    SEMICOLON = re.compile(r';(?:\s|$)')
     prose = [*commentLines(source), *docstringLines(tree)]
     findings: list[Finding] = []
     for number, text in prose:
@@ -700,8 +714,64 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
                 continue
             if found := pattern.search(text):
                 findings.append(Finding(checked_file, number, code, repr(found.group(0).strip())))
+        # a semicolon in backticked code is code, and a list item gets no exemption from this one
+        if SEMICOLON.search(re.sub(r'`[^`]*`', '', text)):
+            findings.append(Finding(checked_file, number, 'NAR013', repr(';')))
 
     return findings
+
+
+def checkReturnContract(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
+    """Flag a function whose body opens with a comment about what the function returns.
+
+    The contract belongs in the docstring, and only when the return type leaves it unclear.
+    The comment is the block of full-line comments directly above the first statement after the
+    docstring, and it counts when it opens with `returns`, `None when`, `None unless` or `the result`.
+
+    Returns:
+        One finding per function, at the first line of the comment.
+    """
+    CONTRACT = re.compile(r'(?:returns?\b|none (?:when|unless|if)\b|the result\b|a returned\b)', re.IGNORECASE)
+    lines = source.splitlines()
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        body = node.body[1:] if ast.get_docstring(node) is not None else node.body
+        if not body:
+            continue
+        first = body[0].lineno
+        above = first - 1
+        while above >= 1 and lines[above - 1].lstrip().startswith('#'):
+            above -= 1
+        if above + 1 == first:
+            continue
+        opening = lines[above].strip().lstrip('#').strip()
+        if CONTRACT.match(opening):
+            findings.append(Finding(checked_file, above + 1, 'NAR019', repr(opening[:40])))
+    return findings
+
+
+def proseInventory(checked_file: Path) -> list[tuple[int, str]]:
+    """List every comment and the first line of every docstring in one file, in line order.
+
+    Returns:
+        Line number and text, or nothing for a file that cannot be read or parsed.
+    """
+    try:
+        source = checked_file.read_text(encoding='utf-8')
+        tree = ast.parse(source)
+    except (OSError, UnicodeDecodeError, SyntaxError):
+        return []
+
+    summaries: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        docstring = ast.get_docstring(node)
+        if docstring and isinstance(node.body[0], ast.Expr):
+            summaries.append((node.body[0].lineno, docstring.splitlines()[0]))
+    return sorted([*commentLines(source), *summaries])
 
 
 def commentLines(source: str) -> list[tuple[int, str]]:
@@ -793,6 +863,7 @@ def checkFile(checked_file: Path) -> list[Finding]:
         *checkFixmeReachability(tree, source, checked_file),
         *checkDocstringSample(tree, checked_file),
         *checkProseWording(tree, source, checked_file),
+        *checkReturnContract(tree, source, checked_file),
     ]
 
     return [f for f in findings if not (suppressed.get(f.line, set()) & {f.code, 'ALL'})]

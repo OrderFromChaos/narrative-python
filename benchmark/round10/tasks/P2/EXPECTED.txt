@@ -1,0 +1,5 @@
+C1 pro 29.00 | sub 29.00 tax 2.10 total 31.10
+C2 basic 4.83 (03-01 to 03-16), pro 14.99 | sub 19.82 tax 1.76 total 21.58   (wall-clock month gives 4.82 and 14.97)
+C3 basic 1.61 (03-20 12:00 to 03-25 12:00) | sub 1.61 tax 0.12 total 1.73
+C4 starter 10.00 | sub 10.00 tax 0.73 (0.725) total 10.73
+billed 65.14; duplicates 1; problems: billing:4 C1 unknown plan, billing:6 C4 out of order, web:4 C9 unknown customer, web:6 C3 malformed

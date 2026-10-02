@@ -1,0 +1,8 @@
+{
+  "allowed": ["MIT", "BSD-3-Clause", "Apache-2.0"],
+  "denied": ["GPL-3.0-only", "AGPL-3.0-only", "SSPL-1.0"],
+  "exceptions": [
+    {"package": "psycopg2", "license": "LGPL-3.0-or-later", "until": "2028-06-30", "reason": "legal review LR-118"},
+    {"package": "Chardet", "license": "LGPL-2.1-or-later", "until": "2028-03-31", "reason": "legal review LR-097"}
+  ]
+}

@@ -1,0 +1,12 @@
+{"badge": "E104", "at": "2026-03-06T07:00:00-08:00", "direction": "in", "reader": "R2"}
+{"badge": "E104", "at": "2026-03-04T15:00:00-08:00", "direction": "out", "reader": "R2"}
+{"badge": "E104", "at": "2026-03-06T15:15:00-08:00", "direction": "out", "reader": "R2"}
+{"badge": "E999", "at": "2026-03-06T08:00:00-08:00", "direction": "in", "reader": "R2"}
+{"badge": "E211", "at": "2026-03-09T08:00:00-07:00", "direction": "in", "reader": "R2"}
+{"badge": "E211", "at": "2026-03-09T16:07:30-07:00", "direction": "out", "reader": "R2"}
+{"badge": "E305", "at": "2026-03-11T09:00:00-07:00", "direction": "in", "reader": "R2"}
+{"badge": "E305", "at": "2026-03-11T09:01:00-07:00", "direction": "in", "reader": "R2"}
+{"badge": "E305", "at": "2026-03-11T17:01:00-07:00", "direction": "out", "reader": "R2"}
+{"badge": "E305", "at": "2026-03-12T17:00:00-07:00", "direction": "out", "reader": "R2"}
+{"badge": "E211", "at": "2026-03-15T22:00:00-07:00", "direction": "in", "reader": "R2"}
+{"badge": "E211", "at": "2026-03-16T06:00:00-07:00", "direction": "out", "reader": "R2"}

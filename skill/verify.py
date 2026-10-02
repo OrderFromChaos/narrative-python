@@ -5,8 +5,8 @@ output, so a missing or misresolved binary produces empty output and reads as a 
 resolves every tool to an absolute path and exits 2 if any one of them is absent, so a green result
 means the tools ran.
 
-This is the whole pipeline. Give it any path and it finds every Python file below it, so nothing
-has to decide a workflow at run time.
+This is the whole pipeline. Give it any path, and every Python file below it is checked, so no
+workflow is chosen at run time.
 
 Order matters. `ruff check --fix` and `ruff format` converge in that order and not the other.
 
@@ -17,7 +17,7 @@ Usage:
 
 Exit codes:
     0  every tool passed
-    1  at least one tool reported a finding
+    1  at least one tool had a finding
     2  the toolchain or the config is missing, so nothing was checked
 """
 
@@ -34,6 +34,8 @@ from pathlib import Path
 
 
 TOOLS = ('ruff', 'pylint', 'mypy', 'vermin')
+# agentverbs.py imports these, so they must be importable by the venv's interpreter
+PARSER_MODULES = ('spacy', 'en_core_web_md')
 PYTHON_FLOOR = '3.11'
 SKIPPED = frozenset({'.venv', 'venv', '.lintenv', '.git', 'build', 'dist', '__pycache__'})
 EXIT_SUCCESS = 0
@@ -64,8 +66,8 @@ def main() -> int:
         return EXIT_NO_TOOLCHAIN
 
     # Presence is not enough. Every real project already has a pyproject.toml, so present-but-wrong
-    # is the DEFAULT state, not an edge case. Without the Narrative sections each tool falls back to
-    # its own defaults, accepts double quotes and snake_case functions, and reports a clean run.
+    # is the DEFAULT state, not an edge case. Without the Narrative sections each tool runs with its
+    # defaults, so double quotes and snake_case functions pass and the run comes out clean.
     snippet = Path(__file__).resolve().parent / 'pyproject-snippet.toml'
     absent = missingConfigSections(args.config)
     if absent:
@@ -99,6 +101,8 @@ def main() -> int:
     results.append(gradeChecks(run([sys.executable, str(checker), *targets])))
     vermin_cmd = [toolchain.paths['vermin'], '--no-tips', f'-t={PYTHON_FLOOR}-', '--violations']
     results.append(gradeVermin(run([*vermin_cmd, *targets])))
+    agent_verbs = Path(__file__).resolve().parent / 'agentverbs.py'
+    results.append(gradeAgentVerbs(run([toolchain.python, str(agent_verbs), *targets])))
 
     width = max(len(r.tool) for r in results)
     for result in results:
@@ -106,7 +110,7 @@ def main() -> int:
 
     failed = [r for r in results if not r.passed]
     if failed:
-        # Print what each failing tool said. A bare count would force the reader to re-run the
+        # Print the output of each failing tool. A bare count would force the reader to re-run the
         # tools by hand, which is the one thing this script exists to stop them doing.
         for result in failed:
             print(f'\n--- {result.tool} ---')
@@ -116,6 +120,9 @@ def main() -> int:
         return EXIT_FINDINGS
 
     print(f'\nall {len(results)} checks passed')
+    inventory = run([sys.executable, str(checker), '--prose', *targets])
+    print('\n--- every comment and docstring summary: read each against SKILL.md, Comments ---')
+    print(inventory.text.rstrip() or '(none)')
     return EXIT_SUCCESS
 
 
@@ -170,7 +177,8 @@ def resolveToolchain(venv: Path) -> Toolchain:
         venv: Directory of a virtual environment, searched before PATH.
 
     Returns:
-        The resolved absolute paths, and the names of any tool that could not be found.
+        The resolved absolute paths, the interpreter that runs agentverbs.py, and the names of any
+        tool or module that could not be found.
     """
     resolved: dict[str, str] = {}
     missing: list[str] = []
@@ -188,7 +196,14 @@ def resolveToolchain(venv: Path) -> Toolchain:
 
         missing.append(tool)
 
-    return Toolchain(resolved, tuple(missing))
+    # absolute, not resolved: the symlink target lacks the venv's packages
+    venv_python = (venv / 'bin' / 'python').absolute()
+    python = str(venv_python) if venv_python.is_file() else sys.executable
+    probe = 'import importlib.util, sys; sys.exit(any(importlib.util.find_spec(m) is None for m in sys.argv[1:]))'
+    if run([python, '-c', probe, *PARSER_MODULES]).code != 0:
+        missing.append(' and '.join(PARSER_MODULES))
+
+    return Toolchain(resolved, python, tuple(missing))
 
 
 def run(command: list[str]) -> Output:
@@ -224,9 +239,14 @@ def gradeChecks(output: Output) -> Result:
     return Result('checks.py', output.code == 0, 'clean' if output.code == 0 else f'{found} findings', output.text)
 
 
+def gradeAgentVerbs(output: Output) -> Result:
+    found = countFindingLines(output)
+    return Result('agentverbs.py', output.code == 0, 'clean' if output.code == 0 else f'{found} findings', output.text)
+
+
 def gradeVermin(output: Output) -> Result:
     # `--violations` matters. Without it vermin fails any file it cannot date, such as one using no
-    # version-specific syntax at all, which it reports as `~2, ~3` and treats as target-not-met.
+    # version-specific syntax at all, shown in vermin's output as `~2, ~3` and counted as target-not-met.
     if output.code == 0:
         return Result('vermin', True, f'{PYTHON_FLOOR} or lower', output.text)
 
@@ -254,6 +274,7 @@ class Result:
 @dataclass(frozen=True, slots=True)
 class Toolchain:
     paths: Mapping[str, str]
+    python: str
     missing: tuple[str, ...]
 
 

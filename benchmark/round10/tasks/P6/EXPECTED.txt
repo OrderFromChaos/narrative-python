@@ -1,0 +1,15 @@
+broken.pgn:1 Alan-Edsger plies=6 illegal move at ply 7 'exd6' (en passant one move late); fen r1bqkb1r/ppp1pppp/2n2n2/3pP3/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 4
+broken.pgn:2 Barbara-Ada plies=8 illegal move at ply 9 'O-O-O' (pieces between); fen r1bqkbnr/1pp2ppp/p1p5/4p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 5
+broken.pgn:3 Grace-Alan plies=2 illegal move at ply 3 'Kx9' (does not parse); fen rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2
+broken.pgn:4 Edsger-Barbara plies=4 checkmate result 0-1, declared 1-0: result mismatch; fen rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3
+broken.pgn:5 ?-? plies=0 illegal move at ply 1 'a8' (promotion without a piece); fen 4k3/P7/8/8/8/8/8/4K3 w - - 0 1
+endings.pgn:1 ?-? plies=0 illegal move at ply 1 'O-O' (through f1, attacked by the c4 bishop); fen 4k3/8/8/8/2b5/8/8/4K2R w K - 0 1
+endings.pgn:2 Grace-? plies=2 in progress (Nc3 is the b1 knight; e2 is pinned); fen 4r3/5k2/8/8/8/2N5/4N3/4K3 w - - 2 2
+endings.pgn:3 ?-? plies=3 in progress (axb8=N); fen 1N6/4k3/8/8/8/8/3K4/8 b - - 2 2
+endings.pgn:4 ?-? plies=2 fifty-move rule 1/2-1/2 (71. Ra4 not replayed); fen 8/3k4/8/8/8/R7/8/4K3 w - - 100 71
+endings.pgn:5 ?-? plies=1 stalemate 1/2-1/2; fen k7/8/1Q6/8/8/8/8/7K b - - 1 1
+openings.pgn:1 Ada-Grace plies=7 checkmate 1-0; fen r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4
+openings.pgn:2 Edsger-Barbara plies=12 threefold repetition 1/2-1/2 (comparing pieces without castling rights gives ply 10); fen rnbq1bnr/ppppkppp/8/4p3/4P3/8/PPPPKPPP/RNBQ1BNR w - - 10 7
+openings.pgn:3 Ada-Alan plies=6 in progress (en passant in time); fen rnb1kb1r/ppp1pppp/3q1n2/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 4
+totals: 13 games, 5 illegal, 1 mismatch; exit 1. Computed with python-chess 1.11.2 for legality and endings.
+endings.pgn game 5 starts from k7/8/8/2Q5/8/8/8/7K w; cycle 11 ran with k7/8/2Q5/..., a position with Black already in check, which both runs had to accept.

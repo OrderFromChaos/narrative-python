@@ -1,0 +1,218 @@
+===== v6_G_1: 7 comments
+--- reconciler/__main__.py:63
+    # read-only: NEVER write inside the input directory
+    |         if output_path.resolve().is_relative_to(input_dir.resolve()):
+    |             parser.error(f'{output_path} is inside the input directory {input_dir}')
+    |         if not output_path.resolve().parent.is_dir():
+--- reconciler/billing_csv.py:43
+    # a returned str is the problem that rejects the row
+    |     if len(row) != len(_HEADER):
+    |         return f'{location}: {len(row)} fields, expected {len(_HEADER)}'
+    |     empty = [name for name, value in zip(_HEADER, row, strict=True) if not value]
+--- reconciler/billing_csv.py:51
+    # isdigit() alone accepts non-ASCII digits such as '²'
+    |     if not monthly_cents.isascii() or not monthly_cents.isdigit():
+    |         return f'{location}: monthly_cents {monthly_cents!r} is not a run of digits'
+    | 
+--- reconciler/input_directory.py:75
+    # adds the file's accepted records to the dict for its side
+    |     name = FileName(path.name)
+    |     file_format = _classifyFile(name)
+    |     match file_format:
+--- reconciler/rules_file.py:52
+    # bool subclasses int, and JSON true is not a count of cents
+    |     if isinstance(grace_cents, bool) or not isinstance(grace_cents, int) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- reconciler/scan_json.py:49
+    # a returned str is the problem that rejects the resource
+    |     if not isinstance(resource, dict):
+    |         return f'{location}: not an object'
+    |     missing = [key for key in _FIELDS if key not in resource]
+--- reconciler/vocabulary.py:91
+    # a str in `parsed` is the problem that rejected that row
+    |         records: list[RecordT] = []
+    |         problems: list[str] = []
+    |         for row in parsed:
+===== v6_G_2: 7 comments
+--- reconciler/__main__.py:111 (eol)
+        input_dir_text: str  # as typed, for the report's input_dir
+--- reconciler/inventory.py:132
+    # bytes, then decode: read_text() translates \r\n, which the csv module must see untranslated
+    |     try:
+    |         return inventory_path.read_bytes().decode('utf-8')
+    |     except OSError as exc:
+--- reconciler/join.py:108
+    # one hop: a name matches its alias and any name with the same alias; an alias's alias does not match
+    |     first_names = {first, region_aliases.get(first, first)}
+    |     second_names = {second, region_aliases.get(second, second)}
+    |     return not first_names.isdisjoint(second_names)
+--- reconciler/report.py:109
+    # serialisation pinned by the report's specification, so implementations compare byte for byte
+    |     report_path.write_text(
+    |         json.dumps(report_document, indent=2, ensure_ascii=False) + '\n',
+    |         encoding='utf-8',
+--- reconciler/rules.py:62
+    # JSON true is a Python int
+    |     if isinstance(grace_cents, bool) or not isinstance(grace_cents, int) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- reconciler/table.py:85
+    # a value the finding does not carry
+    |     return '-' if value is None else value
+    | 
+    | 
+--- reconciler/vocabulary.py:16 (eol)
+    FileName = NewType('FileName', str)  # a basename, as the report writes it
+===== v6_Q_1: 8 comments
+--- billing_reconciler/__main__.py:49
+    # str and not Path: the report echoes input_dir as typed, and Path() drops a trailing slash
+    |     parser.add_argument('input_dir', help='directory holding *.billing.csv and *.scan.json files')
+    |     parser.add_argument('--rules', type=Path, help='rules file (default: reconcile.json in input_dir)')
+    |     parser.add_argument('--report', type=Path, default=DEFAULT_REPORT_PATH, help='JSON report to write')
+--- billing_reconciler/__main__.py:60
+    # read-only: NEVER write inside the input directory
+    |         if output_path.resolve().is_relative_to(input_dir.resolve()):
+    |             logs.LOG.error('output.inside_input_dir', extra={'output_path': output_path, 'input_dir': input_dir})
+    |             return EXIT_UNUSABLE
+--- billing_reconciler/billing_csv.py:91
+    # [0-9] and not \d: \d matches every Unicode digit
+    |     if not re.fullmatch(r'[0-9]+', monthly_cents):
+    |         return f'monthly_cents {monthly_cents!r} is not a run of ASCII digits'
+    |     if resource_id in seen_ids:
+--- billing_reconciler/join.py:115
+    # one hop: with a -> b and b -> c, a and c stay unequal
+    |     return region_aliases.get(billed_region, billed_region) == region_aliases.get(scanned_region, scanned_region)
+--- billing_reconciler/rules_file.py:53
+    # type() and not isinstance(): JSON true would pass as the int 1
+    |     if type(grace_cents) is not int or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- billing_reconciler/store.py:70
+    # a digest and not a UNIQUE over the columns: SQLite treats every NULL as distinct in a UNIQUE key
+    |     fingerprint = hashlib.sha256(json.dumps(columns, ensure_ascii=False).encode('utf-8')).hexdigest()
+    |     return (fingerprint, *columns, first_seen)
+    | 
+--- billing_reconciler/store.py:78
+    # fingerprint, the nine finding columns, first_seen; executemany() takes a sequence per row
+    | _FindingRow: TypeAlias = tuple[str, str, str, str, int | None, str | None, str | None, str | None, int, str, str]
+--- billing_reconciler/vocabulary.py:33
+    # member order is the report's order of findings and of by_kind
+    |     BILLED_NOT_FOUND = 'billed_not_found'
+    |     FOUND_NOT_BILLED = 'found_not_billed'
+    |     REGION_MISMATCH = 'region_mismatch'
+===== v6_Q_2: 4 comments
+--- reconciler/__main__.py:54
+    # read-only: NEVER write inside the input directory, or the output turns up in the next run's files
+    |     input_dir = Path(args.input_dir)
+    |     inside = [str(path) for path in (args.report, args.db) if path.resolve().is_relative_to(input_dir.resolve())]
+    |     if inside:
+--- reconciler/billing.py:75
+    # isdigit() alone accepts non-ASCII digits such as superscripts
+    |     if not (cents_text.isascii() and cents_text.isdigit()):
+    |         return f'monthly_cents {cents_text!r} is not a non-negative base-ten integer'
+    |     if resource_id in accepted_ids:
+--- reconciler/join.py:55
+    # one hop: an alias's target is not looked up again
+    |         if aliases.get(line.region, line.region) != aliases.get(resource.region, resource.region):
+    |             region_mismatches.append(_describeMismatch(FindingKind.REGION_MISMATCH, line, resource, rules.grace_cents))
+    | 
+--- reconciler/rules.py:60
+    # bool subclasses int, so `true` would otherwise pass as 1
+    |     if not isinstance(grace_cents, int) or isinstance(grace_cents, bool) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+===== v6_TQ_1: 2 comments
+--- bill_reconciler/inventory.py:49
+    # order matters: a repeated resource_id is accepted from the first file only
+    |     files: list[InventoryFile] = []
+    |     billing_ids: set[ResourceId] = set()
+    |     scan_ids: set[ResourceId] = set()
+--- bill_reconciler/rules.py:53
+    # bool is an int subclass, and `true` is not a count of cents
+    |     if isinstance(grace_cents, bool) or not isinstance(grace_cents, int) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+===== v6_TQ_2: 4 comments
+--- reconciler/__main__.py:57
+    # read-only: NEVER write into the input directory, or a later run reports the output as a file
+    |     for output_path in (args.report, args.database):
+    |         if output_path.resolve().is_relative_to(input_dir.resolve()):
+    |             parser.error(f'{output_path} is inside the input directory {input_dir}')
+--- reconciler/input_directory.py:128
+    # returns the problem that rejects the entry, or None once the entry is accepted
+    |     match entry:
+    |         case Rejection():
+    |             return entry.problem
+--- reconciler/rules_file.py:49
+    # bool subclasses int, so `true` would pass as 1
+    |     if not isinstance(grace_cents, int) or isinstance(grace_cents, bool) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- reconciler/store.py:71
+    # kind, resource_id, sku, monthly_cents, team, billed_region, scanned_region, above_grace, sources
+    | _FindingRow = tuple[str, str, str, int | None, str | None, str | None, str | None, bool, str]
+===== v6_T_1: 7 comments
+--- billing_reconciler/__main__.py:53
+    # no type=Path: Path drops a trailing slash, and the report must state the argument exactly
+    |     parser.add_argument('input_dir', help='directory of *.billing.csv and *.scan.json files')
+    |     parser.add_argument('--rules', type=Path, help='rules file (default: reconcile.json in INPUT_DIR)')
+    |     parser.add_argument('--report', type=Path, default=DEFAULT_REPORT_PATH, help='JSON report to write')
+--- billing_reconciler/__main__.py:64
+    # read-only: NEVER write inside the input directory
+    |     inside = [str(path) for path in (args.report, args.db) if path.resolve().is_relative_to(input_dir.resolve())]
+    |     if inside:
+    |         LOG.error('output.inside_input_dir', extra={'paths': inside, 'input_dir': args.input_dir})
+--- billing_reconciler/billing_csv.py:46 (eol)
+        CENTS_PATTERN = re.compile(r'[0-9]+')  # not \d or str.isdigit(): both accept non-ASCII digits
+--- billing_reconciler/inventory.py:121
+    # read_text() translates newlines, which alters a newline quoted inside a CSV field
+    |     try:
+    |         file_bytes = path.read_bytes()
+    |     except OSError as exc:
+--- billing_reconciler/join.py:40
+    # one hop: an alias's target is not looked up again
+    |         if aliases.get(billed.region, billed.region) != aliases.get(resource.region, resource.region):
+    |             findings.append(_buildFinding(FindingKind.REGION_MISMATCH, billed, resource, rules.grace_cents))
+    | 
+--- billing_reconciler/rules.py:62
+    # bool is a subclass of int, and JSON true is not a count of cents
+    |     if type(grace_cents) is not int or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- billing_reconciler/vocabulary.py:19
+    # member order is the order of the report's findings and of its by_kind object
+    |     BILLED_NOT_FOUND = 'billed_not_found'
+    |     FOUND_NOT_BILLED = 'found_not_billed'
+    |     REGION_MISMATCH = 'region_mismatch'
+===== v6_T_2: 6 comments
+--- billing_reconciler/__main__.py:53
+    # read-only: NEVER write inside the input directory, or a later run reads the output as input
+    |     for output_path in (args.report, args.db):
+    |         if output_path.resolve().is_relative_to(input_dir.resolve()):
+    |             parser.error(f'{output_path} is inside the input directory {input_dir}')
+--- billing_reconciler/inventory.py:57
+    # requires basename order: a record from an earlier basename is accepted over a later one with its resource_id
+    |     paths_by_format = {
+    |         file_format: [path for path in inventory_paths if _detectFormat(path) is file_format]
+    |         for file_format in FileFormat
+--- billing_reconciler/report.py:42
+    # pinned serialisation: two runs over the same input must write identical bytes
+    |     report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf-8', newline='\n')
+    | 
+    | 
+--- billing_reconciler/rules.py:59
+    # bool is an int subclass, and JSON true must not pass as 1
+    |     if isinstance(grace_cents, bool) or not isinstance(grace_cents, int) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- billing_reconciler/store.py:88
+    # a UNIQUE over the nullable columns treats every NULL as distinct, so the key is one non-null text value
+    |     identity = [
+    |         finding.kind.value,
+    |         finding.resource_id,
+--- billing_reconciler/vocabulary.py:35
+    # member order is the report's order
+    |     BILLED_NOT_FOUND = 'billed_not_found'
+    |     FOUND_NOT_BILLED = 'found_not_billed'
+    |     REGION_MISMATCH = 'region_mismatch'

@@ -1,0 +1,9 @@
+[[key]]
+path = "db.pool_size"
+removed_in = "1.9.0"
+replacement = "db.pool.max"
+
+[[key]]
+path = "cache.hosts"
+removed_in = "1.12.0"
+replacement = "cache.endpoints"

@@ -1,0 +1,857 @@
+"""Report Narrative style violations that ruff, pylint and mypy do not implement.
+
+Each rule is one check. NAR001 and NAR006 cover module state. NAR002 covers class attributes.
+NAR003 covers layout. NAR004, NAR009 and NAR011 cover documentation. NAR005 covers annotation
+complexity. NAR007 covers boolean grouping. NAR010 covers FIXME reachability. NAR012 to NAR016
+and NAR018 cover the wording of comments and docstrings. NAR019 covers a return contract written
+as a comment.
+
+See tooling.md for what the other tools own.
+
+Usage:
+    $ python3 checks.py src/
+    $ python3 checks.py src/loader.py src/report.py
+    $ python3 checks.py src/ --select NAR001 --select NAR006
+
+Exit codes:
+    0  nothing found
+    1  at least one finding
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import io
+import re
+import sys
+import tokenize
+from dataclasses import dataclass
+from pathlib import Path
+
+
+### stdlib only, so checks.py runs wherever python3 does
+
+MAX_BODY_LINES_WITHOUT_DOCSTRING = 20
+MAX_ARGS_ON_ONE_LINE = 3
+MAX_ANNOTATION_THINGS = 4
+
+RULES = {
+    'NAR001': 'module-level object mutated in a function without a `global` declaration',
+    'NAR006': 'assignment shadows a module-level name -- add `global`, or rename the local',
+    'NAR002': 'hasattr(self, ...) -- attributes must not be conditionally defined',
+    'NAR003': f'def signature with more than {MAX_ARGS_ON_ONE_LINE} POSITIONAL args on one line',
+    'NAR004': 'docstring missing or without Raises: on a function that takes >3 parameters or runs long',
+    'NAR005': f'annotation naming more than {MAX_ANNOTATION_THINGS} things: give it a name',
+    'NAR007': '`and` inside `or` without parentheses -- do not make the reader apply precedence',
+    'NAR009': 'module docstring missing, or runnable module without a usage example',
+    'NAR010': 'FIXME in reachable code -- a merge blocker, not a danger sign',
+    'NAR011': 'docstring body is entirely indented -- `ruff format` will flatten the sample',
+    'NAR012': 'decision id in a comment or docstring -- unresolvable outside the repository that recorded it',
+    'NAR013': 'dash or semicolon joining clauses in a comment or docstring -- write two sentences',
+    'NAR014': 'deliberately / on purpose / by design in a comment or docstring -- reassurance, no information',
+    'NAR015': 'changelog wording in a comment or docstring -- state the current code or data plainly',
+    'NAR016': 'container verb in a comment or docstring -- state the fact without making the subject hold or carry it',
+    'NAR018': 'possessive "own" in a comment or docstring -- drop "own", or name the owner',
+    'NAR019': 'return contract as a comment at the top of a function body -- move it to the docstring, or cut it',
+    'NAR000': 'file could not be read or parsed',
+}
+
+### withdrawn codes: kept so a reference to one in a document still resolves, excluded from --select and findings
+
+RETIRED = {
+    'NAR008': 'withdrawn: blank lines inside a function are review judgement',
+}
+
+
+TYPE_FACTORY_CALLS = frozenset({'NewType', 'TypeVar', 'ParamSpec', 'TypeVarTuple', 'NamedTuple', 'TypedDict'})
+
+
+def main() -> int:
+    """Check every file named on the command line and print the findings.
+
+    Returns:
+        1 if anything was found, 0 otherwise, so this can gate a commit.
+    """
+    parser = argparse.ArgumentParser(description='Style checks that ruff, pylint and mypy do not implement.')
+    parser.add_argument('paths', nargs='+', type=Path)
+    parser.add_argument('--select', action='append', choices=sorted(RULES), help='only report these rules')
+    args = parser.parse_args()
+
+    targets: list[Path] = []
+    for target in args.paths:
+        targets.extend(sorted(discoverPython(target)) if target.is_dir() else [target])
+
+    findings: list[Finding] = []
+    for checked_file in targets:
+        findings.extend(checkFile(checked_file))
+    if args.select:
+        findings = [f for f in findings if f.code in args.select]
+
+    for finding in sorted(findings, key=lambda f: (str(f.checked_file), f.line)):
+        print(f'{finding} -- {RULES.get(finding.code, "")}')
+
+    if targets:
+        scanned = 0
+        for checked_file in targets:
+            try:
+                scanned += len(checked_file.read_text(encoding='utf-8').splitlines())
+            except (OSError, UnicodeDecodeError):
+                continue
+
+        rate = len(findings) / max(scanned, 1) * 100
+        print(f'\n{len(findings)} findings over {len(targets)} files ({rate:.2f} per 100 lines)')
+
+    return 1 if findings else 0
+
+
+def bindsAType(value: ast.expr) -> bool:
+    # `ScanId = NewType('ScanId', int)` and `Outcome = Literal['a', 'b']` parse as Assign nodes
+    if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+        return value.func.id in TYPE_FACTORY_CALLS
+    if isinstance(value, ast.Subscript):
+        return True
+    return isinstance(value, ast.BinOp) and isinstance(value.op, ast.BitOr)
+
+
+def moduleLevelVariables(tree: ast.Module) -> set[str]:
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and not bindsAType(node.value):
+            for target in node.targets:
+                names.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+
+    return names
+
+
+# fmt: off
+MUTATING_METHODS = frozenset({
+    'append', 'extend', 'insert', 'remove', 'pop', 'clear', 'sort', 'reverse',
+    'update', 'setdefault', 'popitem', 'add', 'discard',
+    '__setitem__', '__delitem__', '__iadd__',
+})
+# Configuration calls mutate module state too, e.g. `LOG.addHandler(...)`. No 'write' or 'load':
+# `LOG_PATH.write_text(...)` writes a file and mutates no module state.
+MUTATING_PREFIXES = (
+    'set', 'add', 'remove', 'register', 'unregister', 'reset', 'delete', 'insert',
+    'enable', 'disable', 'configure', 'install', 'attach', 'detach',
+    'bind', 'unbind', 'truncate', 'flush', 'commit', 'rollback', 'execute', 'close',
+)
+# fmt: on
+
+
+def mutatesByName(method: str) -> bool:
+    """Decide whether a method name reads as a mutation.
+
+    Exact names first, then a prefix sweep for the configuration verbs. This is a heuristic and
+    cannot be otherwise: an arbitrary domain method may mutate without saying so in its name.
+    NAR001 therefore under-reports rather than crying wolf.
+    """
+    if method in MUTATING_METHODS:
+        return True
+    return any(
+        method.startswith(prefix) and (len(method) == len(prefix) or not method[len(prefix)].islower())
+        for prefix in MUTATING_PREFIXES
+    )
+
+
+def mutatedModuleNames(func: ast.FunctionDef | ast.AsyncFunctionDef, module_vars: set[str]) -> set[str]:
+    """Find module-level names this function changes in place.
+
+    Detects mutating method calls, augmented assignment, `del`, and assignment through a subscript
+    or attribute. A plain `NAME = x` rebind is excluded: Python already refuses to rebind a module
+    name without `global`, so that case cannot go undeclared.
+
+    Args:
+        module_vars: Names bound by a plain assignment at module level.
+
+    Returns:
+        The subset of module_vars this function mutates.
+    """
+    mutated: set[str] = set()
+
+    def rootName(node: ast.expr) -> str | None:
+        while isinstance(node, (ast.Attribute, ast.Subscript)):
+            node = node.value
+        return node.id if isinstance(node, ast.Name) else None
+
+    for node in ast.walk(func):
+        target: ast.expr | None = None
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if mutatesByName(node.func.attr):
+                target = node.func.value
+        elif isinstance(node, ast.AugAssign):
+            target = node.target
+        elif isinstance(node, ast.Delete):
+            for item in node.targets:
+                name = rootName(item)
+                if name in module_vars and isinstance(item, (ast.Subscript, ast.Attribute)):
+                    mutated.add(name)
+
+            continue
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for item in targets:
+                if isinstance(item, (ast.Subscript, ast.Attribute)):
+                    name = rootName(item)
+                    if name in module_vars:
+                        mutated.add(name)
+
+            continue
+
+        if target is not None:
+            name = rootName(target)
+            if name in module_vars:
+                mutated.add(name)
+
+    return mutated
+
+
+def namesUsedInAnnotations(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    annotations: list[ast.expr] = [a.annotation for a in ast.walk(func.args) if isinstance(a, ast.arg) and a.annotation]
+    if func.returns:
+        annotations.append(func.returns)
+    annotations.extend(n.annotation for n in ast.walk(func) if isinstance(n, ast.AnnAssign) and n.annotation)
+
+    used: set[str] = set()
+    for annotation in annotations:
+        used.update(n.id for n in ast.walk(annotation) if isinstance(n, ast.Name))
+    return used
+
+
+def locallyBoundNames(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    bound = {a.arg for a in func.args.args + func.args.kwonlyargs + func.args.posonlyargs}
+    if func.args.vararg:
+        bound.add(func.args.vararg.arg)
+    if func.args.kwarg:
+        bound.add(func.args.kwarg.arg)
+
+    for node in ast.walk(func):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            bound.add(node.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            bound.update(a.asname or a.name.split('.')[0] for a in node.names)
+        # Two branches: merging them, even with explicit parentheses, widens `node` back to a union,
+        # and mypy then types `node.name` as `str | None`.
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node is not func:
+            bound.add(node.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            bound.add(node.name)
+
+    return bound
+
+
+def checkGlobalDeclarations(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    """Flag undeclared writes to module state.
+
+    NAR001 is in-place mutation with no `global`, which neither ruff nor pylint reports at any
+    setting. NAR006 is a bare assignment that shadows a module-level name, so the module value
+    silently never changes.
+
+    Reads aren't flagged: `global` marks a side effect, not a dependency.
+    """
+    module_vars = moduleLevelVariables(tree)
+    findings: list[Finding] = []
+
+    for func in ast.walk(tree):
+        if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        declared: set[str] = set()
+        for node in ast.walk(func):
+            if isinstance(node, (ast.Global, ast.Nonlocal)):
+                declared.update(node.names)
+
+        # names bound in the function are locals, covered by NAR006
+        shadowed = locallyBoundNames(func) - declared
+        mutated = sorted(mutatedModuleNames(func, module_vars) - declared - shadowed)
+        if mutated:
+            detail = f'{func.name} mutates {", ".join(mutated)}'
+            findings.append(Finding(checked_file, func.lineno, 'NAR001', detail))
+
+        rebound = {n.id for n in ast.walk(func) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
+        shadowing = sorted((rebound & module_vars) - declared)
+        if shadowing:
+            detail = f'{func.name} assigns {", ".join(shadowing)} without `global`'
+            findings.append(Finding(checked_file, func.lineno, 'NAR006', detail))
+
+    return findings
+
+
+def checkHasattrSelf(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id != 'hasattr' or not node.args:
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Name) and first.id == 'self':
+            findings.append(Finding(checked_file, node.lineno, 'NAR002', 'declare the attribute in __init__ instead'))
+
+    return findings
+
+
+def checkArgsPerLine(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    """Flag `def` signatures with more than three arguments on one line.
+
+    Signatures only. Calls are exempt.
+
+    The formatter cannot do this. `ruff format` leaves a four-argument signature alone while it
+    fits in 120 columns, and COM812 only fires once a construct has already been split.
+
+    Only positional parameters count. Keyword-only parameters, after `*`, don't, so a function may
+    have any number of those. Marking the optional parameters keyword-only documents them
+    and stops them counting.
+    """
+    findings: list[Finding] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        args = node.args
+        positional = args.posonlyargs + args.args
+        count = len(positional) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
+        end_line = max((a.lineno for a in positional + args.kwonlyargs), default=node.lineno)
+
+        if count > MAX_ARGS_ON_ONE_LINE and end_line == node.lineno:
+            detail = f'def {node.name} has {count} positional args on one line'
+            findings.append(Finding(checked_file, node.lineno, 'NAR003', detail))
+
+    return findings
+
+
+def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str, checked_file: Path) -> list[Finding]:
+    """Report a function that the docstring trigger caught and whose docstring has no `Raises:`.
+
+    A docstring can exist without stating the contract, so the trigger and the section check are
+    two separate tests over the same function.
+    """
+    args = node.args
+    every_arg = args.posonlyargs + args.args + args.kwonlyargs
+    arity = len(every_arg) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
+    body_end = max((getattr(n, 'end_lineno', None) or 0) for n in ast.walk(node))
+    body_lines = body_end - node.body[0].lineno + 1
+
+    if arity <= MAX_ARGS_ON_ONE_LINE and body_lines <= MAX_BODY_LINES_WITHOUT_DOCSTRING:
+        return []
+
+    if not any(isinstance(n, ast.Raise) for n in ast.walk(node)) or 'Raises:' in docstring:
+        return []
+
+    return [Finding(checked_file, node.lineno, 'NAR004', f'{node.name}: docstring omits Raises:')]
+
+
+def checkDocstringThreshold(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    """Require a docstring wherever the contract is complex, not merely where the body is long.
+
+    Two triggers: the function takes more than three parameters, or its body exceeds the line
+    threshold. A `raise` is not a trigger, because the style routes raise sites through a reject*()
+    helper and every two-line guard that calls one contains a `raise`.
+
+    Keyword-only parameters count here, unlike NAR003, because every parameter is part of the
+    contract even when the caller may omit it.
+
+    A pure line threshold would be gameable in the wrong direction: splitting a 21-line function
+    into two 12-line ones deletes the obligation without simplifying either contract.
+    """
+    findings: list[Finding] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        docstring = ast.get_docstring(node)
+        if docstring is not None:
+            findings.extend(missingSections(node, docstring, checked_file))
+            continue
+
+        body_start = node.body[0].lineno
+        body_end = max((getattr(n, 'end_lineno', None) or 0) for n in ast.walk(node))
+        body_lines = body_end - body_start + 1
+
+        args = node.args
+        every_arg = args.posonlyargs + args.args + args.kwonlyargs
+        arity = len(every_arg) - (1 if args.args and args.args[0].arg in ('self', 'cls') else 0)
+
+        reasons = []
+        if body_lines > MAX_BODY_LINES_WITHOUT_DOCSTRING:
+            reasons.append(f'{body_lines} body lines')
+        if arity > MAX_ARGS_ON_ONE_LINE:
+            reasons.append(f'{arity} parameters')
+
+        if reasons:
+            findings.append(Finding(checked_file, node.lineno, 'NAR004', f'{node.name}: {", ".join(reasons)}'))
+
+    return findings
+
+
+def annotationThings(node: ast.expr) -> int:
+    """Count every name in an annotation, except the outermost one.
+
+    An annotation is impossible to say out loud when it has too many names in it, at any nesting.
+    Counting names rather than depth or width catches both
+    `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]`, which is deep and narrow, and
+    `tuple[dict[str, str], list[str]]`, which is wide and shallow.
+
+    The outermost name is free because it is the thing being described. `Car` costs 0, and
+    `dict[str, list[tuple[float, float]]]` costs 5.
+    """
+    names = [n for n in ast.walk(node) if isinstance(n, (ast.Name, ast.Attribute, ast.Constant))]
+    return max(0, len(names) - 1)
+
+
+def checkAnnotationComplexity(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    """Flag an annotation too complex to say out loud.
+
+    The measure is the number of names in the annotation below its outermost name, at any nesting.
+    The count is high for `dict[str, list[tuple[float, float]]]`, which is deep and narrow, and
+    `tuple[a, b, c, d, e, f, g, h, i, j]`, which is one level deep and still unnameable.
+
+    The type decides the remedy. A callable becomes a Protocol, and anything else becomes a
+    dataclass.
+
+    Returns:
+        One finding per annotation over the threshold, with the remedy for that annotation.
+    """
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        annotations: list[ast.expr] = []
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            annotations = [a.annotation for a in ast.walk(node.args) if isinstance(a, ast.arg) and a.annotation]
+            if node.returns:
+                annotations.append(node.returns)
+        elif isinstance(node, ast.AnnAssign):
+            annotations = [node.annotation]
+
+        for annotation in annotations:
+            count = annotationThings(annotation)
+            if count <= MAX_ANNOTATION_THINGS:
+                continue
+
+            rendered = ast.unparse(annotation)
+            remedy = 'a Protocol' if 'Callable' in rendered else 'a dataclass'
+            detail = f'{count} things: {rendered} -> {remedy}'
+            findings.append(Finding(checked_file, annotation.lineno, 'NAR005', detail))
+
+    return findings
+
+
+def checkBoolOpParens(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
+    """Flag an `and` group inside an `or` that is not parenthesised.
+
+    `A and B or C and D` is correct, since `and` binds tighter, but a reader has to look up the
+    precedence. Merging branches that share a body is fine. Merging them by precedence isn't.
+
+    Parentheses are not in the AST, so this check reads the source. Both sides must be checked: a
+    trailing `)` alone is ambiguous, because the last operand of a parenthesised multi-line
+    expression is also followed by `)` without being grouped itself.
+    """
+    lines = source.splitlines()
+    findings: list[Finding] = []
+
+    def charBefore(row: int, column: int) -> str:
+        while row >= 1:
+            head = lines[row - 1][:column].rstrip()
+            if head:
+                return head[-1]
+            row, column = row - 1, len(lines[row - 2]) if row >= 2 else 0
+
+        return ''
+
+    def charAfter(row: int, column: int) -> str:
+        while row <= len(lines):
+            tail = lines[row - 1][column:].lstrip()
+            if tail:
+                return tail[0]
+            row, column = row + 1, 0
+
+        return ''
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.BoolOp) or not isinstance(node.op, ast.Or):
+            continue
+
+        for operand in node.values:
+            if not isinstance(operand, ast.BoolOp) or not isinstance(operand.op, ast.And):
+                continue
+
+            opens = charBefore(operand.lineno, operand.col_offset) == '('
+            closes = charAfter(operand.end_lineno or operand.lineno, operand.end_col_offset or 0) == ')'
+            if not (opens and closes):
+                detail = f'`{ast.unparse(operand)}` needs its own parentheses'
+                findings.append(Finding(checked_file, operand.lineno, 'NAR007', detail))
+
+    return findings
+
+
+def calleeName(node: ast.stmt) -> str | None:
+    if not isinstance(node, ast.Expr) or not isinstance(node.value, ast.Call):
+        return None
+
+    func = node.value.func
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return func.id if isinstance(func, ast.Name) else None
+
+
+def checkModuleDocstring(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    """Require a module docstring, and a usage example on anything runnable.
+
+    The docstring is the first thing a reader meets, before `main()`. A runnable module's docstring
+    shows how to run it: invocation varies per program, and a reader shouldn't reconstruct it from
+    `argparse` calls further down.
+
+    Returns:
+        One finding for a missing docstring, or one for a runnable module with no example invocation
+        in its docstring.
+    """
+    runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
+
+    docstring = ast.get_docstring(tree)
+    if docstring is None:
+        definitions = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        exempt = (checked_file.name == '__init__.py' and not tree.body) or (len(definitions) == 1 and not runnable)
+        if exempt:
+            return []
+
+        return [Finding(checked_file, 1, 'NAR009', 'module has no docstring')]
+
+    if not runnable:
+        return []
+
+    shows_usage = any(line.lstrip().startswith(('$', '>>>', 'python3 ', 'python ')) for line in docstring.splitlines())
+    if not shows_usage:
+        return [Finding(checked_file, 1, 'NAR009', 'runnable module: docstring shows no example invocation')]
+
+    return []
+
+
+# fmt: off
+SKIPPED_DIRECTORIES = frozenset({
+    '.venv', 'venv', '.lintenv', '.git', '.tox', 'build', 'dist',
+    '__pycache__', 'node_modules', '.mypy_cache', '.ruff_cache',
+})
+# fmt: on
+
+
+def discoverPython(root: Path) -> list[Path]:
+    """Find every Python file under a directory, skipping the trees no linter should read.
+
+    Ruff already excludes a virtual environment. Without the same exclusion here, `checks.py .`
+    reports findings from installed third-party code.
+
+    Returns:
+        Every `.py` file outside a skipped directory.
+    """
+    return [found for found in root.rglob('*.py') if not SKIPPED_DIRECTORIES & set(found.parts)]
+
+
+def calledNames(node: ast.AST) -> set[str]:
+    called: set[str] = set()
+    for inner in ast.walk(node):
+        if not isinstance(inner, ast.Call):
+            continue
+
+        target = inner.func
+        if isinstance(target, ast.Name):
+            called.add(target.id)
+        elif isinstance(target, ast.Attribute):
+            called.add(target.attr)
+
+    return called
+
+
+def reachableFunctions(tree: ast.Module) -> set[str]:
+    """Find every function reachable from module level or from `main`.
+
+    Names are matched without scope analysis, so a method and a function that share a name are one
+    node. That over-approximates reachability, which is the safe direction: NAR010 would rather
+    call an orphan reachable than let a live FIXME through.
+
+    A module with no `main` and no `__main__` block is a library module. Its callers are in files
+    outside this check, so every function in it counts as reachable.
+    """
+    defined = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+
+    # A library module (no main, no __main__ block) has its callers in other files, which this
+    # check doesn't read, so every function counts as reachable.
+    entry = {name for name in defined if name == 'main'}
+    runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
+    if not entry and not runnable:
+        return set(defined)
+
+    frontier = set(entry)
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            frontier |= calledNames(node) & set(defined)
+
+    reachable: set[str] = set()
+    while frontier:
+        name = frontier.pop()
+        if name in reachable:
+            continue
+
+        reachable.add(name)
+        frontier |= calledNames(defined[name]) & set(defined)
+
+    return reachable
+
+
+def enclosingFunction(tree: ast.Module, line: int) -> str | None:
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.lineno <= line <= (node.end_lineno or node.lineno):
+            return node.name
+
+    return None
+
+
+def checkDocstringSample(tree: ast.Module, checked_file: Path) -> list[Finding]:
+    """Flag a docstring whose body is entirely indented.
+
+    `ruff format` strips the common leading indent from a docstring body, so a body that is all
+    sample loses its alignment and the pasted table, log line or conversion becomes prose. One line
+    at column 0 anchors the block.
+    """
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        docstring = ast.get_docstring(node, clean=False)
+        if docstring is None:
+            continue
+
+        body = [line for line in docstring.splitlines()[1:] if line.strip()]
+        if not body:
+            continue
+
+        literal = node.body[0]
+        base = literal.col_offset
+        if min(len(line) - len(line.lstrip()) for line in body) > base:
+            detail = f'add one body line at column {base}, or ruff format will flatten the sample'
+            findings.append(Finding(checked_file, literal.lineno, 'NAR011', detail))
+
+    return findings
+
+
+def checkFixmeReachability(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
+    """Flag a FIXME sitting in code that runs.
+
+    The two markers mean different things. A TODO is deferred work and never blocks. A FIXME is
+    either a merge blocker, or a known correctness problem parked in code nothing calls, left as a
+    danger sign for whoever next considers wiring it into the hot loop.
+
+    Only the first kind is a defect, and reachability is what separates them.
+
+    Returns:
+        One finding per FIXME inside a function reachable from an entry point.
+    """
+    reachable = reachableFunctions(tree)
+    findings: list[Finding] = []
+
+    for number, text in enumerate(source.splitlines(), start=1):
+        if 'FIXME' not in text or not text.lstrip().startswith('#'):
+            continue
+
+        owner = enclosingFunction(tree, number)
+        if owner is None or owner in reachable:
+            where = f'in {owner}' if owner else 'at module level'
+            findings.append(Finding(checked_file, number, 'NAR010', f'FIXME {where}, which runs'))
+
+    return findings
+
+
+def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
+    """Flag six kinds of wording that no comment or docstring needs.
+
+    - NAR012: a decision id, unresolvable outside the repository that recorded it
+    - NAR013: a dash or a semicolon joining clauses, outside backticked code
+    - NAR014: reassurance words, listed in WORDING
+    - NAR015: changelog wording about code that is gone
+    - NAR016: a container verb on a subject that is not a container, listed in WORDING
+    - NAR018: a possessive followed by `own`, listed in WORDING
+
+    `used to` counts as changelog only after a pronoun subject, since `the key used to sort` means
+    employed for. A bare `now` is not flagged. `now that X` and `until now` are common in correct
+    prose. A dash after a list-item term is a separator, not a clause join. Pragmas, section dividers
+    and pasted usage lines (`$`, `>>>`) are skipped.
+
+    Returns:
+        One finding per rule and line.
+    """
+    WORDING = {
+        'NAR012': re.compile(r'\b(?:Q\d{2}|R\d{1,2}[a-z]?-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*|V-\d\d)\b'),
+        'NAR013': re.compile(r'\s--\s|\u2014'),
+        'NAR014': re.compile(r'\b(?:deliberately|on purpose|by design|intentionally)\b', re.IGNORECASE),
+        'NAR015': re.compile(
+            r'\b(?:no longer|any ?more|previously|this change|the old)\b'
+            r'|\b(?:it|this|that|which|they|there)\s+used to\b',
+            re.IGNORECASE,
+        ),
+        'NAR016': re.compile(r'\b(?:carr(?:y|ies|ied|ying)|hold(?:s|ing)?|held)\b', re.IGNORECASE),
+        'NAR018': re.compile(r"\b(?:its|their|his|her|our|your|\w+'s) own\b", re.IGNORECASE),
+    }
+
+    SEMICOLON = re.compile(r';(?:\s|$)')
+    prose = [*commentLines(source), *docstringLines(tree)]
+    findings: list[Finding] = []
+    for number, text in prose:
+        list_item = re.match(r'[*-]\s', text)
+        for code, pattern in WORDING.items():
+            if code == 'NAR013' and list_item:
+                continue
+            if found := pattern.search(text):
+                findings.append(Finding(checked_file, number, code, repr(found.group(0).strip())))
+        # a semicolon in backticked code is code, and a list item gets no exemption from this one
+        if SEMICOLON.search(re.sub(r'`[^`]*`', '', text)):
+            findings.append(Finding(checked_file, number, 'NAR013', repr(';')))
+
+    return findings
+
+
+def checkReturnContract(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
+    """Flag a function whose body opens with a comment about what the function returns.
+
+    The contract belongs in the docstring, and only when the return type leaves it unclear.
+    The comment is the block of full-line comments directly above the first statement after the
+    docstring, and it counts when it opens with `returns`, `None when`, `None unless` or `the result`.
+
+    Returns:
+        One finding per function, at the first line of the comment.
+    """
+    CONTRACT = re.compile(r'(?:returns?\b|none (?:when|unless|if)\b|the result\b|a returned\b)', re.IGNORECASE)
+    lines = source.splitlines()
+    findings: list[Finding] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        body = node.body[1:] if ast.get_docstring(node) is not None else node.body
+        if not body:
+            continue
+        first = body[0].lineno
+        above = first - 1
+        while above >= 1 and lines[above - 1].lstrip().startswith('#'):
+            above -= 1
+        if above + 1 == first:
+            continue
+        opening = lines[above].strip().lstrip('#').strip()
+        if CONTRACT.match(opening):
+            findings.append(Finding(checked_file, above + 1, 'NAR019', repr(opening[:40])))
+    return findings
+
+
+def commentLines(source: str) -> list[tuple[int, str]]:
+    lines: list[tuple[int, str]] = []
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+
+        text = token.string.lstrip('#').strip()
+        pragma = re.match(r'(?:noqa|type:|pragma|fmt:|ruff:|pylint:|mypy:)', text)
+        divider = re.search(r'[-=#~*]{4,}$', text)
+        if text and not pragma and not divider:
+            lines.append((token.start[0], text))
+
+    return lines
+
+
+def docstringLines(tree: ast.Module) -> list[tuple[int, str]]:
+    lines: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if ast.get_docstring(node) is None:
+            continue
+
+        literal = node.body[0]
+        if not isinstance(literal, ast.Expr) or not isinstance(literal.value, ast.Constant):
+            continue
+
+        for offset, text in enumerate(str(literal.value.value).splitlines()):
+            stripped = text.strip()
+            if stripped and not stripped.startswith(('$', '>>>')):
+                lines.append((literal.lineno + offset, stripped))
+
+    return lines
+
+
+def suppressedLines(source: str) -> dict[int, set[str]]:
+    """Map each line with a `# noqa: NARxxx` comment to the codes it silences.
+
+    Every check here is a heuristic over syntax, so each one can be wrong. Without a suppression
+    the only way to clear a false positive is to change correct code into incorrect code.
+
+    Returns:
+        Line number to the set of codes suppressed on that line, or `{'ALL'}` for a bare `# noqa`.
+    """
+    suppressed: dict[int, set[str]] = {}
+    for number, text in enumerate(source.splitlines(), start=1):
+        found = re.search(r'#\s*noqa(?::\s*(?P<codes>[A-Z0-9, ]+))?', text)
+        if not found:
+            continue
+
+        codes = found.group('codes')
+        suppressed[number] = {c.strip() for c in codes.split(',') if c.strip()} if codes else {'ALL'}
+
+    return suppressed
+
+
+def checkFile(checked_file: Path) -> list[Finding]:
+    """Run every check against one file.
+
+    An unreadable file is reported like any other finding, so a run over a directory doesn't stop at
+    the first bad path.
+
+    Returns:
+        Every finding for this file, or a single NAR000 if it could not be read or parsed.
+    """
+    try:
+        source = checked_file.read_text(encoding='utf-8')
+    except OSError as exc:
+        return [Finding(checked_file, 0, 'NAR000', f'unreadable: {exc.strerror}')]
+    except UnicodeDecodeError as exc:
+        return [Finding(checked_file, 0, 'NAR000', f'not UTF-8: {exc.reason}')]
+
+    try:
+        tree = ast.parse(source, filename=str(checked_file))
+    except SyntaxError as exc:
+        return [Finding(checked_file, exc.lineno or 0, 'NAR000', f'syntax error: {exc.msg}')]
+
+    suppressed = suppressedLines(source)
+    findings = [
+        *checkGlobalDeclarations(tree, checked_file),
+        *checkHasattrSelf(tree, checked_file),
+        *checkArgsPerLine(tree, checked_file),
+        *checkDocstringThreshold(tree, checked_file),
+        *checkAnnotationComplexity(tree, checked_file),
+        *checkBoolOpParens(tree, source, checked_file),
+        *checkModuleDocstring(tree, checked_file),
+        *checkFixmeReachability(tree, source, checked_file),
+        *checkDocstringSample(tree, checked_file),
+        *checkProseWording(tree, source, checked_file),
+        *checkReturnContract(tree, source, checked_file),
+    ]
+
+    return [f for f in findings if not (suppressed.get(f.line, set()) & {f.code, 'ALL'})]
+
+
+### vocabulary #########################################################################
+
+
+@dataclass(frozen=True)
+class Finding:
+    checked_file: Path
+    line: int
+    code: str
+    detail: str
+
+    def __str__(self) -> str:
+        return f'{self.checked_file}:{self.line}: {self.code} {self.detail}'
+
+
+if __name__ == '__main__':
+    sys.exit(main())

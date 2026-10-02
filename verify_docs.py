@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent
 
 ### The schema that benchmark/README.md documents. Kept here rather than parsed out of the table,
 ### because a checker that reads its rule from the document it checks proves nothing. The two are
-### compared by a human when either changes; that is cheap, and it already drifted three ways
+### compared by a human when either changes. That is cheap, and it already drifted three ways
 ### without one.
 
 DECISION_FIELDS = ('id', 'dimension', 'round', 'kind', 'options', 'choice', 'strength', 'condition', 'note', 'date')
@@ -79,10 +79,10 @@ def supersededBy(record: dict[str, object]) -> list[str]:
     """Return the ids a decision replaces.
 
     The record type is dict[str, object] because schema values are strings, lists and nulls, so the
-    optional field needs narrowing before it can be walked.
+    optional field must be narrowed before it can be walked.
 
     Returns:
-        The superseded ids, in the order the record lists them. Empty when the field is absent.
+        The superseded ids, in record order. Empty when the field is absent.
     """
     value = record.get('supersedes')
     if not isinstance(value, list):
@@ -107,10 +107,10 @@ def supersessions(decisions: list[dict[str, object]]) -> dict[str, str]:
 
 
 def statesCurrentRules(relative: Path) -> bool:
-    """Report whether a document claims to describe the rules as they stand now.
+    """Report whether a document is a description of the current rules.
 
-    The skill and the top-level README do. A round writeup does not: it records what was decided
-    then, so naming a decision that a later round replaced is the point rather than a defect.
+    The skill and the top-level README are. A round writeup is not: it is a record of what was
+    decided then, so naming a decision that a later round replaced is the point rather than a defect.
     """
     return relative.parts[0] == 'skill' or str(relative) == 'README.md'
 
@@ -118,9 +118,9 @@ def statesCurrentRules(relative: Path) -> bool:
 def declarationPrefix(relative: Path) -> str:
     """Return the decision-id prefix a round directory is allowed to name before any answer exists.
 
-    A `benchmark/round7/` document declares `R7-` ids. That is where a question is born, so it names
-    ids that are not in `decisions.jsonl` yet. Every other document cites, and a citation must
-    resolve. Returns an empty string for a document that only ever cites.
+    `R7-` ids are declared in `benchmark/round7/` documents. That is where a question is born, so
+    those ids are not in `decisions.jsonl` yet. In every other document an id is a citation, and a
+    citation must resolve. Returns an empty string for a document with citations only.
     """
     parts = relative.parts
     if len(parts) < MIN_ROUND_PATH_PARTS or parts[0] != 'benchmark' or not parts[1].startswith('round'):
@@ -148,6 +148,12 @@ def main() -> int:
             registries[name] = {k.value for k in keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
 
     rule_codes, retired = registries['RULES'], registries['RETIRED']
+    # the code of each agentverbs.py finding is its CODE constant
+    for node in ast.parse((ROOT / 'skill/agentverbs.py').read_text()).body:
+        if not isinstance(node, ast.Assign) or getattr(node.targets[0], 'id', '') != 'CODE':
+            continue
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            rule_codes = rule_codes | {node.value.value}
 
     docs = [p for p in ROOT.rglob('*.md') if '.lintenv' not in str(p)]
     cited_ids: set[str] = set()

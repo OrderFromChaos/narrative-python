@@ -9,12 +9,12 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 397 forced choices between
+Every rule cites the decision that produced it. The decisions came from 415 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
 
-The skill is seven files in one directory. Clone the repository first, and run every command below
+The skill is nine files in one directory. Clone the repository first, and run every command below
 from its root.
 
 ```bash
@@ -24,7 +24,7 @@ cd narrative-python
 ./install.sh
 ```
 
-`install.sh` copies the seven files to `~/.claude/skills/narrative`. Give it a path to install
+`install.sh` copies the nine files to `~/.claude/skills/narrative`. Give it a path to install
 somewhere else. It removes a file the skill no longer ships, and names each one it removes.
 
 Invoke it as `/narrative`, or let Claude load it when a task involves Python in this style.
@@ -46,8 +46,8 @@ python3 ~/.claude/skills/narrative/checks.py src/ --select NAR001 --select NAR00
 
 ### The external toolchain needs `uv`
 
-Four tools do the work `checks.py` does not, plus one library they need. Install them into a
-project-local environment:
+Four tools and `agentverbs.py` do the work `checks.py` does not, plus the libraries they need.
+Install them into a project-local environment:
 
 ```bash
 uv venv .lintenv --python 3.11
@@ -65,6 +65,8 @@ your code against a different standard library than the floor this style targets
 | `mypy` | 2.3.1 | type correctness under `--strict` |
 | `vermin` | 1.8.0 | the Python 3.11 floor |
 | `hypothesis` | 6.165.10 | not a linter. The style mandates property tests, and `mypy --strict` needs its stubs |
+| `pendulum` | 3.2.0 | not a linter. Dates and times use it, and `mypy --strict` needs it importable |
+| `spacy`, `en_core_web_md` | 3.8.16, 3.8.0 | the sentence parse behind `agentverbs.py` (`NAR017`) |
 
 The versions are pinned in `requirements-lock.txt`. An unpinned install can change what the config
 means, because ruff moved `[tool.ruff.lint]` in 0.2.
@@ -94,9 +96,10 @@ test for each, a list of what is never a comment, and the sentence form follow. 
 round 10 (`benchmark/round10/`), which measured Claude's comments against human-written ones and
 put 53 forced choices to the author.
 
-**Five wording faults in comments and docstrings are checked**: decision ids (`NAR012`), a dash
-joining clauses (`NAR013`), `deliberately` and its synonyms (`NAR014`), changelog wording
-(`NAR015`), and the container verbs `holds` and `carries` (`NAR016`). Everything else is review judgement. `NAR011` catches the one mechanical
+**Six wording faults in comments and docstrings are checked**: decision ids (`NAR012`), a dash
+or semicolon joining clauses (`NAR013`), `deliberately` and its synonyms (`NAR014`), changelog wording
+(`NAR015`), the container verbs `holds` and `carries` (`NAR016`), and a possessive `own`
+(`NAR018`). Everything else is review judgement. `NAR011` catches the one mechanical
 docstring trap: a body indented past the docstring's column, which `ruff format` flattens, destroying a
 pasted sample. (`R9-09`, `R10-lint`)
 
@@ -134,7 +137,8 @@ It resolves every tool to an absolute path, and exits 2 if a tool is missing or 
 hand-rolled loop reads as a pass. That mistake happened twice while building this.
 
 It runs the tools in the order that converges: `ruff check --fix`, `ruff format`, `pylint`,
-`mypy --strict`, `checks.py`, `vermin`.
+`mypy --strict`, `checks.py`, `vermin`, `agentverbs.py`. After a passing run it lists every comment
+and docstring summary, for the agent to read against the comment rules.
 
 | exit | meaning |
 |---|---|
@@ -145,9 +149,9 @@ It runs the tools in the order that converges: `ruff check --fix`, `ruff format`
 The `vermin` call uses `-t=3.11-` with a trailing hyphen. Without it `vermin` asserts an exact
 match and fails any file that uses no 3.11-only feature.
 
-## The fifteen custom rules
+## The eighteen custom rules
 
-`checks.py` implements what no off-the-shelf tool does.
+`checks.py` implements what no off-the-shelf tool does. `agentverbs.py` implements `NAR017`.
 
 | rule | catches |
 |---|---|
@@ -162,10 +166,13 @@ match and fails any file that uses no 3.11-only feature.
 | `NAR010` | a `FIXME` in code that runs, which is a merge blocker rather than a danger sign |
 | `NAR011` | a docstring body indented past the docstring's column, which `ruff format` flattens, destroying a pasted sample |
 | `NAR012` | a decision id in a comment or docstring, unresolvable outside the repository that recorded it |
-| `NAR013` | a dash joining clauses in a comment or docstring |
+| `NAR013` | a dash or a semicolon joining clauses in a comment or docstring |
 | `NAR014` | `deliberately`, `on purpose`, `by design` or `intentionally` in a comment or docstring |
 | `NAR015` | changelog wording in a comment or docstring: `no longer`, `previously`, `it used to` |
 | `NAR016` | a container verb in a comment or docstring: `holds`, `carries` and their forms |
+| `NAR017` | an agent verb on a subject that cannot act, in a comment or docstring: `a period ranks`, `the report names it`. From a spaCy parse and WordNet word classes |
+| `NAR018` | a possessive `own` in a comment or docstring: `its own`, `the layer's own` |
+| `NAR019` | a return contract written as a comment at the top of a function body, where the docstring belongs |
 
 `NAR000` is not a style rule. It reports a file that could not be read or parsed.
 
@@ -177,7 +184,7 @@ withdrawn and its code stays in a `RETIRED` registry, so a document naming it st
 
 | path | contents |
 |---|---|
-| `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
+| `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `checks.py`, `verify.py`, `agentverbs.py`, `words.json`, `pyproject-snippet.toml`, `requirements-lock.txt` |
 | `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
 | `install.sh` | the list of files the skill contains, and the command that installs them |
 | `benchmark/decisions.jsonl` | all 338 decisions, each with its reasoning and evidence |

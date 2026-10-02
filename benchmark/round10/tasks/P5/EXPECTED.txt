@@ -1,0 +1,10 @@
+canary (base, prod, canary): deprecated key cache.hosts; secret in config db.api_token; removed key db.pool_size;
+  bad rollout flags.new_billing.rollout (120); bad rollout flags.search_v2.rollout (25.0); type change flags.search_v2.rollout (integer in prod, float in canary)
+  no cache.enabled type change: canary skips staging
+prod (base, staging, prod): type change cache.enabled (boolean in base, integer in staging); deprecated key cache.hosts; secret in config db.api_token;
+  removed key db.pool_size; bad rollout experiments.checkout_button (49 + 50); bad rollout flags.new_billing.rollout (120)
+  cache.hosts = ["cache-prod.internal"]
+staging (base, staging): type change cache.enabled; deprecated key cache.hosts; removed key db.pool_size; bad rollout experiments.checkout_button
+totals: 3 environments, 13 errors, 3 warnings; exit 1
+not findings: smtp.smtp_password (empty), cache.token_ttl (does not end in the pattern)
+traps: "1.9.0" <= "1.10.0" is False as strings; True == 1 and 25 == 25.0 in Python; arrays replace

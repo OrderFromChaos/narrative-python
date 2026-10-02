@@ -1,0 +1,8 @@
+cache.enabled = 1
+db.pool.max = 15
+
+[flags.search_v2]
+rollout = 50
+
+[experiments.checkout_button.arms.blue]
+share = 49

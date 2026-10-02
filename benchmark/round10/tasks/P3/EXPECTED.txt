@@ -1,0 +1,4 @@
+keep: 073000Z [hourly daily weekly monthly newest]; 063000Z [hourly]; 043000Z [hourly]; 1105T033000Z [daily]; 1103T033000Z [daily]; 1025 [weekly monthly]
+delete: 1105T053000Z, 1104T120000Z, 1102, 1101, 1018, 0930, 0831
+problems: 1105T090000Z from the future; 1131 unparseable. exit 1
+traps: UTC-hour bucketing keeps 053000Z instead of 043000Z; UTC dates make Nov 3 a daily period; following the symlink 075900Z makes it the newest

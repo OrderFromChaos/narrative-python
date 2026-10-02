@@ -1,0 +1,74 @@
+===== v6_D_1: 5 comments
+--- billing_reconciler/__main__.py:59
+    # read-only: NEVER write inside the input directory
+    |     input_dir = Path(args.input_dir)
+    |     for output_path in (args.report, args.db):
+    |         if output_path.resolve().is_relative_to(input_dir.resolve()):
+--- billing_reconciler/rules.py:50
+    # needs the bool test: JSON true is a Python int
+    |     if isinstance(grace_cents, bool) or not isinstance(grace_cents, int) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- billing_reconciler/store.py:49 (eol)
+            added = connection.total_changes  # counted per connection, so only this call's inserts
+--- billing_reconciler/store.py:66
+    # NULLs never compare equal in a PRIMARY KEY or UNIQUE column: with a composite key over the
+    # nullable columns, every run would insert a duplicate
+    |     finding_key = json.dumps(fields, ensure_ascii=False)
+    |     return (finding_key, *fields, first_seen_at)
+--- billing_reconciler/vocabulary.py:95
+    # a reader returns one FileFailure for a file unreadable as a whole, otherwise one entry per record in file order
+    | FileRead: TypeAlias = FileFailure | tuple[RecordT | RejectedRecord, ...]
+    | 
+    | 
+===== v6_D_2: 10 comments
+--- billrecon/__main__.py:58
+    # read-only: NEVER write inside the input directory
+    |         if output_path.resolve().is_relative_to(input_dir.resolve()):
+    |             parser.error(f'{output_path} is inside the input directory {input_dir}')
+    | 
+--- billrecon/__main__.py:62
+    # each raise site logged its reason
+    |     try:
+    |         reconciliation = reconcile.reconcileDirectory(input_dir, rules_path=args.rules)
+    |     except (InputDirectoryError, RulesError):
+--- billrecon/billing.py:66
+    # the result is the line, or the reason for rejecting it
+    |     CENTS_PATTERN = re.compile(r'[0-9]+')
+    | 
+    |     if len(row) != len(BILLING_HEADER):
+--- billrecon/billing.py:75
+    # fullmatch() on [0-9]: int() accepts '+7', ' 7' and '7_0', and str.isdigit() accepts non-ASCII digits
+    |     if not CENTS_PATTERN.fullmatch(monthly_cents):
+    |         return f'monthly_cents {monthly_cents!r} is not a run of ASCII digits'
+    | 
+--- billrecon/inventory.py:70
+    # adds each accepted record to billing_lines or scanned_resources
+    |     match _detectFormat(path.name):
+    |         case FileFormat.BILLING:
+    |             return _admitRecords(path, FileFormat.BILLING, billing.parseBillingText, billing_lines)
+--- billrecon/join.py:39
+    # one hop: with a -> b and b -> c, a and c resolve to b and c and stay unequal
+    |     aliases = rules.region_aliases
+    |     mismatched = [
+    |         (line, resource)
+--- billrecon/reconcile.py:28
+    # list before reading the rules: a missing input_dir is reported as such, not as a missing rules file
+    |     inventory_paths = inventory.listInventoryFiles(input_dir, applied_rules_path)
+    |     applied_rules = rules.readRules(applied_rules_path)
+    | 
+--- billrecon/rules.py:53
+    # the keys of a JSON object are always strings
+    |     region_aliases = document['region_aliases']
+    |     if not isinstance(region_aliases, dict) or not all(isinstance(alias, str) for alias in region_aliases.values()):
+    |         raise _rejectRules(rules_path, 'region_aliases is not an object of string to string')
+--- billrecon/rules.py:58
+    # needs the bool check; JSON true is a Python int
+    |     if isinstance(grace_cents, bool) or not isinstance(grace_cents, int) or grace_cents < 0:
+    |         raise _rejectRules(rules_path, 'grace_cents is not a non-negative integer')
+    | 
+--- billrecon/scan.py:61
+    # the result is the resource, or the reason for rejecting it
+    |     FIELDS = ('id', 'sku', 'team', 'region')
+    | 
+    |     if not isinstance(entry, dict):

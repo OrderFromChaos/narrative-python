@@ -1,0 +1,80 @@
+===== cycle9/p4_X_1
+Audit pinned dependencies against a license policy, from another program.
+Check every pinned dependency of several services against a license policy.
+Audit the input directory, record the verdicts, write audit.json and print the summary table.
+Audit every pinned dependency in an input directory against a license policy.
+Audit the lock files of `input_dir` against its licenses.json and a policy.
+Judge one pinned release. A release that licenses.json does not list is an unknown license.
+Read licenses.json into a LicenseCatalog, keyed by normalised package name and exact version.
+Parse the license file.
+Parse the calendar dates of the audit, from `--today` and from the `until` of a policy exception.
+raises ValueError for a string that is not YYYY-MM-DD or names no real day
+Parse an SPDX license expression, and test whether a set of license ids satisfies it.
+a parenthesis, or a run of anything else up to whitespace
+Build the tree of one license expression.
+Read one lock file into its pinned entries and its malformed lines.
+Parse every line of one lock file.
+name, '==', version, then an optional '; marker' and an optional '# comment'
+Shared logger of the license audit, with a formatter that prints every extra field.
+Normalise package names and license ids to the forms the audit compares.
+Read policy.json into a Policy, and judge a license expression against it.
+Parse the policy file.
+Judge one license expression of one package against the policy on a date.
+Render an audit as the audit.json document and as the summary table for stdout.
+Lay out every entry that is not allowed, then the totals.
+Record the verdicts of an audit in a SQLite database.
+Insert one row per audited entry.
+Types that the modules of the license audit pass between them.
+PEP 503 normalised: lower case, separators folded to '-'
+case-folded SPDX license id, for comparison only
+file name of a lock file inside the input directory
+as written in licenses.json
+as written in policy.json
+None when licenses.json lists no expression for the release
+The input directory, a lock file, licenses.json or policy.json cannot be used, so no audit runs.
+A license expression does not follow the grammar of ids, AND, OR and parentheses.
+===== cycle9/p4_X_2
+Audit pinned dependencies against a license policy, as a library.
+Audit the pinned dependencies of several services against a license policy.
+Run the audit named on the command line and write its outputs.
+echoed into audit.json as typed
+Audit every lock file of an input directory against a license policy.
+Audit the *.lock files of input_dir against licenses.json and the policy as it stands today.
+Judge one pin, or give it an unknown license when the catalog lists no license for its release.
+Render an Audit as the text of audit.json.
+Render audit, with raw_input_dir echoed as the input_dir the user typed.
+Parse a YYYY-MM-DD calendar date.
+Read licenses.json into the license expression of each release.
+Read licenses.json, keyed by release with the package name normalised.
+Read an input file of the audit, and reject one that cannot be used.
+stacklevel=2 attributes the record to the raise site in the caller
+Parse an SPDX license expression, and decide whether it can be satisfied.
+Parse expression_text, or return None when it is not well formed.
+Decide whether the ids that usable() accepts satisfy expression without any other id.
+one precedence level: operands joined by operator
+an OR operand is an AND chain, so AND binds tighter
+index of the first token after the expression
+Read the pins of one lock file.
+Read the pins and the malformed lines of one lock file, both in line order.
+environment marker
+inline comment
+splitlines() would also split at form feeds and other separators, which shifts line numbers
+Log to stderr as an event name followed by key=value fields, sorted by key.
+Validate a package name and normalise it by the PEP 503 rule.
+PEP 508
+Read policy.json into a Policy, and judge a license expression against it.
+Read policy.json.
+Judge one license expression of package against the policy as it stands today.
+denied when every way to satisfy the expression needs a denied id
+Decide whether license_id is allowed, or excepted for package through today.
+Read one entry of the exceptions list.
+Record the verdicts of an Audit in a SQLite database, one row per entry.
+Insert one row per audit entry, creating the table on first use.
+COALESCE: a unique index treats every NULL as distinct, so unknown-license rows would repeat
+Render the entries of an Audit that are not allowed, then its totals, as a table for a terminal.
+Render the flagged entries in audit order, then the totals line.
+The types that the modules of the license audit pass between them.
+PEP 503 normalised
+file name of a lock file, without its directory
+lower case
+None when licenses.json lists no license for the release

@@ -231,7 +231,9 @@ almost every constant, including the ones that belong at module level. This is r
   arithmetic on amounts. (R10-money-cents)
 
 - **Dates and times use `pendulum`**, unless `datetime` is tightly integrated with the repository,
-  so that removing it would be hard. Replace a small `datetime` use with `pendulum`. (R10-pendulum)
+  so that removing it would be hard. Replace a small `datetime` use with `pendulum`. A library that
+  returns `datetime` values, such as `tomllib`, `sqlite3` or a JSON decoder, is a boundary: convert
+  each value to pendulum where it enters. (R10-pendulum, R10-pendulum-boundary)
 
 - `Enum` for closed sets, `.value` at serialisation boundaries. Not `Literal`, not `StrEnum`. (R2-08)
 
@@ -250,10 +252,24 @@ almost every constant, including the ones that belong at module level. This is r
   `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` and width alone admits
   `tuple[dict[str, str], list[str]]`. One number catches both.
 
-  **The DB-API is the standing exception.** `sqlite3.executemany` takes a sequence per row, so
-  `list[tuple[str, str, float, float, int, int]]` names seven things and has no dataclass form —
-  passing one raises `ProgrammingError: parameters are of unsupported type`. Give the row shape a
-  named alias so it reads, and suppress the finding with that reason. (`R8-D27`)
+  **The DB-API is the standing exception.** `sqlite3.executemany` takes a sequence per row and
+  raises `ProgrammingError: parameters are of unsupported type` on a dataclass. Instead, use a
+  `NamedTuple` for rows: it is a tuple, so `executemany` takes it, and its fields have names. Use
+  `?` placeholders, and say why in a comment. (`R8-D27`, `R10-namedtuple-rows`)
+
+  ```python
+  # sqlite3.Cursor.executemany does not support dataclasses, so NamedTuple is used instead
+  class FindingRow(NamedTuple):
+      path: str
+      line: int
+      code: str
+      detail: str
+
+
+  def storeFindings(connection: sqlite3.Connection, rows: list[FindingRow]) -> None:
+      connection.executemany('INSERT INTO findings VALUES (?, ?, ?, ?)', rows)
+      connection.commit()
+  ```
 
   The type then decides the fix. **A callable becomes a `Protocol`.** **Anything else — any kind of
   iterable — becomes a dataclass.**
@@ -653,7 +669,9 @@ Before writing or rewording a comment, in order:
 2. **Guarantee it in code.** Establish a cheap precondition, such as sorted input, upstream in the
    call flow, and write no comment. Not in the function that relies on it: an index lookup doesn't
    sort its own input. A comment warning of a trap the code could remove: remove the trap instead.
-   (R10-Q19, R10-footgun)
+   If explaining how the code works takes more than one plain clause, rewrite the code instead: name
+   the step, or use the obvious construct. A `dict` filled with `setdefault()` and sliced by insertion
+   order becomes an explicit loop that counts periods. (R10-Q19, R10-footgun, R10-hard-comment)
 3. **Match a kind.** Write a comment only if it is one of the four **Comment kinds**, passes that
    kind's test, and is not under **Never**. Deleting is a valid outcome of a rewrite.
 4. **Set the depth and sentence form** by **Depth** and **Sentence form**.
@@ -701,17 +719,35 @@ Before writing or rewording a comment, in order:
 - future needs nobody has documented or planned (R10-Q15)
 - reassurance that a weakness is fine; `deliberately`, `on purpose` (R10-candor, R10-Q20, `NAR014`)
 - guarantees about other modules. Put them in the module docstring or `architecture.md`. (R10-Q24, R10-Q11)
+- how one function uses a type, written on the type: `member order is the order plan.json lists a
+  snapshot's rules` belongs with the function that writes plan.json, or nowhere if that function
+  states the order itself (R10-usage-placement)
 - illustrations of a decision just discussed in the session (R10-Q21)
-- a function's return contract. State it in the docstring, and only if the return type doesn't make it obvious. (R10-return-contract)
+- a function's return contract. State it in the docstring, and only if the return type doesn't make it obvious. (R10-return-contract, `NAR019`)
 
-**Depth:** in proportion to the idea's difficulty for the reader, and one step of reason.
-`# signed error` on a rolling mean, more on a novel method. (R10-Q16, R10-seed-2)
+**Depth:** in proportion to the idea's difficulty for the reader. `# signed error` on a rolling
+mean, more on a novel method. When the reader needs the consequence or the action as well as the
+fact, write a second sentence, as a block of full sentences:
+```python
+# logging.NullHandler() stops the last-resort handler from printing this package's warnings.
+# They reach stderr only when the calling program configures logging.
+LOG.addHandler(logging.NullHandler())
+```
+A one-line comment stays one clause. (R10-Q16, R10-seed-2, R10-depth-sentences)
 
 **Sentence form:**
 - a one-line `#` comment: lowercase start, no period. Several lines, and every docstring: sentences. (R10-Q26, R10-Q35, R10-docstrings)
 - terse: drop articles where nothing is lost (R10-seed-10)
 - possessives and noun compounds over relative clauses: `the archive's collections`, `in read order` (R10-seed-1, R10-seed-9, R10-Q32)
 - trade terms over paraphrase: `has no side effects`. Modifiers before the noun: `JSONL logs`. (R10-seed-3, R10-seed-4)
+- the conclusion, not the derivation: state what the code means, not how it gets there.
+  `None when malformed`, not `None when a malformed line names no customer as a string`. If a
+  clause names an internal check, structure or attribute, cut it unless the reader needs it to act.
+  (R10-conclusion)
+- no intensifiers: drop a word that only stresses, such as `exactly`, `always`, `precisely` or
+  `simply`. Keep it when the sentence means something else without it: `exactly two decimal places`.
+  (R10-intensifiers)
+- the full term when a short form is ambiguous: `timezone`, not `zone` (R10-clipped-terms)
 - contractions; imperative; no `we` (R10-Q28, R10-Q29)
 - callables as `name()`; no article before an identifier (R10-Q30, R10-Q35)
 - only names the reader can resolve from the comment's position (R10-Q22, R10-Q21)
@@ -720,22 +756,35 @@ Before writing or rewording a comment, in order:
   `holds`, `carries`, `keeps its`, `costs`. Write `a module has one function`, not
   `a module holding one function`. These words are examples; the test is whether the subject can
   perform the verb. (R10-Q31, R10-Q39, R10-seed-1, R10-seed-6, R10-seed-15, R10-skill-gaps)
-- no `is what`, no `its own` (R10-Q40, R10-Q41)
+- no `is what`, no `its own` (R10-Q40, R10-Q41, `NAR018`)
 - the general case: `records are separated by blank lines`, not `two records` (R10-Q40)
 - a worked example matches what the code does for every case it shows: not `with a->b and b->c,
   a and c compare unequal` when a and b also compare unequal (R10-worked-example)
-- semicolon only between connected clauses, otherwise two sentences; never a dash (R10-Q33, `NAR013`)
+- no semicolon and no dash: write two sentences (R10-no-semicolon, `NAR013`)
 - a Fence as what the simpler code would do wrong: `# without the bool test, JSON true passes as 1`,
   `# isdigit() alone admits non-ASCII digits such as '²'`. Code the file doesn't run takes `would`:
   `# read_text() would translate newlines, which alters a newline quoted inside a CSV field` (R10-fence-form)
 - directly above the statement it concerns, not above its enclosing block: inside `try:`, above the
-  call it concerns, not above `try:`. End-of-line for a short note. (R10-Q34, R10-locality, R10-fence-form)
+  call it concerns, not above `try:`. A comment on an argument goes above the call that passes it:
+  above `pendulum.parse(raw_at, tz=None)`, not below the `try` block. End-of-line for a short note.
+  (R10-Q34, R10-locality, R10-fence-form, R10-argument-placement)
 
-`NAR012` to `NAR016` flag five wording faults in comments and docstrings, and a clean run is no
+`NAR012` to `NAR016` and `NAR018` flag six wording faults in comments and docstrings, and a clean run is no
 evidence about the rest of these lists. Check every comment and docstring you write or touch against
 them. A dash after a list-item term is allowed. `NAR015` also flags `no longer` about data; such a
 sentence usually gives data an agent verb, so reword it. Silence a false positive with
-`# noqa: NARxxx`. (R10-lint, R10-skill-gaps, R10-list-dash, R10-nar015-scope, R10-nar016)
+`# noqa: NARxxx`. (R10-lint, R10-skill-gaps, R10-list-dash, R10-nar015-scope, R10-nar016, R10-nar018)
+
+`NAR017`, from `agentverbs.py`, the seventh check `verify.py` runs, flags an agent verb on a
+subject that cannot act: a noun that is not a person, with a verb for something only a mind does
+(`a period ranks`, `the report names it`, `a policy can judge`). Documents get no exception: write
+`named in the report`. It parses the sentence, so it also flags some noun compounds and
+participles. Silence those with `# noqa: NAR017`. (R10-agentverb-check)
+
+**Before you finish, read the list `verify.py` prints after a passing run**: every comment and
+docstring summary in the code. For each one, name the subject and the verb and ask whether that
+subject can perform that verb. Then test the sentence against **Sentence form** and the comment
+against the restatement gate. Fix what fails and run `verify.py` again. (R10-prose-inventory)
 
 ## Logging
 
@@ -851,7 +900,8 @@ absent. **Do not replace it with a loop that greps tool output for findings**: a
 missing config then produces empty output, which reads as a pass.
 
 It runs, in the order that converges: `ruff check --fix`, `ruff format`, `pylint`, `mypy --strict`,
-`checks.py`, `vermin`.
+`checks.py`, `vermin`, `agentverbs.py`. After a passing run it lists every comment and docstring
+summary (**Comments**).
 
 | exit | meaning |
 |---|---|

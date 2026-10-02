@@ -1,0 +1,108 @@
+--- skill/SKILL.md
++++ skill/SKILL.md
+@@ -754,6 +754,17 @@
+ sentence usually gives data an agent verb, so reword it. Silence a false positive with
+ `# noqa: NARxxx`. (R10-lint, R10-skill-gaps, R10-list-dash, R10-nar015-scope, R10-nar016, R10-nar018)
+ 
++`NAR017`, the seventh check `verify.py` runs, flags an agent verb on a subject that cannot act: a
++noun that is not a person, with a verb for something only a mind does (`a period ranks`, `the report names it`,
++`a policy can judge`). Documents get no exception: write `named in the report`. It parses the
++sentence, so it also flags some noun compounds and participles; silence those with
++`# noqa: NAR017`.
++
++**Before you finish, read the list `verify.py` prints after a passing run**: every comment and
++docstring summary in the code. For each one, name the subject and the verb and ask whether that
++subject can perform that verb; then test the sentence against **Sentence form** and the comment
++against the restatement gate. Fix what fails and run `verify.py` again.
++
+ ## Logging
+ 
+ One stable event name plus structured `extra={...}` fields, never an f-string of prose. The
+--- skill/checks.py
++++ skill/checks.py
+@@ -74,12 +74,20 @@
+     parser = argparse.ArgumentParser(description='Style checks that ruff, pylint and mypy do not implement.')
+     parser.add_argument('paths', nargs='+', type=Path)
+     parser.add_argument('--select', action='append', choices=sorted(RULES), help='only report these rules')
++    parser.add_argument('--prose', action='store_true', help='list every comment and docstring summary line')
+     args = parser.parse_args()
+ 
+     targets: list[Path] = []
+     for target in args.paths:
+         targets.extend(sorted(discoverPython(target)) if target.is_dir() else [target])
+ 
++    if args.prose:
++        for checked_file in targets:
++            shown = checked_file.relative_to(Path.cwd()) if checked_file.is_relative_to(Path.cwd()) else checked_file
++            for number, text in proseInventory(checked_file):
++                print(f'{shown}:{number}: {text}')
++        return 0
++
+     findings: list[Finding] = []
+     for checked_file in targets:
+         findings.extend(checkFile(checked_file))
+@@ -707,6 +715,28 @@
+     return findings
+ 
+ 
++def proseInventory(checked_file: Path) -> list[tuple[int, str]]:
++    """List every comment and the first line of every docstring in one file, in line order.
++
++    Returns:
++        Line number and text, or nothing for a file that cannot be read or parsed.
++    """
++    try:
++        source = checked_file.read_text(encoding='utf-8')
++        tree = ast.parse(source)
++    except (OSError, UnicodeDecodeError, SyntaxError):
++        return []
++
++    summaries: list[tuple[int, str]] = []
++    for node in ast.walk(tree):
++        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++            continue
++        docstring = ast.get_docstring(node)
++        if docstring and isinstance(node.body[0], ast.Expr):
++            summaries.append((node.body[0].lineno, docstring.splitlines()[0]))
++    return sorted([*commentLines(source), *summaries])
++
++
+ def commentLines(source: str) -> list[tuple[int, str]]:
+     lines: list[tuple[int, str]] = []
+     for token in tokenize.generate_tokens(io.StringIO(source).readline):
+--- skill/verify.py
++++ skill/verify.py
+@@ -99,6 +99,8 @@
+     results.append(gradeChecks(run([sys.executable, str(checker), *targets])))
+     vermin_cmd = [toolchain.paths['vermin'], '--no-tips', f'-t={PYTHON_FLOOR}-', '--violations']
+     results.append(gradeVermin(run([*vermin_cmd, *targets])))
++    agent_verbs = Path(__file__).resolve().parent / 'agentverbs.py'
++    results.append(gradeAgentVerbs(run([str(args.venv / 'bin' / 'python'), str(agent_verbs), *targets])))
+ 
+     width = max(len(r.tool) for r in results)
+     for result in results:
+@@ -116,6 +118,9 @@
+         return EXIT_FINDINGS
+ 
+     print(f'\nall {len(results)} checks passed')
++    inventory = run([sys.executable, str(checker), '--prose', *targets])
++    print('\n--- every comment and docstring summary: read each against SKILL.md, Comments ---')
++    print(inventory.text.rstrip() or '(none)')
+     return EXIT_SUCCESS
+ 
+ 
+@@ -224,6 +229,14 @@
+     return Result('checks.py', output.code == 0, 'clean' if output.code == 0 else f'{found} findings', output.text)
+ 
+ 
++def gradeAgentVerbs(output: Output) -> Result:
++    if output.code == 0:
++        return Result('agentverbs', True, 'clean', output.text)
++    findings = sum(1 for line in output.text.splitlines() if ': NAR017 ' in line)
++    summary = f'{findings} findings' if findings else 'did not run (spaCy or its model missing)'
++    return Result('agentverbs', False, summary, output.text)
++
++
+ def gradeVermin(output: Output) -> Result:
+     # `--violations` matters. Without it vermin fails any file it cannot date, such as one using no
+     # version-specific syntax at all, which it reports as `~2, ~3` and treats as target-not-met.
