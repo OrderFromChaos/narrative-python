@@ -31,39 +31,39 @@ A Streamlit tab from [gtnh-seedlib](https://github.com/OrderedSet86/gtnh-seedlib
 **Without the skill:**
 
 ```python
-    st.subheader("Everything that fed the score")
-    # "(top scorer)" is a sentinel rather than a seed id, so it re-resolves every run and follows the
-    # ranking as the metric is edited — which is what you want while tinkering. Picking an explicit
-    # seed pins it, because the selectbox is keyed and Streamlit keeps a keyed widget's value across
-    # reruns. Two behaviours, one widget, no extra checkbox to get out of sync.
-    seed_opts = [TOP_SCORER, "(all seeds combined)"] + [r["seed"] for r in rows]
-    if st.session_state.get("loot_breakdown") not in seed_opts:
-        st.session_state["loot_breakdown"] = TOP_SCORER  # source or limit changed; the pin is stale
-    which = st.selectbox(
-        "Breakdown for", seed_opts, key="loot_breakdown",
-        help="Defaults to whichever seed currently ranks first and follows it as you edit the "
-             "metric. Select a specific seed to pin it across reruns.")
+st.subheader("Everything that fed the score")
+# "(top scorer)" is a sentinel rather than a seed id, so it re-resolves every run and follows the
+# ranking as the metric is edited — which is what you want while tinkering. Picking an explicit
+# seed pins it, because the selectbox is keyed and Streamlit keeps a keyed widget's value across
+# reruns. Two behaviours, one widget, no extra checkbox to get out of sync.
+seed_opts = [TOP_SCORER, "(all seeds combined)"] + [r["seed"] for r in rows]
+if st.session_state.get("loot_breakdown") not in seed_opts:
+    st.session_state["loot_breakdown"] = TOP_SCORER  # source or limit changed; the pin is stale
+which = st.selectbox(
+    "Breakdown for", seed_opts, key="loot_breakdown",
+    help="Defaults to whichever seed currently ranks first and follows it as you edit the "
+          "metric. Select a specific seed to pin it across reruns.")
 ```
 
 **With the skill:**
 
 ```python
-    st.subheader('Score breakdown by item')
-    breakdown_options = [TOP_SCORER, ALL_SEEDS, *(row['seed'] for row in rows)]
-    # after a change of source, seed limit or Min requirements, a pinned seed can be absent from the options
-    if st.session_state.get(BREAKDOWN_KEY) not in breakdown_options:
-        st.session_state[BREAKDOWN_KEY] = TOP_SCORER
-    # Streamlit restores a keyed widget's value on every rerun, so a seed id as the default would stay
-    # selected after the ranking changes. TOP_SCORER is mapped to the current first seed on each run.
-    selection = st.selectbox(
-        'Breakdown for',
-        breakdown_options,
-        key=BREAKDOWN_KEY,
-        help=(
-            f'{TOP_SCORER} is the seed in first place on each run, so it changes as you edit the metric. '
-            'Select a seed to pin the breakdown to it across reruns.'
-        ),
-    )
+st.subheader('Score breakdown by item')
+breakdown_options = [TOP_SCORER, ALL_SEEDS, *(row['seed'] for row in rows)]
+# after a change of source, seed limit or Min requirements, a pinned seed can be absent from the options
+if st.session_state.get(BREAKDOWN_KEY) not in breakdown_options:
+    st.session_state[BREAKDOWN_KEY] = TOP_SCORER
+# Streamlit restores a keyed widget's value on every rerun, so a seed id as the default would stay
+# selected after the ranking changes. TOP_SCORER is mapped to the current first seed on each run.
+selection = st.selectbox(
+    'Breakdown for',
+    breakdown_options,
+    key=BREAKDOWN_KEY,
+    help=(
+        f'{TOP_SCORER} is the seed in first place on each run, so it changes as you edit the metric. '
+        'Select a seed to pin the breakdown to it across reruns.'
+    ),
+)
 ```
 
 ## Claude's comments, with and without the skill
