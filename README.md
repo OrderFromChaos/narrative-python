@@ -4,8 +4,7 @@
 human-like comments.**
 
 Narrative is a Claude Code skill. With it, Claude writes each module as a document you read from the
-top down: `main()` first, then the steps it calls in call order, then the types. A pipeline of
-linters checks every run.
+top down: `main()` first, then the steps it calls in call order, then the types.
 
 ## What you get
 
