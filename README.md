@@ -9,7 +9,7 @@ The module leaves nothing for the reader to infer. Side effects carry a `global`
 over a closed set is exhaustive, `__init__` declares every attribute, and one boundary gate parses
 untrusted input into a frozen dataclass.
 
-Every rule cites the decision that produced it. The decisions came from 276 forced choices between
+Every rule cites the decision that produced it. The decisions came from 397 forced choices between
 real working programs, not from preference stated in the abstract.
 
 ## Install
@@ -21,18 +21,16 @@ from its root.
 git clone git@github.com:OrderFromChaos/narrative-python.git
 cd narrative-python
 
-mkdir -p ~/.claude/skills/narrative
-cp skill/SKILL.md skill/architecture.md skill/tooling.md \
-   skill/checks.py skill/verify.py \
-   skill/requirements-lock.txt \
-   skill/pyproject-snippet.toml \
-   ~/.claude/skills/narrative/
+./install.sh
 ```
+
+`install.sh` copies the seven files to `~/.claude/skills/narrative`. Give it a path to install
+somewhere else. It removes a file the skill no longer ships, and names each one it removes.
 
 Invoke it as `/narrative`, or let Claude load it when a task involves Python in this style.
 
-**To update, run the same `cp` again.** Nothing detects a stale install, and a skill installed at an
-earlier version keeps its old rules with no warning. `git pull && cp ...` is the whole procedure.
+**To update, run `git pull && ./install.sh`.** Nothing detects a stale install, and a skill installed
+at an earlier version keeps its old rules with no warning.
 
 ## Dependencies
 
@@ -81,15 +79,26 @@ cp ~/.claude/skills/narrative/pyproject-snippet.toml pyproject.toml   # new proj
 The settings are not defaults and several are load-bearing. `tooling.md` records why each one is
 there and what breaks without it.
 
-### Docstring prose
+### Comments and docstring prose
 
-Docstrings are written for a professional developer who has the file open, so trade vocabulary is
-correct and a plain-English circumlocution around it is not. `SKILL.md` carries the rules: what a
-docstring body may say, what it may not, and the tests that cut a sentence.
+Comments and docstrings are written for a smart, experienced developer who has the file open, so
+trade vocabulary is correct and a plain-English circumlocution around it is not.
 
-**No tool checks prose, and none is coming.** Docstring quality is review judgement; `verify.py`
-reads Python files only. `NAR011` catches the one mechanical trap — a docstring body indented past
-its own column, which `ruff format` flattens and which silently destroys a pasted sample. (`R9-09`)
+Claude's comments tend to record the reasoning it did while writing: edge cases, alternatives and
+spec gaps. The rules in `SKILL.md`, **Comments**, open with a test (what information does this
+comment provide over the code itself?) and two paragraphs against this: that reasoning is a
+thinking trace for the report to the user, and a comment a smart reader would get from the code
+below it is cut. In blind ratings over four runs per variant, the author cut 0 of 18 comments
+written with both paragraphs, against 11 of 28 with the cut rule alone. Four comment kinds with a
+test for each, a list of what is never a comment, and the sentence form follow. They come from
+round 10 (`benchmark/round10/`), which measured Claude's comments against human-written ones and
+put 53 forced choices to the author.
+
+**Five wording faults in comments and docstrings are checked**: decision ids (`NAR012`), a dash
+joining clauses (`NAR013`), `deliberately` and its synonyms (`NAR014`), changelog wording
+(`NAR015`), and the container verbs `holds` and `carries` (`NAR016`). Everything else is review judgement. `NAR011` catches the one mechanical
+docstring trap: a body indented past the docstring's column, which `ruff format` flattens, destroying a
+pasted sample. (`R9-09`, `R10-lint`)
 
 ### Python version
 
@@ -136,7 +145,7 @@ It runs the tools in the order that converges: `ruff check --fix`, `ruff format`
 The `vermin` call uses `-t=3.11-` with a trailing hyphen. Without it `vermin` asserts an exact
 match and fails any file that uses no 3.11-only feature.
 
-## The ten custom rules
+## The fifteen custom rules
 
 `checks.py` implements what no off-the-shelf tool does.
 
@@ -151,7 +160,12 @@ match and fails any file that uses no 3.11-only feature.
 | `NAR007` | `and` inside `or` without parentheses |
 | `NAR009` | a missing module docstring, or a runnable module with no usage example. An empty `__init__.py` and a single-def module are exempt |
 | `NAR010` | a `FIXME` in code that runs, which is a merge blocker rather than a danger sign |
-| `NAR011` | a docstring body indented past the docstring's own column, which `ruff format` flattens, destroying a pasted sample |
+| `NAR011` | a docstring body indented past the docstring's column, which `ruff format` flattens, destroying a pasted sample |
+| `NAR012` | a decision id in a comment or docstring, unresolvable outside the repository that recorded it |
+| `NAR013` | a dash joining clauses in a comment or docstring |
+| `NAR014` | `deliberately`, `on purpose`, `by design` or `intentionally` in a comment or docstring |
+| `NAR015` | changelog wording in a comment or docstring: `no longer`, `previously`, `it used to` |
+| `NAR016` | a container verb in a comment or docstring: `holds`, `carries` and their forms |
 
 `NAR000` is not a style rule. It reports a file that could not be read or parsed.
 
@@ -165,7 +179,8 @@ withdrawn and its code stays in a `RETIRED` registry, so a document naming it st
 |---|---|
 | `skill/` | the deliverable: `SKILL.md`, `architecture.md`, `tooling.md`, `checks.py`, `verify.py`, `pyproject-snippet.toml`, `requirements-lock.txt` |
 | `skill/architecture.md` | the multi-module rules: 70 decisions from round 7, loaded only when a program spans files |
-| `benchmark/decisions.jsonl` | all 276 decisions, each with its reasoning and evidence |
+| `install.sh` | the list of files the skill contains, and the command that installs them |
+| `benchmark/decisions.jsonl` | all 338 decisions, each with its reasoning and evidence |
 | `benchmark/GAPS.md` | gaps found by writing real programs against the skill, and what each rule became |
 | `benchmark/round1/` | 24 forced-choice snippet questions |
 | `benchmark/round2b/` | side-by-side comparisons that settled specific rules |

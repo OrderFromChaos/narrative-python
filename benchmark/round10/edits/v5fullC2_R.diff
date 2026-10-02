@@ -1,0 +1,32 @@
+diff --git a/pristine/v5fullC2/reconciler/join.py b/v5fullC2_R/reconciler/join.py
+index a0f097a..ba876ee 100644
+--- a/pristine/v5fullC2/reconciler/join.py
++++ b/v5fullC2_R/reconciler/join.py
+@@ -31,7 +31,7 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+     Returns:
+         The billed_not_found findings sorted by (-monthly_cents, resource_id), then the
+         found_not_billed findings sorted by (team, resource_id), then the region_mismatch findings
+-        sorted by resource_id, then the sku_mismatch findings sorted by resource_id.
++        sorted by resource_id, then the sku_mismatch findings sorted by (-monthly_cents, resource_id).
+     """
+     joinable = [record for record in records if record.sku not in reconcile_rules.ignored_skus]
+     billed = _indexByResourceId(record for record in joinable if record.origin is InventoryFormat.BILLING_CSV)
+@@ -107,12 +107,17 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+                 ),
+             )
+ 
+-    billed_not_found.sort(key=lambda finding: (-(finding.monthly_cents or 0), finding.resource_id))
++    billed_not_found.sort(key=_buildCostSortKey)
+     found_not_billed.sort(key=lambda finding: (finding.team or '', finding.resource_id))
++    sku_mismatch.sort(key=_buildCostSortKey)
+     findings = tuple(billed_not_found + found_not_billed + region_mismatch + sku_mismatch)
+     return findings
+ 
+ 
++def _buildCostSortKey(finding: Finding) -> tuple[int, str]:
++    return (-(finding.monthly_cents or 0), finding.resource_id)
++
++
+ def _indexByResourceId(records: Iterable[InventoryRecord]) -> dict[ResourceId, InventoryRecord]:
+     indexed: dict[ResourceId, InventoryRecord] = {}
+     for record in records:

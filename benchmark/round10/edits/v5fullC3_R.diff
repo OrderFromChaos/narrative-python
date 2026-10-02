@@ -1,0 +1,81 @@
+diff --git a/pristine/v5fullC3/reconciler/join.py b/v5fullC3_R/reconciler/join.py
+index 3376828..cca6c23 100644
+--- a/pristine/v5fullC3/reconciler/join.py
++++ b/v5fullC3_R/reconciler/join.py
+@@ -5,8 +5,8 @@ takes part in no match and appears in no finding, and a resource_id that both si
+ keeps the last record read.
+ 
+ A scanned resource whose team is ignored by the rules is excluded the same way, and so is every
+-billing line for its resource_id, unless a scanned resource of another team states that resource_id
+-too.
++billing line for its resource_id, unless a scanned resource of a team that is not ignored states that
++resource_id too. A team matches ignoring case and surrounding spaces.
+ 
+ A finding carries the fields the side that produced it had: a billed_not_found finding names a cost
+ and no team, and a found_not_billed finding names a team and no cost.
+@@ -16,6 +16,7 @@ from __future__ import annotations
+ 
+ from collections.abc import Iterable
+ 
++from reconciler import rules
+ from reconciler.logs import LOG
+ from reconciler.vocabulary import (
+     Finding,
+@@ -39,13 +40,13 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+     scanned = _indexByResourceId(
+         record
+         for record in joinable
+-        if record.origin is InventoryFormat.SCAN_JSON and record.team not in reconcile_rules.ignored_teams
++        if record.origin is InventoryFormat.SCAN_JSON and not rules.teamIgnored(record.team, reconcile_rules)
+     )
+     # A billing line carries no team, so it is exempt only through the scanned resource it would match.
+     exempt = {
+         record.resource_id
+         for record in joinable
+-        if record.origin is InventoryFormat.SCAN_JSON and record.team in reconcile_rules.ignored_teams
++        if record.origin is InventoryFormat.SCAN_JSON and rules.teamIgnored(record.team, reconcile_rules)
+     } - scanned.keys()
+     billed = _indexByResourceId(
+         record
+diff --git a/pristine/v5fullC3/reconciler/rules.py b/v5fullC3_R/reconciler/rules.py
+index dac042d..0422f06 100644
+--- a/pristine/v5fullC3/reconciler/rules.py
++++ b/v5fullC3_R/reconciler/rules.py
+@@ -7,9 +7,10 @@
+       "grace_cents": 500
+     }
+ 
+-`ignored_teams` is optional and stands for an empty list when absent. The other three keys are
+-required, and the first malformed key stops the read. `region_aliases` maps one spelling of a region
+-to the other, and a region the file does not name stands for itself.
++`ignored_teams` is optional and stands for an empty list when absent, and it matches a team ignoring
++case and surrounding spaces. The other three keys are required, and the first malformed key stops
++the read. `region_aliases` maps one spelling of a region to the other, and a region the file does
++not name stands for itself.
+ `grace_cents` is the cost at or below which a billed_not_found finding is recorded and does not
+ fail the run.
+ """
+@@ -68,7 +69,7 @@ def readRules(rules_path: Path) -> ReconcileRules:
+ 
+     reconcile_rules = ReconcileRules(
+         ignored_skus=frozenset(Sku(sku) for sku in ignored_skus),
+-        ignored_teams=frozenset(TeamName(team) for team in ignored_teams),
++        ignored_teams=frozenset(_foldTeamName(team) for team in ignored_teams),
+         region_aliases={RegionName(alias): RegionName(region) for alias, region in region_aliases.items()},
+         grace_cents=Cents(grace_cents),
+     )
+@@ -83,6 +84,14 @@ def aboveGrace(finding: Finding, reconcile_rules: ReconcileRules) -> bool:
+     return finding.monthly_cents is not None and finding.monthly_cents > reconcile_rules.grace_cents
+ 
+ 
++def teamIgnored(team: TeamName | None, reconcile_rules: ReconcileRules) -> bool:
++    return team is not None and _foldTeamName(team) in reconcile_rules.ignored_teams
++
++
++def _foldTeamName(team: str) -> TeamName:
++    return TeamName(team.strip().casefold())
++
++
+ def _rejectRules(rules_path: Path, reason: str) -> RulesFileError:
+     LOG.error('rules.rejected', extra={'path': str(rules_path), 'reason': reason})
+     return RulesFileError(f'{rules_path}: {reason}')

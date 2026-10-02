@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent
 ### without one.
 
 DECISION_FIELDS = ('id', 'dimension', 'round', 'kind', 'options', 'choice', 'strength', 'condition', 'note', 'date')
-DECISION_ROUNDS = frozenset({'1', '2', '2b', '3', '3a', '4', '5', '6', '7', '8', '9', 'validation'})
+DECISION_ROUNDS = frozenset({'1', '2', '2b', '3', '3a', '4', '5', '6', '7', '8', '9', '10', 'validation'})
 DECISION_KINDS = frozenset({'control', 'gap', 'provocation', 'derived'})
 DECISION_STRENGTHS = frozenset({'strong', 'weak'})
 NULLABLE_FIELDS = frozenset({'condition', 'note', 'strength'})
@@ -36,7 +36,7 @@ def schemaProblems(decisions: list[dict[str, object]]) -> list[str]:
     """Report every decision record that does not match the schema in benchmark/README.md.
 
     The evidence base gets the same treatment as a pyproject.toml: present and unchecked is how a
-    document becomes wrong. The `round` field held both ints and strings before this ran.
+    document becomes wrong.
     """
     problems: list[str] = []
     known = {record['id'] for record in decisions}
@@ -78,7 +78,7 @@ def schemaProblems(decisions: list[dict[str, object]]) -> list[str]:
 def supersededBy(record: dict[str, object]) -> list[str]:
     """Return the ids a decision replaces.
 
-    The record type is dict[str, object] because the schema holds strings, lists and nulls, so the
+    The record type is dict[str, object] because schema values are strings, lists and nulls, so the
     optional field needs narrowing before it can be walked.
 
     Returns:
@@ -119,7 +119,7 @@ def declarationPrefix(relative: Path) -> str:
     """Return the decision-id prefix a round directory is allowed to name before any answer exists.
 
     A `benchmark/round7/` document declares `R7-` ids. That is where a question is born, so it names
-    ids that `decisions.jsonl` cannot hold yet. Every other document cites, and a citation must
+    ids that are not in `decisions.jsonl` yet. Every other document cites, and a citation must
     resolve. Returns an empty string for a document that only ever cites.
     """
     parts = relative.parts
@@ -130,7 +130,7 @@ def declarationPrefix(relative: Path) -> str:
 
 
 def main() -> int:
-    """Report any citation, code block or count in the docs that no longer matches its source."""
+    """Report any citation, code block or count in the docs that doesn't match its source."""
     problems: list[str] = []
 
     decisions = [json.loads(line) for line in (ROOT / 'benchmark/decisions.jsonl').open()]
@@ -159,7 +159,7 @@ def main() -> int:
         rel = doc.relative_to(ROOT)
         own_prefix = declarationPrefix(rel)
 
-        for token in re.findall(r'\b(?:Q\d{2}|R\d[a-z]?-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*|V-\d\d)\b', text):
+        for token in re.findall(r'\b(?:Q\d{2}|R\d{1,2}[a-z]?-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*|V-\d\d)\b', text):
             if own_prefix and token.startswith(own_prefix):
                 declared_ids.add(token)
                 continue

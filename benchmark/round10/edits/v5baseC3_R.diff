@@ -1,0 +1,89 @@
+diff --git a/pristine/v5baseC3/reconcile/join.py b/v5baseC3_R/reconcile/join.py
+index d8d1568..3aaed37 100644
+--- a/pristine/v5baseC3/reconcile/join.py
++++ b/v5baseC3_R/reconcile/join.py
+@@ -10,6 +10,8 @@ A scanned resource whose team is in `ignored_teams` leaves the join the same
+ way. A billing line carries no team, so a billing line leaves with it when its
+ resource id names a scanned resource that left for its team. Without that, the
+ team's own resource would come back as a `billed_not_found` finding.
++
++A record that both rules exclude counts once, as ignored for its sku.
+ """
+ 
+ from __future__ import annotations
+@@ -50,23 +52,28 @@ def reconcile(
+         for resource in scanned
+         if rules.is_ignored_team(resource.team)
+     }
++    billed_skus = [line for line in billing if not rules.is_ignored(line.sku)]
++    found_skus = [
++        resource for resource in scanned if not rules.is_ignored(resource.sku)
++    ]
+     billed = {
+         line.resource_id: line
+-        for line in billing
+-        if not rules.is_ignored(line.sku) and line.resource_id not in ignored_by_team
++        for line in billed_skus
++        if line.resource_id not in ignored_by_team
+     }
+     found = {
+         resource.resource_id: resource
+-        for resource in scanned
+-        if not rules.is_ignored(resource.sku)
+-        and resource.resource_id not in ignored_by_team
++        for resource in found_skus
++        if resource.resource_id not in ignored_by_team
+     }
+ 
+     stats = JoinStats(
+         billing_lines=len(billing),
+         scanned_resources=len(scanned),
+-        ignored_billing=len(billing) - len(billed),
+-        ignored_scanned=len(scanned) - len(found),
++        ignored_billing=len(billing) - len(billed_skus),
++        ignored_scanned=len(scanned) - len(found_skus),
++        team_ignored_billing=len(billed_skus) - len(billed),
++        team_ignored_scanned=len(found_skus) - len(found),
+         matched=len(billed.keys() & found.keys()),
+     )
+ 
+diff --git a/pristine/v5baseC3/reconcile/model.py b/v5baseC3_R/reconcile/model.py
+index f95fea2..6e9d18e 100644
+--- a/pristine/v5baseC3/reconcile/model.py
++++ b/v5baseC3_R/reconcile/model.py
+@@ -126,6 +126,8 @@ class JoinStats:
+     scanned_resources: int = 0
+     ignored_billing: int = 0
+     ignored_scanned: int = 0
++    team_ignored_billing: int = 0
++    team_ignored_scanned: int = 0
+     matched: int = 0
+ 
+     def as_dict(self) -> dict[str, Any]:
+@@ -134,6 +136,8 @@ class JoinStats:
+             "scanned_resources": self.scanned_resources,
+             "ignored_billing": self.ignored_billing,
+             "ignored_scanned": self.ignored_scanned,
++            "team_ignored_billing": self.team_ignored_billing,
++            "team_ignored_scanned": self.team_ignored_scanned,
+             "matched": self.matched,
+         }
+ 
+diff --git a/pristine/v5baseC3/reconcile/report.py b/v5baseC3_R/reconcile/report.py
+index d6fc33e..e7e493d 100644
+--- a/pristine/v5baseC3/reconcile/report.py
++++ b/v5baseC3_R/reconcile/report.py
+@@ -125,9 +125,11 @@ def _summary_block(result: Reconciliation) -> str:
+     lines = [
+         "SUMMARY",
+         f"  billing lines     {stats.billing_lines} "
+-        f"({stats.ignored_billing} ignored)",
++        f"({stats.ignored_billing} ignored, "
++        f"{stats.team_ignored_billing} ignored for team)",
+         f"  scanned resources {stats.scanned_resources} "
+-        f"({stats.ignored_scanned} ignored)",
++        f"({stats.ignored_scanned} ignored, "
++        f"{stats.team_ignored_scanned} ignored for team)",
+         f"  matched           {stats.matched}",
+         f"  findings          {len(result.findings)} ({by_kind})",
+         f"  above grace       {len(result.actionable)} "

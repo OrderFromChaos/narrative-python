@@ -290,22 +290,12 @@ Real dependencies in tests (`R2-02`, `R7-C08`) need no adjustment at module scal
 
 ## Comments
 
-**Never write a decision citation into code you write for another project.** (`R7-D04-comments`,
-`R7-D04-comments-scope`) A file the skill generates is user code wherever it sits, and `(Q08)` is
-unlookupable outside the benchmark. **Keep the reason and drop the citation.**
+The comment rules are in `SKILL.md`, **Comments**, including the ban on decision citations
+(`NAR012`).
 
-**The reason a comment carries is why the program behaves this way** — the constraint from outside,
-the format the vendor chose, the failure that a reader would otherwise reintroduce. **It is never
-why the file conforms to a rule in these documents.** "Two audits can hold two databases at once" is
-a fact about the program. "so this is a class and not a module" argues with the style guide, and the
-reader wants the program explained rather than the rulebook. This applies to every rule here: the
-architecture rules are statements about relationships between files, and transcribing one into a
-module docstring makes a claim that the next commit falsifies. `SKILL.md` states the rule that
-governs docstring scope. (`R9-02`)
-
-One exception, and it is narrow: a program may name a rule it **implements**. `checks.py` says
-"that case is `NAR006`'s, not this one's", where `NAR006` is its own identifier rather than a
-cross-reference. Naming your own code is not a citation.
+Exception: a program may name a rule it **implements**. `checks.py` has the comment
+`names bound in the function are locals, covered by NAR006`, where `NAR006` is its own identifier.
+Naming your own code is not a citation.
 
 ## Not architecture, learned alongside
 

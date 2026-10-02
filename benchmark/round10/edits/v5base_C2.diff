@@ -1,0 +1,272 @@
+diff --git a/pristine/v5base/reconcile/__init__.py b/v5base_C2/reconcile/__init__.py
+index cc1481c..37dc85a 100644
+--- a/pristine/v5base/reconcile/__init__.py
++++ b/v5base_C2/reconcile/__init__.py
+@@ -2,7 +2,8 @@
+ 
+ Matches what a cloud bill charges for against what an asset scan found, and
+ reports every mismatch: a billing line with no resource, a resource with no
+-billing line, and a pair that disagrees about the region.
++billing line, a pair that disagrees about the region, and a pair that disagrees
++about the sku.
+ 
+ Command line:
+ 
+diff --git a/pristine/v5base/reconcile/join.py b/v5base_C2/reconcile/join.py
+index 900ad88..1038a03 100644
+--- a/pristine/v5base/reconcile/join.py
++++ b/v5base_C2/reconcile/join.py
+@@ -5,6 +5,9 @@ one record on the other, and the records that fail to match are the report.
+ 
+ A resource whose sku is in `ignored_skus` leaves the join before it starts. It
+ matches nothing and appears in no finding, on either side.
++
++A matched pair is checked for the region and for the sku separately, so one
++resource can produce both a `region_mismatch` and a `sku_mismatch`.
+ """
+ 
+ from __future__ import annotations
+@@ -36,9 +39,11 @@ def reconcile(
+ ) -> JoinResult:
+     """Join the two sides and return every mismatch.
+ 
+-    `billed_not_found` findings come first, the largest cost first. A finding at
+-    or below `grace_cents` is returned like any other, with `above_grace` false,
+-    so the caller can record it without acting on it.
++    `billed_not_found` findings come first, the largest cost first, then
++    `found_not_billed`, `region_mismatch` and `sku_mismatch`. A finding at or
++    below `grace_cents` is returned like any other, with `above_grace` false,
++    so the caller can record it without acting on it. Only a `billed_not_found`
++    finding can be above the grace amount.
+     """
+     billed = {
+         line.resource_id: line for line in billing if not rules.is_ignored(line.sku)
+@@ -61,6 +66,7 @@ def reconcile(
+         _billed_not_found(billed, found, rules)
+         + _found_not_billed(billed, found)
+         + _region_mismatch(billed, found, rules)
++        + _sku_mismatch(billed, found, rules)
+     )
+     return JoinResult(findings=findings, stats=stats)
+ 
+@@ -138,3 +144,35 @@ def _region_mismatch(
+             )
+         )
+     return findings
++
++
++def _sku_mismatch(
++    billed: dict[str, BillingLine],
++    found: dict[str, ScannedResource],
++    rules: Rules,
++) -> list[Finding]:
++    """Both sides matched, but they disagree about the sku.
++
++    The comparison ignores case, as `ignored_skus` does. The finding never sets
++    the exit code, whatever the cost.
++    """
++    findings = []
++    for key in sorted(billed.keys() & found.keys()):
++        line = billed[key]
++        resource = found[key]
++        if rules.same_sku(line.sku, resource.sku):
++            continue
++        findings.append(
++            Finding(
++                kind=FindingKind.SKU_MISMATCH,
++                resource_id=key,
++                sku=line.sku,
++                scanned_sku=resource.sku,
++                monthly_cents=line.monthly_cents,
++                team=resource.team,
++                billed_region=line.region,
++                scanned_region=resource.region,
++                sources=(line.source, resource.source),
++            )
++        )
++    return findings
+diff --git a/pristine/v5base/reconcile/model.py b/v5base_C2/reconcile/model.py
+index f95fea2..7ce2a55 100644
+--- a/pristine/v5base/reconcile/model.py
++++ b/v5base_C2/reconcile/model.py
+@@ -25,11 +25,12 @@ class MalformedInputError(Exception):
+ 
+ 
+ class FindingKind(str, Enum):
+-    """The three kinds of mismatch the reconciler reports."""
++    """The four kinds of mismatch the reconciler reports."""
+ 
+     BILLED_NOT_FOUND = "billed_not_found"
+     FOUND_NOT_BILLED = "found_not_billed"
+     REGION_MISMATCH = "region_mismatch"
++    SKU_MISMATCH = "sku_mismatch"
+ 
+ 
+ @dataclass(frozen=True)
+@@ -56,7 +57,12 @@ class ScannedResource:
+ 
+ @dataclass(frozen=True)
+ class Finding:
+-    """One mismatch between the two sides of the join."""
++    """One mismatch between the two sides of the join.
++
++    `sku` is the sku of the side that holds the record, and the billed sku when
++    both sides hold one. `scanned_sku` is set only on a `sku_mismatch`, where
++    the two differ.
++    """
+ 
+     kind: FindingKind
+     resource_id: str
+@@ -65,6 +71,7 @@ class Finding:
+     team: str | None = None
+     billed_region: str | None = None
+     scanned_region: str | None = None
++    scanned_sku: str | None = None
+     above_grace: bool = False
+     sources: tuple[str, ...] = ()
+ 
+@@ -88,6 +95,7 @@ class Finding:
+             "team": self.team,
+             "billed_region": self.billed_region,
+             "scanned_region": self.scanned_region,
++            "scanned_sku": self.scanned_sku,
+             "above_grace": self.above_grace,
+             "sources": list(self.sources),
+         }
+diff --git a/pristine/v5base/reconcile/report.py b/v5base_C2/reconcile/report.py
+index d6fc33e..f375a18 100644
+--- a/pristine/v5base/reconcile/report.py
++++ b/v5base_C2/reconcile/report.py
+@@ -68,6 +68,7 @@ def _findings_block(result: Reconciliation) -> str:
+             finding.kind.value,
+             finding.resource_id,
+             finding.sku,
++            finding.scanned_sku or "-",
+             finding.team or "-",
+             _money(finding.monthly_cents),
+             finding.billed_region or "-",
+@@ -77,9 +78,19 @@ def _findings_block(result: Reconciliation) -> str:
+         for finding in result.findings
+     ]
+     table = _table(
+-        ["kind", "resource", "sku", "team", "monthly", "billed", "scanned", "grace"],
++        [
++            "kind",
++            "resource",
++            "sku",
++            "scanned sku",
++            "team",
++            "monthly",
++            "billed",
++            "scanned",
++            "grace",
++        ],
+         rows,
+-        aligns="llllrlll",
++        aligns="lllllrlll",
+     )
+     return "FINDINGS\n" + table
+ 
+diff --git a/pristine/v5base/reconcile/rules.py b/v5base_C2/reconcile/rules.py
+index 37f17c8..33a74b9 100644
+--- a/pristine/v5base/reconcile/rules.py
++++ b/v5base_C2/reconcile/rules.py
+@@ -57,6 +57,9 @@ class Rules:
+     def same_region(self, left: str, right: str) -> bool:
+         return self.canonical_region(left) == self.canonical_region(right)
+ 
++    def same_sku(self, left: str, right: str) -> bool:
++        return left.strip().lower() == right.strip().lower()
++
+     def as_dict(self) -> dict[str, Any]:
+         return {
+             "ignored_skus": sorted(self.ignored_skus),
+diff --git a/pristine/v5base/reconcile/store.py b/v5base_C2/reconcile/store.py
+index 2e417f9..453abff 100644
+--- a/pristine/v5base/reconcile/store.py
++++ b/v5base_C2/reconcile/store.py
+@@ -8,6 +8,10 @@ instead of inserting a second one.
+ `last_seen_at` moves to the time of the latest run that found it again. A row
+ whose `last_seen_at` is older than the latest run is a mismatch that the inputs
+ no longer show.
++
++A database written before a column existed is brought forward when the store
++opens it: each missing column is added, and the rows already there keep their
++values, with the new column empty.
+ """
+ 
+ from __future__ import annotations
+@@ -28,6 +32,7 @@ CREATE TABLE IF NOT EXISTS findings (
+     monthly_cents  INTEGER,
+     billed_region  TEXT,
+     scanned_region TEXT,
++    scanned_sku    TEXT,
+     above_grace    INTEGER NOT NULL,
+     sources        TEXT    NOT NULL,
+     first_seen_at  TEXT    NOT NULL,
+@@ -39,19 +44,27 @@ CREATE TABLE IF NOT EXISTS findings (
+ UPSERT = """
+ INSERT INTO findings (
+     kind, resource_id, sku, team, monthly_cents, billed_region,
+-    scanned_region, above_grace, sources, first_seen_at, last_seen_at
+-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++    scanned_region, scanned_sku, above_grace, sources, first_seen_at,
++    last_seen_at
++) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ ON CONFLICT (kind, resource_id) DO UPDATE SET
+     sku            = excluded.sku,
+     team           = excluded.team,
+     monthly_cents  = excluded.monthly_cents,
+     billed_region  = excluded.billed_region,
+     scanned_region = excluded.scanned_region,
++    scanned_sku    = excluded.scanned_sku,
+     above_grace    = excluded.above_grace,
+     sources        = excluded.sources,
+     last_seen_at   = excluded.last_seen_at;
+ """
+ 
++# Columns added after the first release, with their declarations. A database
++# written before one of them existed gets it from `_bring_forward`.
++ADDED_COLUMNS = {
++    "scanned_sku": "TEXT",
++}
++
+ 
+ @dataclass(frozen=True)
+ class StoreStats:
+@@ -81,6 +94,7 @@ def record_findings(
+     with closing(sqlite3.connect(db_path)) as connection:
+         connection.execute("PRAGMA foreign_keys = ON;")
+         connection.executescript(SCHEMA)
++        _bring_forward(connection)
+ 
+         known = {
+             (kind, resource_id)
+@@ -124,6 +138,19 @@ def read_findings(db_path: Path) -> list[dict[str, object]]:
+     return [dict(row) for row in rows]
+ 
+ 
++def _bring_forward(connection: sqlite3.Connection) -> None:
++    """Add to an existing `findings` table each column it is missing."""
++    present = {
++        row[1] for row in connection.execute("PRAGMA table_info(findings);")
++    }
++    with connection:
++        for name, declaration in ADDED_COLUMNS.items():
++            if name not in present:
++                connection.execute(
++                    f"ALTER TABLE findings ADD COLUMN {name} {declaration};"
++                )
++
++
+ def _row(finding: Finding, seen_at: str) -> tuple[object, ...]:
+     return (
+         finding.kind.value,
+@@ -133,6 +160,7 @@ def _row(finding: Finding, seen_at: str) -> tuple[object, ...]:
+         finding.monthly_cents,
+         finding.billed_region,
+         finding.scanned_region,
++        finding.scanned_sku,
+         int(finding.above_grace),
+         ",".join(finding.sources),
+         seen_at,

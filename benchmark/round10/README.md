@@ -1,0 +1,485 @@
+# Round 10 — comments
+
+Forced choices on `#` comments and their sentence form. Every question is built from a comment Claude
+wrote. The resulting rules are `skill/SKILL.md`, **Comments**, and cover docstring prose too
+(R10-docstrings); R9-10's rules on what a docstring body contains are unchanged.
+
+| file | contents |
+|---|---|
+| `harvest.py` | the extractor. It writes `corpus.jsonl` |
+| `corpus.jsonl` | one record per comment block, with its source, arm, length and placement |
+| `classes.jsonl` | the taxonomy code and verdict of each prose block, from a classifier agent |
+| `edits/` | the Python diff of every edit run, against the copy it started from |
+| `seeds.md` | comment pairs the user rewrote by hand |
+| `questions.md`, `key.md` | the questions, and what each one probes |
+| `prototypes/` | three layouts of the rules put to the user. C was chosen (R10-structure) and matches `SKILL.md` |
+| `rating.md`, `rating_key.md` | a blind sample of new-skill, old-skill and no-skill comments, and its sources |
+
+## Sources
+
+| source | what | blocks of prose |
+|---|---|---|
+| `fresh` | every Python file in the validation arms, `experiment/length`, `benchmark/round3` and the tooling, as it stands | 246 |
+| `history` | blocks a later commit added to a tooling file that already existed | 24 |
+| `edit` | comments and docstrings an edit run added | 10 |
+
+The edit runs reuse the change requests in `validation/harness/changes/`:
+- C1–C4 ran on v5 `base` and v6 `base` without the skill, and on v5 `full` with it. C5 ran on each
+  arm's own C1 output. Each run is one agent that saw only its own copy and the request.
+- Each C1–C4 agent then received one reviewer reversal of a decision it had reported, such as "compare
+  skus case-sensitively" or "put the parser back in `billing_csv.py`". The reversal diff is against
+  the agent's own pre-reversal copy. Those runs are named `<arm><change>_R`.
+- `COMMON.md` asks every run to report what it changed, which may prime changelog voice. It stays,
+  because that is the setting the comments are written in.
+
+## Length
+
+Prose blocks only, in words.
+
+| arm | blocks | median | p90 | max |
+|---|---|---|---|---|
+| `base` (no guidance) | 32 | 6 | 20 | 26 |
+| `doc` (V1/V2 style doc) | 22 | 22 | 36 | 37 |
+| `skill` | 53 | 18 | 33 | 56 |
+| `full` | 42 | 18 | 32 | 37 |
+| `narrative` (`experiment/length`) | 27 | 31 | 42 | 45 |
+| `round3` | 32 | 20 | 39 | 77 |
+| `tooling` | 30 | 28 | 49 | 73 |
+| `history` | 24 | 31–42 per commit | | 73 |
+
+**Guidance makes comments longer and more frequent.** Unguided arms write about 0.4 comments per 100
+lines at a median of 6 words; guided arms write 1.0–1.3 at 18. Most guided blocks take the shape
+"X, so Y" or "X because Y", and the reason clause is where the length is. The skill's rule that a
+comment states *why* (R9-02, the rule those arms ran under) asks for exactly that clause.
+
+## Where changelog voice comes from
+
+**Generated code has almost none.** The classifier marks 7 fresh blocks F2a. Two are in round 3
+arms: `now lives inside that function` (copied across three variants) and `removes the lock the
+threaded version needed`. The other five are in tooling Claude edited across sessions, such as
+`` NOT `-q`: ... so a failing file scored zero `` (`validation/prepare_blind.py:85`) and
+`... read as a clean arm for three rounds` (`validation/score_arms.py:69`).
+
+**One-shot edits hold none.** The 15 change runs add 10 `#` blocks and none says "now", "no longer" or
+"used to". What they add instead is data history, which is legitimate:
+`a database written before account_id existed has the table without the column`.
+
+The 12 reversals add no `#` block at all. Where a reversal made a comment false, the agent deleted
+it: v6 `base` C1 dropped `str.splitlines() is not used: ...` along with the code it explained.
+
+**Reversals leak the reversed decision without a changelog word (F2b).** After a reviewer reversed
+one of its decisions, the agent rewrote the docstring around it, and the new text argues with the old
+decision:
+- `The comparison is exact and case-sensitive, so Compute-Std and compute-std differ.`
+- `Every reported value except account_id goes into the key`
+- `ignored_skus, by contrast, matches exactly`
+
+Each one answers the reviewer, not a reader who never saw the review.
+
+**Literal changelog wording (F2a) comes from long sessions.** Every instance with "now", "is not any
+more" or "the old X" is in `history`: tooling that Claude edited across many turns with the user.
+- `` `raises` was a trigger and is not any more. `` (`7dfdb3e:skill/checks.py:370`)
+- `The floor is now 3.11 so tomllib is available` (`skill/verify.py:150`, still in the tree)
+- `demanding them is what made the old raises trigger cost 61 lines in a 124-line module`
+  (`7dfdb3e:skill/checks.py:331`)
+
+## Taxonomy
+
+| code | name |
+|---|---|
+| F1 | restates the code |
+| F2a | literal changelog: a previous state of the code, or the act of changing it |
+| F2b | conversation residue: text that answers a decision just discussed or reversed |
+| F3 | justifies style-guide compliance |
+| F4 | leaked citation |
+| F5 | over-long: more than one idea, or more words than the claim needs |
+| F6 | hedged, chatty or rhetorical |
+| F7 | non-local claim that nothing checks |
+| F8 | argues with an alternative that is not in the file |
+| F9 | instruction aimed at a maintainer |
+| F10 | oversells: reassures or argues the code is fine where a weakness exists (R10-candor) |
+| K1 | block label |
+| K2 | a reason the code cannot show: outside constraint, library quirk, data history |
+| K4 | field, unit or nullability annotation |
+| K5 | test-case annotation |
+| K6 | tool directive with prose |
+| K7 | TODO / FIXME, and any admitted weakness. Claude writes these about 12 times less often than human developers. |
+
+F9 was left open for the questions. R10-Q12 dropped a maintainer instruction (weakly), and R10-Q15 bans speculating about what another team will do.
+
+### Counts
+
+A classifier agent coded every prose block and every `history` and `edit` docstring: 434 records.
+A record can carry several codes. It was told the user finds most of Claude's comments too long, so
+its verdicts lean strict. Its verdicts are not decisions; the questions are.
+
+| code | fresh | history | edit |
+|---|---|---|---|
+| F1 restates | 26 | 11 | 4 |
+| F2a changelog | 7 | 10 | 0 |
+| F2b residue | 10 | 16 | 5 |
+| F3 style justification | 34 | 0 | 1 |
+| F4 citation | 6 | 9 | 0 |
+| F5 over-long | 69 | 39 | 4 |
+| F6 hedged or chatty | 21 | 13 | 2 |
+| F7 non-local | 31 | 7 | 18 |
+| F8 absent alternative | 29 | 14 | 4 |
+| F9 maintainer instruction | 6 | 4 | 0 |
+| K1 block label | 28 | 5 | 1 |
+| K2 reason the code cannot show | 152 | 29 | 34 |
+| K4 annotation | 18 | 0 | 10 |
+| K5 test case | 8 | 0 | 0 |
+
+| verdict | fresh | history | edit |
+|---|---|---|---|
+| keep | 110 | 13 | 106 |
+| trim | 90 | 47 | 14 |
+| cut | 46 | 6 | 2 |
+
+**Most fixes are trims of a real reason, not deletions.** Of the 90 fresh blocks marked trim, 74
+carry a real reason (K2), and 42 of the 69 over-long blocks do too. Most of the time the comment
+should exist and is written too long.
+
+Re-run the extraction with:
+
+    $ python3 benchmark/round10/harvest.py --edits <directory of edit runs>
+
+## Claudish: Claude's comments against human ones
+
+`sessions` is a fourth source, kept outside the repository because it contains the user's private code:
+every comment line Claude added through Edit, Write or MultiEdit across the user's Claude Code
+transcripts, 29 projects. Only tool inputs were read. The baseline is professional, almost entirely
+pre-LLM Python: the CPython 3.14 standard library (without `encodings/` and `idlelib/`) and the mypy,
+pylint and astroid sources.
+
+Rates are per 100 comment blocks. `Claude #` is Python, shell and config files only. `Claude all`
+adds `//` languages, mostly Java and TypeScript.
+
+| feature | Claude # | Claude all | human | ratio |
+|---|---|---|---|---|
+| blocks | 2,578 | 6,305 | 22,891 | |
+| median words | 24 | 31 | 9 | |
+| p90 words | 83 | 101 | 29 | |
+| blocks of more than one sentence | 45% | 56% | 15% | 3.1 |
+| `, not` contrast | 10.7 | 10.0 | 0.4 | 24 |
+| dash (` -- ` or `—`) | 23.9 | 34.4 | 1.0 | 23 |
+| absolutes: every, never, whole, exactly | 31.1 | 46.5 | 1.6 | 19 |
+| `the one` / `one place` | 2.2 | 2.8 | 0.1 | 18 |
+| deliberately, on purpose, by design | 2.1 | 3.1 | 0.1 | 17 |
+| `rather than` / `instead of` | 18.2 | 21.4 | 1.1 | 16 |
+| `, so` joining clauses | 32.9 | 42.3 | 3.3 | 10 |
+| semicolon | 18.5 | 27.5 | 2.5 | 7 |
+| agentive verb: finds, knows, wants, sees, asks, decides, owns | 2.3 | 4.9 | 0.3 | 7 |
+| container verb: holds, carries, lives, keeps, names, states | 11.3 | 13.1 | 2.0 | 6 |
+| intensifier: genuine, real, actually, really, truly | 8.3 | 11.2 | 1.5 | 6 |
+| article before a backticked identifier | 2.8 | 1.3 | 0.6 | 5 |
+| `because` | 9.2 | 10.2 | 2.4 | 4 |
+| passive (`is`/`are`/`was`/`be` + `-ed`) | 26.0 | 35.5 | 14.7 | 1.8 |
+| changelog: now, no longer, used to, the old | 2.9 | 4.9 | 2.7 | 1.1 |
+| hedge: usually, likely, probably, might, seems | 0.3 | 0.5 | 2.4 | 0.1 |
+| first person: we, our, us, I | 2.0 | 3.6 | 22.8 | 0.1 |
+| TODO, NOTE, FIXME, XXX, HACK | 0.1 | 0.1 | 3.7 | 0.03 |
+
+**Words and pairs Claude overuses most**, by Dunning log-likelihood: `rather than`, `so the`,
+`is the`, `is what`, `its own`, `which is`, `reads as`, `the whole`, `what makes`, `does not`,
+`nothing`, `against`, `every`, `own`, `per`.
+
+**Words and pairs Claude underuses most**: `we`, `if`, `need to`, `will`, `should`, `don't`,
+`it's`, `to avoid`, `make sure`, `in case`, `note that`, `todo`, `if the`, `so we`.
+
+What the two lists show:
+- **Claude writes argument.** Its comments are full declarative sentences that assert, contrast and
+  conclude: `X, not Y`, `X rather than Y`, `X, so Y`, `the one place`, `every`, `never`,
+  `deliberately`.
+- **Human developers write working notes.** Their comments are short fragments that state a
+  condition or a purpose and talk to a colleague: `if the`, `need to`, `to avoid`, `in case`, `we`,
+  `don't`, `TODO`.
+- **Claude never hedges, never contracts and never says `we`.** Seed pair 2 adds the human features
+  back: a `NOTE:` marker, a contraction, an imperative, and one clause of reason.
+- **Claude almost never admits a weakness.** TODO, FIXME, XXX, `known limitation`, `workaround`,
+  `untested` or `approximate` appear in 0.3% of its blocks and 3.7% of human ones. Its certainty
+  claims (`always`, `never`, `cannot`, `impossible`) run at 2.7 times the human rate. The user rules
+  that a known weakness is stated, as a TODO naming the fix, rather than justified (R10-candor).
+- **Literal changelog wording is not the distinguishing feature.** Its rate is about the human one.
+  Claude is distinguished by the contrastive argument around a change, which is F2b and F8.
+
+Caveat: some of the session projects loaded the Narrative skill or a style instruction, so part of
+the `Claude` column is guided output. The fresh-arm numbers above separate guided from unguided
+writing for this repository's tasks.
+
+## Trial: procedural against priority framing
+
+Prototype C opens its steps with "Before writing a comment, in order:". The user asked whether that
+framing makes an agent walk the four steps aloud for every comment. Two copies of the skill differed
+only in that framing: `procedural` (C as accepted) and `priority` (the same items as an "Order of
+preference" list). A third copy, `current`, is the skill as it stands. Each ran change requests C2 and
+C4 on v5 `full`, one fresh agent per cell, with no mention of comments in the prompt.
+
+| arm | C2 tokens, tools, time | C4 tokens, tools, time | step mentions in the agent's text |
+|---|---|---|---|
+| current | 116k, 21, 192 s | 111k, 21, 172 s | 0 |
+| procedural | 119k, 20, 202 s | 107k, 20, 159 s | 0 |
+| priority | 130k, 27, 271 s | 109k, 17, 148 s | 0 |
+
+New `#` comments, excluding a comment all three C2 arms edited in place:
+
+| arm | comment |
+|---|---|
+| current C2 | `A database written before sku_mismatch existed has no scanned_sku column.` |
+| current C4 | `Last, where ALTER TABLE puts it in a database from before the column existed.` |
+| current C4 | `CREATE TABLE IF NOT EXISTS leaves a table from an earlier version without the column.` |
+| procedural C2 | `databases written before 2026/10/01 lack the scanned_sku column` |
+| procedural C4 | `databases written before 2026/10/01 lack the account_id column` |
+| priority C2 | `databases written before 2026/10/01 lack the scanned_sku column` |
+| priority C4 | `databases written before 2026/10/01 lack the account_id column, and their rows keep it NULL` |
+
+- **No arm narrated the steps.** Mentions of the step names or the R10-Q25 test in the agents' text
+  and reasoning: 0 in every cell. Cost differences sit within run-to-run spread.
+- **Both C arms wrote the dated data-history form** that R10-Q23 asked for, lowercase without a
+  period. The `current` arm wrote undated history in sentence case, and two of its three comments
+  give code an agent verb (`leaves`, `puts`).
+- **The trial is small.** One agent per cell, and these change requests call for one or two
+  comments each. It shows the framing costs nothing measurable. It cannot rank the two C framings,
+  and the transcripts may not hold all of an agent's reasoning.
+
+## Validation of the shipped rules
+
+The **Comments** section went into `skill/SKILL.md` with `NAR012` to `NAR015` in `checks.py`. The
+validation agents read a copy taken before `R10-skill-gaps`, so it lacked the extension of the steps
+to rewording and the verb principle.
+
+Fresh write of V6 (`validation/v6_report_contract/TASK.md`), one agent per arm:
+
+| arm | `#` comments | per 100 lines | median words | docstring words |
+|---|---|---|---|---|
+| no skill (`base`) | 4 | 0.29 | 14.5 | 2,280 |
+| old skill (`full`) | 7 | 0.53 | 17 | 2,225 |
+| new skill | 2 | 0.18 | 10 | 1,158 |
+
+The new skill's two comments: `read-only: NEVER write inside the input directory` and
+`input_dir_argument stays a str: a Path would normalise what the command line typed`.
+
+**Docstrings changed too, without a rule.** Per 1,000 docstring words, the new skill against the old:
+`rather than` 0.0 against 1.3, `, not` 0.0 against 0.9, `, so` 2.6 against 6.3, absolutes 6.0
+against 13.5, agent and container verbs 5.2 against 11.2.
+
+**The agent-verb fault persisted in edits.** C3 on v5 `full` under the new skill wrote `its billing
+lines leave the report too. A billing line names no team, so it takes the team of the scanned
+resource`, and its reversal wrote `a billing line names no team, so no rule ignores it on its own
+evidence`. The list of example verbs in that copy did not hold `leave`, `names`, `takes` or `ignores`,
+which is the gap `R10-skill-gaps` addresses.
+
+**Reversal residue moved into docstrings.** The C1 reversal (don't strip ledger fields) added no `#`
+comment, and added `A value between tabs is taken exactly as written, with no trimming.` to a module
+docstring. The skill copy these agents read applied the rules to `#` comments only; R10-docstrings extends them to docstrings.
+
+`rating.md` is a blind sample of 15 comments from the three sources; `rating_key.md` gives each item's source.
+
+## Blind rating
+
+The user rated `rating.md` without the key (R10-rating):
+
+| source | keep | trim | cut |
+|---|---|---|---|
+| new skill | 2 | 1 | 3 |
+| old skill | 0 | 1 | 5 |
+| no skill | 0 | 0 | 3 |
+
+Two of the three cut new-skill comments came from edit runs on the copy without R10-skill-gaps, and
+give code an agent verb. The third, `input_dir_argument stays a str: a Path would normalise what the
+command line typed`, is a valid topic, an architecture decision, cut as too inconsequential. The
+user's overall verdict: most comments at this scale restate the code.
+
+## Kinds against lists
+
+Two copies of the current skill differed only in the **Comments** section: `kinds` (four comment
+kinds with a test each, and a never list) and `lists` (the valid and invalid topic lists). Each ran
+the V6 fresh write, C1 and C3 on v5 `full`, and one reviewer reversal per edit.
+
+| version | V6 comments | per 100 lines | median words | edit comments |
+|---|---|---|---|---|
+| kinds | 8 | 0.70 | 11 | 1 |
+| lists | 3 | 0.27 | 13 | 3 |
+
+The kinds V6 run wrote more comments, including `bool is an int subclass, so JSON true would pass
+the int check`, close to one the user cut in the first blind rating. Both versions wrote `billing
+lines name no team` in an edit, a container verb outside the rule's example list. Neither wrote a
+TODO for an edge case its agent reported as unhandled. One run per cell; `rating2.md` is the blind
+sample, `rating2_key.md` its sources.
+
+Rating 2 (R10-rating2): kinds 1 keep, 1 trim, 7 cut; lists 3 keep, 3 cut. Most cut comments
+restate the code in compliant style. The kinds tests gave the writing agent categories to place a
+restatement in (a simple regex as a decoding aid, `bool is an int subclass` as a source fact).
+
+## Instruction cycles
+
+The user's direction (R10-instruction-design): a failed instruction means the instruction is not
+good enough, so design better instructions before choosing between layouts. Each cycle adds short
+stance paragraphs to the shipped skill, all with the restatement gate (R10-restatement-gate), and runs
+the V6 fresh write twice per variant.
+
+**Where the comments come from.** 9 of the 11 comments in the kinds and lists V6 runs repeat an item
+from the agent's own report of decisions where the spec was silent or edge cases it tested: one-hop
+aliases, a boolean `grace_cents`, digit-only cents, NULLs in a SQLite unique key, writing inside the
+input directory. The user's word for them: thinking traces.
+
+### Cycle 1
+
+| variant | stance added | comments per run |
+|---|---|---|
+| G | the gate alone | 4, 4 |
+| R | redirect: decisions go in the report, edge cases in tests, behaviour in names | 6, 1 |
+| S | authorship: the lines you reasoned about feel like they need explaining | 5, 13 |
+| RS | both | 3, 4 |
+
+No variant separates from the run-to-run spread. The same comments recur whatever the stance:
+`bool subclasses int` in 7 of 8 runs, `read-only: NEVER write inside the input directory` in 5,
+one-hop aliases in 4.
+
+### The judge
+
+Five judge prompts tried to reproduce the user's keep/cut line on the 30 rated comments (R10-F02,
+R10-F03): rubric 20 of 30, rubric with examples 21, predict-then-compare 19, content questions 21,
+against a base rate of 21. Reader-intelligence framing moved errors between directions without
+reducing them; the content questions kept every comment the user kept. The refined content-question
+judge, scored before the user rated R10-rating3, reached 10 of 18 against a base rate of 11
+(R10-F04). Its main error came from a clause generalised from two labels ('cut gotcha guards'),
+which the user's reversal on `bool subclasses int` refuted. User ratings remain the measure.
+
+### Cycle 2
+
+Variants, each added after `These rules cover docstring prose too.` with the gate:
+
+- **T**: "**Comments are not thinking traces.** While writing, you reasoned through edge cases,
+  alternatives and spec gaps. That reasoning is a thinking trace: it belongs in your report to the
+  user, not in the code."
+- **Q**: "**A reader arrives at one line with one question.** A comment answers a question a reader
+  would ask at that exact line, and sits on that line. If no reader would ask, write nothing. If a
+  better name would answer it, rename instead."
+- **TQ**: both. **G**: the gate alone, as control.
+
+Measure per variant: comments per run, placement errors (a comment away from the line it concerns,
+R10-locality), then a blind user rating of the distinct comments.
+
+| variant | comments per run | placement errors per run |
+|---|---|---|
+| G | 7, 7 | 4, 0 |
+| T | 7, 6 | 0, 0 |
+| Q | 8, 4 | 0, 0 |
+| TQ | 2, 4 | 1, 1 |
+
+Comments are counted as blocks, without `###` dividers or pragmas; the same count gives cycle 1's
+table. Cycle 2's G differs from cycle 1's G only in the block-label bullet (R10-block-label-size)
+and wrote 7 and 7 against 4 and 4, so the spread between runs of one skill is at least 3.
+TQ's 2 and 4 fall inside that spread. A placement error here is a comment at the top of a function
+body or above an initialisation block when it concerns a later statement; four of the six state
+the function's return contract (`# a returned str is the problem that rejects the row`).
+
+Recurring families: `bool subclasses int` in 8 of 8 runs, `read-only: NEVER write inside the input
+directory` in 6, one-hop aliases and non-ASCII digits in 4 each, enum member order and the
+input_dir echoed as typed in 3 each. Ten comments from families no earlier rating settled are in
+`rating4.md`, with the variants in `rating4_key.md`.
+
+The user rated those ten (R10-rating4). Applying the verdicts of R10-rating3 and R10-rating4 to
+every cycle 2 comment by family:
+
+| variant | comments | kept or trimmed | cut |
+|---|---|---|---|
+| G | 14 | 7 | 7 |
+| T | 13 | 13 | 0 |
+| Q | 12 | 12 | 0 |
+| TQ | 6 | 5 | 1 |
+
+Each family verdict comes from one comment in one context. G_1's cuts are three return contracts at
+the top of a function body and an unclear summary (`for its side`); G_2's are end-of-line notes on a
+dataclass field and a NewType, and a container verb (`a value the finding does not carry`). T and Q wrote about as many comments as G and none of the cut kinds. TQ wrote fewer, and
+TQ_1 left out the read-only rule the other variants wrote in 6 of 8 runs.
+
+### Cycle 3
+
+Two more runs each of G, T and Q with the cycle 2 skills unchanged.
+
+| variant | comments per run | cut by family verdict | not yet rated |
+|---|---|---|---|
+| G | 8, 6 | 3, 0 | 2, 0 |
+| T | 2, 3 | 0, 0 | 0, 0 |
+| Q | 8, 4 | 0, 1 | 2, 0 |
+
+G_3's cuts are two return contracts at the top of a function body and `JSON object keys are always
+strings` (R10-rating3). Q_4's is a NewType note (`a basename, the form the report names a file by`),
+the family cut in R10-rating3. The four comments not yet rated are in `rating5.md`, with the
+variants in `rating5_key.md`.
+
+The user rated them (R10-rating5): G_3 one kept, one cut; Q_3 one cut, one to replace with a rename.
+Cycles 2 and 3 together, four runs per variant:
+
+| variant | comments | cut or replaced by a rename |
+|---|---|---|
+| G | 28 | 11 |
+| T | 18 | 0 |
+| Q | 24 | 3 |
+
+### Cycle 4
+
+Two runs of the folded draft `prototypes/D_cleaned.md`, which drops the Reader paragraph, the Test
+line and the Never list, moving their content into the thinking-trace paragraph, the gate and a
+Placement list.
+
+| run | comments | cut by family verdict | not yet rated |
+|---|---|---|---|
+| D_1 | 5 | 1 | 1 |
+| D_2 | 10 | 5 | 1 |
+
+D_2's cuts are two return contracts, `adds each accepted record to billing_lines or
+scanned_resources`, `list before reading the rules` (R10-rating3) and `the keys of a JSON object are
+always strings` (R10-rating3). Against T's 0 of 18, the user restored the tested section and dropped
+only the Reader paragraph's domain question (R10-cleanup). Both runs wrote the Fence form `needs the
+bool test: JSON true is a Python int` (R10-fence-consequence). The two unrated comments, an
+end-of-line note on `connection.total_changes` and `each raise site logged its reason` above an
+except clause that doesn't log, were hard to judge without more context.
+
+### Cycle 5
+
+Two V6 runs of the shipped section, with R10-fence-form, R10-footgun and R10-worked-example: 6 and 7
+comments. Six of the 13 copy SKILL.md examples word for word (`isdigit() alone admits non-ASCII
+digits such as '²'`, `without the bool test, JSON true passes as 1`, `read_text() would translate
+newlines, …`, the last now inside the `try`), because those examples came from this task. The user
+rated the set fine (R10-rating7) and asked for a task the examples were not drawn from. The worked
+example in one run now matches the code: `with a->b and b->c, a resolves to b and b to c, so a
+matches neither`.
+
+### Cycle 6
+
+Task P1, timesheet to payroll (spec and fixture in the session scratchpad, `task_P1/`): punches
+across a daylight saving change, weeks in local time, a shift length halfway between rounding steps
+(where `round()` rounds to even), and a half-cent gross pay (where `Decimal.quantize()` defaults to
+half-even). None of these appears among the SKILL.md examples. Two runs of the shipped section.
+
+Both runs computed the fixture correctly (11 shifts, 1 duplicate, 4 problems, 1740.27). The user
+kept 17 of their 20 comments (R10-rating8); three reuse SKILL.md example wording where the
+situation recurs. The review also produced six rules outside the comment rules, listed in
+`proposals_payroll.md`: R10-raw-names, R10-path-type, R10-money-cents, R10-pendulum, R10-uv and the
+container-verb check `NAR016` (R10-nar016).
+
+## Open
+
+- Kinds against lists (R10-instruction-design): the cycles ran with kinds plus the gate and T
+  (R10-stance), and lists were not retested with them.
+- The developer-action half of R10-fence-consequence: what a warning such as `# order matters: a
+  repeated resource_id is accepted from the first file only` should tell the reader.
+- The shipped section adds lines no cycle tested in it: the Fence sentence (R10-fence-consequence),
+  the return-contract bullet (R10-return-contract), the Fence form and try placement
+  (R10-fence-form), the footgun rule (R10-footgun) and the worked-example rule
+  (R10-worked-example). Cycle 4 ran the first two inside the folded draft; cycles 5 and 6 ran the
+  shipped section. No run has used the six rules from R10-rating8 yet.
+- R10-rating6 judged the wording of the 18 comments from the T runs; the user rated their style
+  poorly overall.
+- Unconfirmed generalisations in **Sentence form** and **Depth**: "one step of reason" (from R10-Q16
+  and R10-seed-2; R10-Q16 made depth depend on the reader) and "drop articles where nothing is lost"
+  (one rewrite, R10-seed-10).
+- What the user keeps, from R10-rating3 to R10-rating5 and R10-F03: outside facts, rules for future
+  changers, facts not visible from the comment's position, gotcha guards the reader does not already
+  know (R10-audience), and a one-line summary above a dense comprehension.
+- `install.sh` has not been run, so `~/.claude/skills/narrative` holds the skill from before round 10.
+- Raw run outputs (cycle packages, validation runs, judge files, the session corpus) are in the
+  session scratchpad, not the repository.

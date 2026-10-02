@@ -1,0 +1,214 @@
+diff --git a/pristine/v5baseC1/reconcile/__init__.py b/v5baseC1_C5/reconcile/__init__.py
+index de6fe14..894333b 100644
+--- a/pristine/v5baseC1/reconcile/__init__.py
++++ b/v5baseC1_C5/reconcile/__init__.py
+@@ -17,8 +17,8 @@ Program:
+     record_findings(Path("reconcile.db"), result.findings, result.generated_at)
+     payload = build_report(result)
+ 
+-The modules under this package hold one concern each: `billing`, `ledger` and
+-`scan` read the three input formats, `rules` reads the rules file, `loader`
++The modules under this package hold one concern each: `billing`, `ledger`,
++`charges` and `scan` read the four input formats, `rules` reads the rules file, `loader`
+ walks the input directory, `join` matches the two sides, `store` writes SQLite,
+ `report` builds the table and the JSON, and `cli` is the command-line tool.
+ """
+@@ -26,6 +26,7 @@ walks the input directory, `join` matches the two sides, `store` writes SQLite,
+ from __future__ import annotations
+ 
+ from .billing import read_billing_file
++from .charges import read_charges_file
+ from .join import JoinResult, reconcile
+ from .ledger import read_ledger_file
+ from .loader import Inventory, load_inventory
+@@ -63,6 +64,7 @@ __all__ = [
+     "load_inventory",
+     "load_rules",
+     "read_billing_file",
++    "read_charges_file",
+     "read_findings",
+     "read_ledger_file",
+     "read_scan_file",
+diff --git a/pristine/v5baseC1/reconcile/billing.py b/v5baseC1_C5/reconcile/billing.py
+index fd57fa8..b78ed93 100644
+--- a/pristine/v5baseC1/reconcile/billing.py
++++ b/v5baseC1_C5/reconcile/billing.py
+@@ -61,8 +61,8 @@ def read_billing_file(path: Path) -> tuple[list[BillingLine], list[str]]:
+ def read_row(row: dict[str, str | None], number: int, source: str) -> BillingLine:
+     """Validate one record keyed by the names in `COLUMNS`.
+ 
+-    The ledger reader uses this too, so both finance formats accept and reject
+-    the same records. Raises `ValueError` naming the bad field.
++    The ledger and charges readers use this too, so every finance format accepts
++    and rejects the same records. Raises `ValueError` naming the bad field.
+     """
+     values = {
+         (name or "").strip().lower(): (value or "").strip()
+diff --git a/v5baseC1_C5/reconcile/charges.py b/v5baseC1_C5/reconcile/charges.py
+new file mode 100644
+index 0000000..7e77390
+--- /dev/null
++++ b/v5baseC1_C5/reconcile/charges.py
+@@ -0,0 +1,75 @@
++"""Reader for the third finance export, `*.charges.psv`.
++
++The file has a header row, then one charge per line as four pipe-separated
++fields:
++
++    resource_id|sku|monthly_cents|region
++
++A line whose first non-whitespace character is `#` is a comment, before or
++after the header. A blank line holds nothing. Like `*.billing.csv`, the format
++carries a cost and no owning team, so each record becomes a `BillingLine` and
++joins as one.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++from . import billing
++from .model import BillingLine, MalformedInputError
++
++SUFFIX = ".charges.psv"
++SEPARATOR = "|"
++FIELD_COUNT = len(billing.COLUMNS)
++
++
++def is_charges_file(path: Path) -> bool:
++    return path.name.lower().endswith(SUFFIX)
++
++
++def read_charges_file(path: Path) -> tuple[list[BillingLine], list[str]]:
++    """Read one charges file.
++
++    Returns the lines that parsed and a message for each line that did not. A
++    bad line is skipped; the rest of the file is still read.
++
++    Raises `MalformedInputError` if the file cannot be opened, is not UTF-8
++    text, holds no header row, or has a header that is not the four names of
++    `billing.COLUMNS` in that order.
++    """
++    try:
++        text = path.read_text(encoding="utf-8")
++    except (OSError, UnicodeDecodeError) as error:
++        raise MalformedInputError(f"cannot read file: {error}") from error
++
++    records = [
++        (number, line)
++        for number, line in enumerate(text.splitlines(), start=1)
++        if line.strip() and not line.lstrip().startswith("#")
++    ]
++    if not records:
++        raise MalformedInputError("file is empty, expected a header row")
++
++    _, header_line = records[0]
++    header = tuple(name.strip().lower() for name in header_line.split(SEPARATOR))
++    if header != billing.COLUMNS:
++        raise MalformedInputError(
++            "header is not " + SEPARATOR.join(billing.COLUMNS)
++        )
++
++    lines: list[BillingLine] = []
++    problems: list[str] = []
++    for number, line in records[1:]:
++        fields = line.split(SEPARATOR)
++        if len(fields) != FIELD_COUNT:
++            problems.append(
++                f"line {number}: expected {FIELD_COUNT} pipe-separated fields, "
++                f"found {len(fields)}"
++            )
++            continue
++        row: dict[str, str | None] = dict(zip(billing.COLUMNS, fields))
++        try:
++            lines.append(billing.read_row(row, number, path.name))
++        except ValueError as error:
++            problems.append(f"line {number}: {error}")
++    return lines, problems
+diff --git a/pristine/v5baseC1/reconcile/cli.py b/v5baseC1_C5/reconcile/cli.py
+index a31cc40..97b25f4 100644
+--- a/pristine/v5baseC1/reconcile/cli.py
++++ b/v5baseC1_C5/reconcile/cli.py
+@@ -44,8 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
+         "input_dir",
+         type=Path,
+         help=(
+-            "directory that holds the *.billing.csv, *.ledger.tsv and "
+-            "*.scan.json files"
++            "directory that holds the *.billing.csv, *.ledger.tsv, "
++            "*.charges.psv and *.scan.json files"
+         ),
+     )
+     parser.add_argument(
+diff --git a/pristine/v5baseC1/reconcile/loader.py b/v5baseC1_C5/reconcile/loader.py
+index aab9db0..b9bc81e 100644
+--- a/pristine/v5baseC1/reconcile/loader.py
++++ b/v5baseC1_C5/reconcile/loader.py
+@@ -19,7 +19,7 @@ from collections.abc import Callable
+ from dataclasses import dataclass, field
+ from pathlib import Path
+ 
+-from . import billing, ledger, scan
++from . import billing, charges, ledger, scan
+ from .model import BillingLine, FileOutcome, MalformedInputError, ScannedResource
+ from .rules import RULES_FILENAME
+ 
+@@ -64,6 +64,10 @@ def load_inventory(input_dir: Path, rules_path: Path | None = None) -> Inventory
+             outcome = _load_billing(
+                 path, "ledger", ledger.read_ledger_file, inventory, seen_billing
+             )
++        elif charges.is_charges_file(path):
++            outcome = _load_billing(
++                path, "charges", charges.read_charges_file, inventory, seen_billing
++            )
+         elif scan.is_scan_file(path):
+             outcome = _load_scan(path, inventory, seen_scanned)
+         else:
+@@ -71,7 +75,10 @@ def load_inventory(input_dir: Path, rules_path: Path | None = None) -> Inventory
+                 path=path.name,
+                 kind="unknown",
+                 status="skipped",
+-                problems=["not a *.billing.csv, *.ledger.tsv or *.scan.json file"],
++                problems=[
++                    "not a *.billing.csv, *.ledger.tsv, *.charges.psv or "
++                    "*.scan.json file"
++                ],
+             )
+         inventory.outcomes.append(outcome)
+ 
+@@ -85,10 +92,10 @@ def _load_billing(
+     inventory: Inventory,
+     seen: dict[str, str],
+ ) -> FileOutcome:
+-    """Load one file of either finance format into the billing side.
++    """Load one file of any finance format into the billing side.
+ 
+-    Both formats share `seen`, so a resource billed in a `*.billing.csv` and
+-    again in a `*.ledger.tsv` keeps the line from the file read first.
++    Every finance format shares `seen`, so a resource billed in two finance
++    files, of the same format or not, keeps the line from the file read first.
+     """
+     outcome = FileOutcome(path=path.name, kind=kind, status="ok")
+     try:
+diff --git a/pristine/v5baseC1/reconcile/model.py b/v5baseC1_C5/reconcile/model.py
+index 9968dcd..2e0abe2 100644
+--- a/pristine/v5baseC1/reconcile/model.py
++++ b/v5baseC1_C5/reconcile/model.py
+@@ -1,7 +1,7 @@
+ """Record types shared by the readers, the join, the store and the report.
+ 
+ The inventory formats do not carry the same fields. A billing line, read from
+-either finance export, has a cost and no owning team. A scanned resource has an owning team and no cost. The
++any finance export, has a cost and no owning team. A scanned resource has an owning team and no cost. The
+ finding record keeps both sides optional, so a reader of the report can tell a
+ missing value from an empty one.
+ """
+@@ -34,7 +34,7 @@ class FindingKind(str, Enum):
+ 
+ @dataclass(frozen=True)
+ class BillingLine:
+-    """One line of a `*.billing.csv` or `*.ledger.tsv` file."""
++    """One line of a `*.billing.csv`, `*.ledger.tsv` or `*.charges.psv` file."""
+ 
+     resource_id: str
+     sku: str

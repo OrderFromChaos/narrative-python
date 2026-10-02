@@ -1,0 +1,164 @@
+diff --git a/pristine/v5fullC1/reconciler/__main__.py b/v5fullC1_C5/reconciler/__main__.py
+index 3a3ff34..427f244 100644
+--- a/pristine/v5fullC1/reconciler/__main__.py
++++ b/v5fullC1_C5/reconciler/__main__.py
+@@ -15,7 +15,8 @@ Modules, in reading order:
+     inventory     every inventory file of the input directory, whichever format each one is
+     billing_csv   one `*.billing.csv` from the finance export
+     ledger_tsv    one `*.ledger.tsv` from the finance ledger export
+-    billing_line  one line of either finance export
++    charges_psv   one `*.charges.psv` from the charges export
++    billing_line  one line of any finance export
+     scan_json     one `*.scan.json` from the asset scanner
+     join          billing lines matched to scanned resources, and what fails to match
+     reconcile     one reconciliation, for a caller that is not this program
+diff --git a/pristine/v5fullC1/reconciler/billing_line.py b/v5fullC1_C5/reconciler/billing_line.py
+index 3ec9e2f..c47e2f4 100644
+--- a/pristine/v5fullC1/reconciler/billing_line.py
++++ b/v5fullC1_C5/reconciler/billing_line.py
+@@ -4,7 +4,7 @@
+     -> InventoryRecord(resource_id='i-0014', sku='compute-gpu', region='us-east-1',
+                        origin=<InventoryFormat.LEDGER_TSV: 'ledger.tsv'>, monthly_cents=250000, team=None)
+ 
+-Both finance exports write these fields in this order. A billing line carries a cost and no owning
++Every finance export writes these fields in this order. A billing line carries a cost and no owning
+ team, so `team` is None on every record this module builds.
+ """
+ 
+diff --git a/v5fullC1_C5/reconciler/charges_psv.py b/v5fullC1_C5/reconciler/charges_psv.py
+new file mode 100644
+index 0000000..18e79a5
+--- /dev/null
++++ b/v5fullC1_C5/reconciler/charges_psv.py
+@@ -0,0 +1,69 @@
++"""Read a `*.charges.psv` file from the charges export into InventoryRecords.
++
++    # exported by charges-svc
++    resource_id|sku|monthly_cents|region
++    i-0021|compute-gpu|250000|us-east-1
++
++A line whose first non-whitespace character is `#` is a comment, before or after the header. The
++first other non-blank line is the header, and a missing or wrong header stops the file. A malformed
++line is rejected on its own and counted.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++from reconciler import billing_line
++from reconciler.logs import LOG
++from reconciler.vocabulary import FileRead, InventoryFileError, InventoryFormat, InventoryLineError
++
++
++def readChargesLines(charges_path: Path) -> FileRead:
++    """Parse every line of one charges export.
++
++    Returns:
++        The accepted records in file order, and the count of lines rejected.
++
++    Raises:
++        InventoryFileError: the file could not be read, or its header is absent or not the export's header.
++    """
++    try:
++        charges_text = charges_path.read_text(encoding='utf-8')
++    except UnicodeDecodeError as exc:
++        raise _rejectChargesFile(charges_path, 'the file is not UTF-8 text') from exc
++    except OSError as exc:
++        raise _rejectChargesFile(charges_path, 'the file could not be read') from exc
++
++    # keep the header and data lines; a comment may sit on either side of the header
++    content_lines = [
++        (line_number, line)
++        for line_number, line in enumerate(charges_text.splitlines(), start=1)
++        if line.strip() and not line.lstrip().startswith('#')
++    ]
++    if not content_lines:
++        raise _rejectChargesFile(charges_path, 'the file has no header row')
++    header = [name.strip() for name in content_lines[0][1].split('|')]
++    if header != list(billing_line.BILLING_FIELDS):
++        raise _rejectChargesFile(charges_path, f'the header row is {header}, not {list(billing_line.BILLING_FIELDS)}')
++
++    records = []
++    rejected_lines = 0
++    for line_number, line in content_lines[1:]:
++        try:
++            records.append(
++                billing_line.parseBillingLine(
++                    line.split('|'),
++                    charges_path,
++                    line_number,
++                    origin=InventoryFormat.CHARGES_PSV,
++                ),
++            )
++        except InventoryLineError:
++            rejected_lines += 1
++
++    return FileRead(records=tuple(records), rejected_lines=rejected_lines)
++
++
++def _rejectChargesFile(charges_path: Path, reason: str) -> InventoryFileError:
++    LOG.debug('charges.file_rejected', extra={'path': str(charges_path), 'reason': reason})
++    return InventoryFileError(reason)
+diff --git a/pristine/v5fullC1/reconciler/inventory.py b/v5fullC1_C5/reconciler/inventory.py
+index 74cd36c..69c360f 100644
+--- a/pristine/v5fullC1/reconciler/inventory.py
++++ b/v5fullC1_C5/reconciler/inventory.py
+@@ -1,7 +1,7 @@
+ """Read every inventory file of an input directory, whichever format each one is.
+ 
+-A file whose name ends in none of `.billing.csv`, `.scan.json` and `.ledger.tsv` is not inventory
+-and is passed over, which is what lets the rules file share the directory. A file that fails as a
++A file whose name ends in none of `.billing.csv`, `.scan.json`, `.ledger.tsv` and `.charges.psv` is
++not inventory and is passed over, which is what lets the rules file share the directory. A file that fails as a
+ whole becomes an outcome carrying the reason and contributes no record, so the files after it are
+ still read.
+ 
+@@ -13,7 +13,7 @@ from __future__ import annotations
+ 
+ from pathlib import Path
+ 
+-from reconciler import billing_csv, ledger_tsv, scan_json
++from reconciler import billing_csv, charges_psv, ledger_tsv, scan_json
+ from reconciler.logs import LOG
+ from reconciler.vocabulary import (
+     FileOutcome,
+@@ -90,3 +90,5 @@ def _readInventoryFile(inventory_path: Path, inventory_format: InventoryFormat)
+             return scan_json.readScannedResources(inventory_path)
+         case InventoryFormat.LEDGER_TSV:
+             return ledger_tsv.readLedgerLines(inventory_path)
++        case InventoryFormat.CHARGES_PSV:
++            return charges_psv.readChargesLines(inventory_path)
+diff --git a/pristine/v5fullC1/reconciler/join.py b/v5fullC1_C5/reconciler/join.py
+index 65cca72..c539c6b 100644
+--- a/pristine/v5fullC1/reconciler/join.py
++++ b/v5fullC1_C5/reconciler/join.py
+@@ -1,6 +1,6 @@
+ """Match billing lines to scanned resources on resource_id, and report what fails to match.
+ 
+-A billing line is a record from either finance export, `billing.csv` or `ledger.tsv`. Each
++A billing line is a record from any finance export: `billing.csv`, `ledger.tsv` or `charges.psv`. Each
+ resource_id matches at most one line on each side. A record whose sku is ignored by the rules takes
+ part in no match and appears in no finding, and a resource_id that both sides state twice keeps the
+ last record read.
+@@ -96,7 +96,7 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+ 
+ def _billingFormat(inventory_format: InventoryFormat) -> bool:
+     match inventory_format:
+-        case InventoryFormat.BILLING_CSV | InventoryFormat.LEDGER_TSV:
++        case InventoryFormat.BILLING_CSV | InventoryFormat.LEDGER_TSV | InventoryFormat.CHARGES_PSV:
+             return True
+         case InventoryFormat.SCAN_JSON:
+             return False
+diff --git a/pristine/v5fullC1/reconciler/vocabulary.py b/v5fullC1_C5/reconciler/vocabulary.py
+index 65a6813..f7df13e 100644
+--- a/pristine/v5fullC1/reconciler/vocabulary.py
++++ b/v5fullC1_C5/reconciler/vocabulary.py
+@@ -29,6 +29,7 @@ class InventoryFormat(Enum):
+     BILLING_CSV = 'billing.csv'
+     SCAN_JSON = 'scan.json'
+     LEDGER_TSV = 'ledger.tsv'
++    CHARGES_PSV = 'charges.psv'
+ 
+ 
+ class FindingKind(Enum):

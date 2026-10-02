@@ -1,0 +1,39 @@
+diff --git a/pristine/v5baseC4/reconcile/billing.py b/v5baseC4_R/reconcile/billing.py
+index cc52e36..903d52d 100644
+--- a/pristine/v5baseC4/reconcile/billing.py
++++ b/v5baseC4_R/reconcile/billing.py
+@@ -4,7 +4,9 @@ The file has a header row, then one line per charge:
+ 
+     resource_id,sku,monthly_cents,region,account_id
+ 
+-The format carries a cost and the billing account, and no owning team.
++The format carries a cost and the billing account, and no owning team. The
++`account_id` column must be in the header, but a line may leave it empty: that
++line is kept and its account is recorded as absent.
+ """
+ 
+ from __future__ import annotations
+@@ -85,9 +87,7 @@ def _read_row(row: dict[str, str | None], number: int, source: str) -> BillingLi
+     if not region:
+         raise ValueError(f"{resource_id}: region is empty")
+ 
+-    account_id = values.get("account_id", "")
+-    if not account_id:
+-        raise ValueError(f"{resource_id}: account_id is empty")
++    account_id = values.get("account_id", "") or None
+ 
+     return BillingLine(
+         resource_id=resource_id,
+diff --git a/pristine/v5baseC4/reconcile/model.py b/v5baseC4_R/reconcile/model.py
+index ff649fb..a4d39a9 100644
+--- a/pristine/v5baseC4/reconcile/model.py
++++ b/v5baseC4_R/reconcile/model.py
+@@ -40,7 +40,7 @@ class BillingLine:
+     sku: str
+     monthly_cents: int
+     region: str
+-    account_id: str
++    account_id: str | None
+     source: str
+ 
+ 

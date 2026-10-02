@@ -1,0 +1,246 @@
+diff --git a/pristine/v6base/reconciler/join.py b/v6base_C2/reconciler/join.py
+index ef34aee..6b514b6 100644
+--- a/pristine/v6base/reconciler/join.py
++++ b/v6base_C2/reconciler/join.py
+@@ -28,8 +28,9 @@ def join_inventory(inventory: Inventory, rules: Rules) -> JoinResult:
+     The sku filter is applied per side before the join. When the two sides
+     disagree on sku and only one of them is ignored, the ignored side drops and
+     the other survives unmatched, which is itself a finding. A sku disagreement
+-    between two records that both survive is not a finding: the three kinds are
+-    the whole list.
++    between two records that both survive is a ``sku_mismatch``. A matched pair
++    can disagree on both region and sku, and then produces one finding of each
++    kind.
+     """
+     billed = {
+         line.resource_id: line for line in inventory.billing if not rules.is_ignored(line.sku)
+@@ -41,6 +42,7 @@ def join_inventory(inventory: Inventory, rules: Rules) -> JoinResult:
+     }
+ 
+     matched_ids = billed.keys() & scanned.keys()
++    pairs = [(billed[resource_id], scanned[resource_id]) for resource_id in matched_ids]
+     findings = [
+         *_billed_not_found(
+             [line for resource_id, line in billed.items() if resource_id not in matched_ids],
+@@ -53,9 +55,8 @@ def join_inventory(inventory: Inventory, rules: Rules) -> JoinResult:
+                 if resource_id not in matched_ids
+             ]
+         ),
+-        *_region_mismatches(
+-            [(billed[resource_id], scanned[resource_id]) for resource_id in matched_ids], rules
+-        ),
++        *_region_mismatches(pairs, rules),
++        *_sku_mismatches(pairs),
+     ]
+ 
+     totals = Totals(
+@@ -145,3 +146,30 @@ def _region_mismatches(
+         if rules.canonical_region(line.region) != rules.canonical_region(resource.region)
+     ]
+     return sorted(findings, key=lambda finding: finding.resource_id)
++
++
++def _sku_mismatches(pairs: list[tuple[BillingLine, ScannedResource]]) -> list[Finding]:
++    """Build the findings for matched pairs whose skus differ.
++
++    The skus are compared exactly, with no alias table. The finding carries
++    both skus and everything else either side supplied. It is never above the
++    grace: the resource is billed and running, so the bill is not paying for
++    nothing.
++    """
++    findings = [
++        Finding(
++            kind=FindingKind.SKU_MISMATCH,
++            resource_id=line.resource_id,
++            sku=line.sku,
++            monthly_cents=line.monthly_cents,
++            team=resource.team,
++            billed_region=line.region,
++            scanned_region=resource.region,
++            above_grace=False,
++            sources=tuple(sorted({line.source, resource.source})),
++            scanned_sku=resource.sku,
++        )
++        for line, resource in pairs
++        if line.sku != resource.sku
++    ]
++    return sorted(findings, key=lambda finding: finding.resource_id)
+diff --git a/pristine/v6base/reconciler/models.py b/v6base_C2/reconciler/models.py
+index 194c217..3f92aa9 100644
+--- a/pristine/v6base/reconciler/models.py
++++ b/v6base_C2/reconciler/models.py
+@@ -29,7 +29,7 @@ class FileStatus(StrEnum):
+ 
+ 
+ class FindingKind(StrEnum):
+-    """The three mismatches the reconciliation reports.
++    """The four mismatches the reconciliation reports.
+ 
+     Declaration order is the order the kinds appear in the report's ``by_kind``
+     block and the order the findings themselves are grouped in.
+@@ -38,6 +38,7 @@ class FindingKind(StrEnum):
+     BILLED_NOT_FOUND = 'billed_not_found'
+     FOUND_NOT_BILLED = 'found_not_billed'
+     REGION_MISMATCH = 'region_mismatch'
++    SKU_MISMATCH = 'sku_mismatch'
+ 
+ 
+ @dataclass(frozen=True, slots=True)
+@@ -97,8 +98,12 @@ class Finding:
+ 
+     A value the finding has no side for is ``None``. ``sources`` holds the
+     basenames of the files that supplied an accepted record to this finding,
+-    sorted, so a one-sided finding names one file and a ``region_mismatch``
++    sorted, so a one-sided finding names one file and a two-sided finding
+     names two.
++
++    ``sku`` is the billing side's sku whenever the finding has a billing side,
++    and the scanned side's otherwise. ``scanned_sku`` is set only on a
++    ``sku_mismatch``, the one kind whose point is that the two skus differ.
+     """
+ 
+     kind: FindingKind
+@@ -110,6 +115,7 @@ class Finding:
+     scanned_region: str | None
+     above_grace: bool
+     sources: tuple[str, ...]
++    scanned_sku: str | None = None
+ 
+ 
+ @dataclass(frozen=True, slots=True)
+diff --git a/pristine/v6base/reconciler/report.py b/v6base_C2/reconciler/report.py
+index bc4a188..0d23143 100644
+--- a/pristine/v6base/reconciler/report.py
++++ b/v6base_C2/reconciler/report.py
+@@ -78,6 +78,7 @@ def _finding_entry(finding: Finding) -> dict[str, Any]:
+         'kind': finding.kind.value,
+         'resource_id': finding.resource_id,
+         'sku': finding.sku,
++        'scanned_sku': finding.scanned_sku,
+         'monthly_cents': finding.monthly_cents,
+         'team': finding.team,
+         'billed_region': finding.billed_region,
+diff --git a/pristine/v6base/reconciler/store.py b/v6base_C2/reconciler/store.py
+index 8204498..d2b5d4c 100644
+--- a/pristine/v6base/reconciler/store.py
++++ b/v6base_C2/reconciler/store.py
+@@ -6,6 +6,9 @@ content, which makes the answer follow the finding rather than the run: a
+ second run over the same inputs touches the same rows and only moves their
+ ``last_seen_at`` forward. A finding whose cost or region has changed is a
+ different finding and gets its own row, which is what leaves a history behind.
++
++A database written before ``scanned_sku`` existed lacks that column. Opening it
++adds the column, empty on the rows already there, and keeps those rows.
+ """
+ 
+ from __future__ import annotations
+@@ -35,7 +38,8 @@ CREATE TABLE IF NOT EXISTS finding (
+     above_grace     INTEGER NOT NULL,
+     sources         TEXT NOT NULL,
+     first_seen_at   TEXT NOT NULL,
+-    last_seen_at    TEXT NOT NULL
++    last_seen_at    TEXT NOT NULL,
++    scanned_sku     TEXT
+ );
+ CREATE INDEX IF NOT EXISTS finding_by_resource ON finding (resource_id);
+ """
+@@ -43,8 +47,9 @@ CREATE INDEX IF NOT EXISTS finding_by_resource ON finding (resource_id);
+ _UPSERT = """
+ INSERT INTO finding (
+     fingerprint, kind, resource_id, sku, monthly_cents, team,
+-    billed_region, scanned_region, above_grace, sources, first_seen_at, last_seen_at
+-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++    billed_region, scanned_region, above_grace, sources, first_seen_at, last_seen_at,
++    scanned_sku
++) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ ON CONFLICT (fingerprint) DO UPDATE SET last_seen_at = excluded.last_seen_at
+ """
+ 
+@@ -63,21 +68,25 @@ def fingerprint(finding: Finding) -> str:
+     Every reported value goes into the key, in a form that cannot be confused
+     across fields, so two findings share a key only when they are the same
+     mismatch of the same resource with the same numbers behind it.
++
++    ``scanned_sku`` joins the key only when the finding carries one, so every
++    finding of a kind that predates it keeps the key it had, and a database
++    written before it still recognises those findings.
+     """
+-    payload = json.dumps(
+-        [
+-            finding.kind.value,
+-            finding.resource_id,
+-            finding.sku,
+-            finding.monthly_cents,
+-            finding.team,
+-            finding.billed_region,
+-            finding.scanned_region,
+-            finding.above_grace,
+-            list(finding.sources),
+-        ],
+-        ensure_ascii=False,
+-    )
++    fields: list[object] = [
++        finding.kind.value,
++        finding.resource_id,
++        finding.sku,
++        finding.monthly_cents,
++        finding.team,
++        finding.billed_region,
++        finding.scanned_region,
++        finding.above_grace,
++        list(finding.sources),
++    ]
++    if finding.scanned_sku is not None:
++        fields.append(finding.scanned_sku)
++    payload = json.dumps(fields, ensure_ascii=False)
+     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+ 
+ 
+@@ -108,12 +117,14 @@ def record_findings(db_path: Path, findings: list[Finding], observed_at: str) ->
+             json.dumps(list(finding.sources), ensure_ascii=False),
+             observed_at,
+             observed_at,
++            finding.scanned_sku,
+         )
+         for finding in findings
+     ]
+ 
+     with closing(sqlite3.connect(db_path)) as connection, connection:
+         connection.executescript(_SCHEMA)
++        _add_scanned_sku(connection)
+         before = _row_count(connection)
+         connection.executemany(_UPSERT, rows)
+         inserted = _row_count(connection) - before
+@@ -121,5 +132,12 @@ def record_findings(db_path: Path, findings: list[Finding], observed_at: str) ->
+     return StoreOutcome(inserted=inserted, seen_again=len(rows) - inserted)
+ 
+ 
++def _add_scanned_sku(connection: sqlite3.Connection) -> None:
++    """Add the ``scanned_sku`` column to a table created before it existed."""
++    columns = {row[1] for row in connection.execute('PRAGMA table_info(finding)')}
++    if 'scanned_sku' not in columns:
++        connection.execute('ALTER TABLE finding ADD COLUMN scanned_sku TEXT')
++
++
+ def _row_count(connection: sqlite3.Connection) -> int:
+     return int(connection.execute('SELECT count(*) FROM finding').fetchone()[0])
+diff --git a/pristine/v6base/reconciler/summary.py b/v6base_C2/reconciler/summary.py
+index bb22417..6e203c1 100644
+--- a/pristine/v6base/reconciler/summary.py
++++ b/v6base_C2/reconciler/summary.py
+@@ -21,6 +21,7 @@ _FINDING_HEADINGS = (
+     'kind',
+     'resource',
+     'sku',
++    'scanned_sku',
+     'team',
+     'monthly',
+     'billed_region',
+@@ -57,6 +58,7 @@ def _finding_row(finding: Finding) -> tuple[str, ...]:
+         finding.kind.value,
+         finding.resource_id,
+         finding.sku,
++        finding.scanned_sku or ABSENT,
+         finding.team or ABSENT,
+         ABSENT if finding.monthly_cents is None else f'{finding.monthly_cents}c',
+         finding.billed_region or ABSENT,

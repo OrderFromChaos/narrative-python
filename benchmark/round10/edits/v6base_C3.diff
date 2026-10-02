@@ -1,0 +1,206 @@
+diff --git a/pristine/v6base/reconciler/inventory.py b/v6base_C3/reconciler/inventory.py
+index 167d89f..a9cdd41 100644
+--- a/pristine/v6base/reconciler/inventory.py
++++ b/v6base_C3/reconciler/inventory.py
+@@ -23,8 +23,8 @@ SCAN_SUFFIX = '.scan.json'
+ class Inventory:
+     """Every accepted record from the input directory, and every file outcome.
+ 
+-    ``billing`` and ``scanned`` hold the records the sku filter has not yet
+-    seen. ``files`` is in the order the files were read, which is ascending
++    ``billing`` and ``scanned`` hold the records the sku and team filters have
++    not yet seen. ``files`` is in the order the files were read, which is ascending
+     basename order, and is also the order the report prints them in.
+     """
+ 
+diff --git a/pristine/v6base/reconciler/join.py b/v6base_C3/reconciler/join.py
+index ef34aee..708ff34 100644
+--- a/pristine/v6base/reconciler/join.py
++++ b/v6base_C3/reconciler/join.py
+@@ -30,14 +30,30 @@ def join_inventory(inventory: Inventory, rules: Rules) -> JoinResult:
+     the other survives unmatched, which is itself a finding. A sku disagreement
+     between two records that both survive is not a finding: the three kinds are
+     the whole list.
++
++    The team filter is applied before the join too, but it drops both sides. A
++    billing line carries no team, so it takes the team of the accepted scanned
++    resource with its ``resource_id``. When that team is ignored, the line
++    drops with the resource, even when the sku filter already dropped the
++    resource, rather than surviving as a ``billed_not_found`` against a team
++    that is exempt from the report.
+     """
++    team_ignored_ids = {
++        resource.resource_id
++        for resource in inventory.scanned
++        if rules.is_team_ignored(resource.team)
++    }
++    sku_billed = [line for line in inventory.billing if not rules.is_ignored(line.sku)]
++    sku_scanned = [
++        resource for resource in inventory.scanned if not rules.is_ignored(resource.sku)
++    ]
+     billed = {
+-        line.resource_id: line for line in inventory.billing if not rules.is_ignored(line.sku)
++        line.resource_id: line for line in sku_billed if line.resource_id not in team_ignored_ids
+     }
+     scanned = {
+         resource.resource_id: resource
+-        for resource in inventory.scanned
+-        if not rules.is_ignored(resource.sku)
++        for resource in sku_scanned
++        if resource.resource_id not in team_ignored_ids
+     }
+ 
+     matched_ids = billed.keys() & scanned.keys()
+@@ -61,8 +77,10 @@ def join_inventory(inventory: Inventory, rules: Rules) -> JoinResult:
+     totals = Totals(
+         billing_lines=len(inventory.billing),
+         scanned_resources=len(inventory.scanned),
+-        ignored_billing=len(inventory.billing) - len(billed),
+-        ignored_scanned=len(inventory.scanned) - len(scanned),
++        ignored_billing=len(inventory.billing) - len(sku_billed),
++        ignored_scanned=len(inventory.scanned) - len(sku_scanned),
++        ignored_billing_by_team=len(sku_billed) - len(billed),
++        ignored_scanned_by_team=len(sku_scanned) - len(scanned),
+         matched=len(matched_ids),
+         findings=len(findings),
+         above_grace=sum(1 for finding in findings if finding.above_grace),
+diff --git a/pristine/v6base/reconciler/models.py b/v6base_C3/reconciler/models.py
+index 194c217..6198a81 100644
+--- a/pristine/v6base/reconciler/models.py
++++ b/v6base_C3/reconciler/models.py
+@@ -71,8 +71,8 @@ class FileOutcome:
+     """What the readers made of one file in the input directory.
+ 
+     ``accepted`` and ``rejected`` count records, not lines, and they ignore the
+-    sku filter entirely: the filter runs after reading, so a record it later
+-    drops is still counted here as accepted.
++    sku and team filters entirely: the filters run after reading, so a record
++    they later drop is still counted here as accepted.
+ 
+     ``rejected`` and ``len(problems)`` are allowed to disagree. A file that
+     fails as a whole has zero of both counts and one problem string.
+@@ -117,14 +117,18 @@ class Totals:
+     """The counts the report's ``totals`` block publishes.
+ 
+     ``billing_lines`` and ``scanned_resources`` count accepted records before
+-    the sku filter; ``ignored_billing`` and ``ignored_scanned`` count how many
+-    of those the filter then dropped.
++    either filter; ``ignored_billing`` and ``ignored_scanned`` count how many
++    of those the sku filter then dropped. The two ``_by_team`` counts are the
++    records the team filter dropped on top of those, so a record both filters
++    match is counted once, under sku.
+     """
+ 
+     billing_lines: int
+     scanned_resources: int
+     ignored_billing: int
+     ignored_scanned: int
++    ignored_billing_by_team: int
++    ignored_scanned_by_team: int
+     matched: int
+     findings: int
+     above_grace: int
+diff --git a/pristine/v6base/reconciler/report.py b/v6base_C3/reconciler/report.py
+index bc4a188..04538c8 100644
+--- a/pristine/v6base/reconciler/report.py
++++ b/v6base_C3/reconciler/report.py
+@@ -50,9 +50,14 @@ def _by_path(outcome: FileOutcome) -> str:
+ 
+ 
+ def _rules_block(rules: Rules) -> dict[str, Any]:
+-    """Echo the rules that were applied, with both collections sorted."""
++    """Echo the rules that were applied, with every collection sorted.
++
++    ``ignored_teams`` is always present, as an empty list when the rules file
++    omits the key.
++    """
+     return {
+         'ignored_skus': sorted(rules.ignored_skus),
++        'ignored_teams': sorted(rules.ignored_teams),
+         'region_aliases': {key: rules.region_aliases[key] for key in sorted(rules.region_aliases)},
+         'grace_cents': rules.grace_cents,
+     }
+@@ -65,6 +70,8 @@ def _totals_block(result: ReconcileResult) -> dict[str, Any]:
+         'scanned_resources': totals.scanned_resources,
+         'ignored_billing': totals.ignored_billing,
+         'ignored_scanned': totals.ignored_scanned,
++        'ignored_billing_by_team': totals.ignored_billing_by_team,
++        'ignored_scanned_by_team': totals.ignored_scanned_by_team,
+         'matched': totals.matched,
+         'findings': totals.findings,
+         'above_grace': totals.above_grace,
+diff --git a/pristine/v6base/reconciler/rules.py b/v6base_C3/reconciler/rules.py
+index 8148e04..8c85313 100644
+--- a/pristine/v6base/reconciler/rules.py
++++ b/v6base_C3/reconciler/rules.py
+@@ -1,7 +1,7 @@
+ """The rules file: how it is read, how it is checked, and what it decides.
+ 
+-The rules answer three questions for the join, so they are kept together with
+-the two lookups that use them rather than being passed around as a bare dict.
++The rules answer four questions for the join, so they are kept together with
++the lookups that use them rather than being passed around as a bare dict.
+ """
+ 
+ from __future__ import annotations
+@@ -25,10 +25,11 @@ class Rules:
+ 
+     Built only by :func:`load_rules`, so every instance already satisfies the
+     type checks the task states: strings throughout, and a grace of zero or
+-    more cents.
++    more cents. ``ignored_teams`` is empty when the file omits the key.
+     """
+ 
+     ignored_skus: frozenset[str]
++    ignored_teams: frozenset[str]
+     region_aliases: Mapping[str, str]
+     grace_cents: int
+ 
+@@ -36,6 +37,10 @@ class Rules:
+         """Report whether a record carrying this sku is dropped before the join."""
+         return sku in self.ignored_skus
+ 
++    def is_team_ignored(self, team: str) -> bool:
++        """Report whether a scanned resource owned by this team is dropped before the join."""
++        return team in self.ignored_teams
++
+     def canonical_region(self, region: str) -> str:
+         """Resolve a region name through the alias table, one hop only.
+ 
+@@ -52,6 +57,8 @@ def load_rules(path: Path) -> Rules:
+     Raises:
+         ReconcileError: The file is unreadable, is not a JSON object, omits one
+             of the three mandatory keys, or holds a value of the wrong type.
++            ``ignored_teams`` is the one optional key, and it is type-checked
++            only when present.
+     """
+     try:
+         raw_text = path.read_text(encoding='utf-8')
+@@ -70,6 +77,11 @@ def load_rules(path: Path) -> Rules:
+ 
+     return Rules(
+         ignored_skus=frozenset(_read_string_list(document, 'ignored_skus', path)),
++        ignored_teams=frozenset(
++            _read_string_list(document, 'ignored_teams', path)
++            if 'ignored_teams' in document
++            else []
++        ),
+         region_aliases=MappingProxyType(dict(_read_string_map(document, 'region_aliases', path))),
+         grace_cents=_read_non_negative_int(document, 'grace_cents', path),
+     )
+diff --git a/pristine/v6base/reconciler/summary.py b/v6base_C3/reconciler/summary.py
+index bb22417..29c53c9 100644
+--- a/pristine/v6base/reconciler/summary.py
++++ b/v6base_C3/reconciler/summary.py
+@@ -102,9 +102,9 @@ def _totals(out: TextIO, result: ReconcileResult) -> None:
+     totals = result.totals
+     lines = [
+         f'billing lines      {totals.billing_lines} '
+-        f'({totals.ignored_billing} ignored by sku)',
++        f'({totals.ignored_billing} ignored by sku, {totals.ignored_billing_by_team} by team)',
+         f'scanned resources  {totals.scanned_resources} '
+-        f'({totals.ignored_scanned} ignored by sku)',
++        f'({totals.ignored_scanned} ignored by sku, {totals.ignored_scanned_by_team} by team)',
+         f'matched pairs      {totals.matched}',
+         f'findings           {totals.findings} '
+         f'({totals.above_grace} above the {result.rules.grace_cents}c grace)',

@@ -1,0 +1,133 @@
+diff --git a/pristine/v5base/reconcile/join.py b/v5base_C3/reconcile/join.py
+index 900ad88..d8d1568 100644
+--- a/pristine/v5base/reconcile/join.py
++++ b/v5base_C3/reconcile/join.py
+@@ -5,6 +5,11 @@ one record on the other, and the records that fail to match are the report.
+ 
+ A resource whose sku is in `ignored_skus` leaves the join before it starts. It
+ matches nothing and appears in no finding, on either side.
++
++A scanned resource whose team is in `ignored_teams` leaves the join the same
++way. A billing line carries no team, so a billing line leaves with it when its
++resource id names a scanned resource that left for its team. Without that, the
++team's own resource would come back as a `billed_not_found` finding.
+ """
+ 
+ from __future__ import annotations
+@@ -40,13 +45,21 @@ def reconcile(
+     or below `grace_cents` is returned like any other, with `above_grace` false,
+     so the caller can record it without acting on it.
+     """
++    ignored_by_team = {
++        resource.resource_id
++        for resource in scanned
++        if rules.is_ignored_team(resource.team)
++    }
+     billed = {
+-        line.resource_id: line for line in billing if not rules.is_ignored(line.sku)
++        line.resource_id: line
++        for line in billing
++        if not rules.is_ignored(line.sku) and line.resource_id not in ignored_by_team
+     }
+     found = {
+         resource.resource_id: resource
+         for resource in scanned
+         if not rules.is_ignored(resource.sku)
++        and resource.resource_id not in ignored_by_team
+     }
+ 
+     stats = JoinStats(
+diff --git a/pristine/v5base/reconcile/rules.py b/v5base_C3/reconcile/rules.py
+index 37f17c8..49bc35d 100644
+--- a/pristine/v5base/reconcile/rules.py
++++ b/v5base_C3/reconcile/rules.py
+@@ -1,8 +1,10 @@
+ """The `reconcile.json` rules file.
+ 
+-The file holds three keys:
++The file holds four keys:
+ 
+     ignored_skus    a resource with one of these skus takes part in no join
++    ignored_teams   a scanned resource owned by one of these teams takes part
++                    in no join, and neither does the billing line for it
+     region_aliases  a long region name mapped to its short name
+     grace_cents     a billed_not_found finding at or below this cost is
+                     recorded but does not set the exit code
+@@ -28,11 +30,12 @@ class RulesError(Exception):
+ class Rules:
+     """Normalised rules.
+ 
+-    Skus and region names are compared in lower case. The raw text stays in the
+-    records, so the report shows what the input files said.
++    Skus, teams and region names are compared in lower case. The raw text
++    stays in the records, so the report shows what the input files said.
+     """
+ 
+     ignored_skus: frozenset[str] = frozenset()
++    ignored_teams: frozenset[str] = frozenset()
+     region_aliases: dict[str, str] = field(default_factory=dict)
+     grace_cents: int = 0
+     source: str | None = None
+@@ -40,6 +43,9 @@ class Rules:
+     def is_ignored(self, sku: str) -> bool:
+         return sku.strip().lower() in self.ignored_skus
+ 
++    def is_ignored_team(self, team: str) -> bool:
++        return team.strip().lower() in self.ignored_teams
++
+     def canonical_region(self, region: str) -> str:
+         """Resolve a region name to the name that all of its aliases share.
+ 
+@@ -60,6 +66,7 @@ class Rules:
+     def as_dict(self) -> dict[str, Any]:
+         return {
+             "ignored_skus": sorted(self.ignored_skus),
++            "ignored_teams": sorted(self.ignored_teams),
+             "region_aliases": dict(self.region_aliases),
+             "grace_cents": self.grace_cents,
+             "source": self.source,
+@@ -91,22 +98,24 @@ def load_rules(path: Path) -> Rules:
+         raise RulesError(f"rules file {path} must hold a JSON object")
+ 
+     return Rules(
+-        ignored_skus=_read_sku_list(raw.get("ignored_skus", []), path),
++        ignored_skus=_read_name_list(raw, "ignored_skus", path),
++        ignored_teams=_read_name_list(raw, "ignored_teams", path),
+         region_aliases=_read_alias_map(raw.get("region_aliases", {}), path),
+         grace_cents=_read_grace(raw.get("grace_cents", 0), path),
+         source=str(path),
+     )
+ 
+ 
+-def _read_sku_list(value: Any, path: Path) -> frozenset[str]:
++def _read_name_list(raw: dict[str, Any], key: str, path: Path) -> frozenset[str]:
++    value = raw.get(key, [])
+     if not isinstance(value, list):
+-        raise RulesError(f"rules file {path}: ignored_skus must be a list")
+-    skus = set()
++        raise RulesError(f"rules file {path}: {key} must be a list")
++    names = set()
+     for item in value:
+         if not isinstance(item, str):
+-            raise RulesError(f"rules file {path}: ignored_skus must hold strings")
+-        skus.add(item.strip().lower())
+-    return frozenset(skus)
++            raise RulesError(f"rules file {path}: {key} must hold strings")
++        names.add(item.strip().lower())
++    return frozenset(names)
+ 
+ 
+ def _read_alias_map(value: Any, path: Path) -> dict[str, str]:
+diff --git a/pristine/v5base/reconcile/service.py b/v5base_C3/reconcile/service.py
+index afb0584..2d6c681 100644
+--- a/pristine/v5base/reconcile/service.py
++++ b/v5base_C3/reconcile/service.py
+@@ -30,7 +30,7 @@ def reconcile_directory(
+ 
+     `rules_path` defaults to `reconcile.json` inside the input directory. If
+     that file is absent, the run uses the default rules: no ignored sku, no
+-    region alias, and no grace amount.
++    ignored team, no region alias, and no grace amount.
+ 
+     Raises `NotADirectoryError` if the input directory is absent, and
+     `RulesError` if a rules file exists but cannot be used.

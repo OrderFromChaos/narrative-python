@@ -1,0 +1,254 @@
+diff --git a/pristine/v6base/reconciler/__init__.py b/v6base_C1/reconciler/__init__.py
+index 0ca04aa..45a5dce 100644
+--- a/pristine/v6base/reconciler/__init__.py
++++ b/v6base_C1/reconciler/__init__.py
+@@ -22,10 +22,10 @@ directory is unusable, which is the only failure that stops a whole run; an
+ unreadable inventory file is recorded against that file and the rest are read.
+ 
+ The modules behind it: ``rules`` reads and checks the rules file,
+-``billing_csv`` and ``scan_json`` read the two inventory formats, ``inventory``
+-walks the input directory, ``join`` decides which findings exist, ``store``
+-keeps them in SQLite, ``report`` writes the JSON, ``summary`` prints the table
+-and ``cli`` wires the command-line tool together.
++``billing_csv``, ``ledger_tsv`` and ``scan_json`` read the three inventory
++formats, ``inventory`` walks the input directory, ``join`` decides which
++findings exist, ``store`` keeps them in SQLite, ``report`` writes the JSON,
++``summary`` prints the table and ``cli`` wires the command-line tool together.
+ """
+ 
+ from __future__ import annotations
+diff --git a/pristine/v6base/reconciler/billing_csv.py b/v6base_C1/reconciler/billing_csv.py
+index 9bcd508..11a06aa 100644
+--- a/pristine/v6base/reconciler/billing_csv.py
++++ b/v6base_C1/reconciler/billing_csv.py
+@@ -1,4 +1,4 @@
+-"""Reader for the finance export, ``*.billing.csv``.
++"""Reader for the first finance export, ``*.billing.csv``.
+ 
+ The export carries a cost and no owning team. Fields are read by position, so
+ the header is checked once and then discarded.
+@@ -63,7 +63,7 @@ def read_billing_file(
+         # newline would reject a phantom row.
+         if not row:
+             continue
+-        record = _read_row(row, path.name, rows.line_num, outcome, accepted_resource_ids)
++        record = read_billing_row(row, path.name, rows.line_num, outcome, accepted_resource_ids)
+         if record is not None:
+             records.append(record)
+             accepted_resource_ids.add(record.resource_id)
+@@ -74,14 +74,18 @@ def read_billing_file(
+     return records, outcome
+ 
+ 
+-def _read_row(
++def read_billing_row(
+     row: list[str],
+     source: str,
+     line_number: int,
+     outcome: FileOutcome,
+     accepted_resource_ids: set[str],
+ ) -> BillingLine | None:
+-    """Turn one data row into a record, or reject it and return ``None``."""
++    """Turn one data row into a record, or reject it and return ``None``.
++
++    The ledger export carries the same four fields in the same order, so its
++    reader checks each row here too.
++    """
+     where = f'{source} line {line_number}'
+ 
+     if len(row) != 4:
+diff --git a/pristine/v6base/reconciler/cli.py b/v6base_C1/reconciler/cli.py
+index fcf6284..9bd6065 100644
+--- a/pristine/v6base/reconciler/cli.py
++++ b/v6base_C1/reconciler/cli.py
+@@ -74,7 +74,10 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
+     )
+     parser.add_argument(
+         'input_dir',
+-        help='directory holding the *.billing.csv and *.scan.json files to reconcile',
++        help=(
++            'directory holding the *.billing.csv, *.ledger.tsv and *.scan.json files '
++            'to reconcile'
++        ),
+     )
+     parser.add_argument(
+         '--rules',
+@@ -119,4 +122,4 @@ def _log_files(result: ReconcileResult) -> None:
+         elif outcome.status is FileStatus.PARTIAL:
+             _log.warning('%s: %d record(s) rejected', outcome.path, outcome.rejected)
+         elif outcome.status is FileStatus.SKIPPED:
+-            _log.info('%s is neither a billing nor a scan file, skipped', outcome.path)
++            _log.info('%s is not a billing, ledger or scan file, skipped', outcome.path)
+diff --git a/pristine/v6base/reconciler/inventory.py b/v6base_C1/reconciler/inventory.py
+index 167d89f..2dc7af5 100644
+--- a/pristine/v6base/reconciler/inventory.py
++++ b/v6base_C1/reconciler/inventory.py
+@@ -1,6 +1,6 @@
+ """Walk the input directory and hand each file to the reader its name selects.
+ 
+-This module owns two rules that neither reader can see on its own: which files
++This module owns two rules that no reader can see on its own: which files
+ exist at all, and the order they are read in. The order matters, because the
+ first accepted record for a ``resource_id`` on a side is the one that is kept.
+ """
+@@ -12,10 +12,12 @@ from pathlib import Path
+ 
+ from .billing_csv import read_billing_file
+ from .errors import ReconcileError
++from .ledger_tsv import read_ledger_file
+ from .models import BillingLine, FileFormat, FileOutcome, FileStatus, ScannedResource
+ from .scan_json import read_scan_file
+ 
+ BILLING_SUFFIX = '.billing.csv'
++LEDGER_SUFFIX = '.ledger.tsv'
+ SCAN_SUFFIX = '.scan.json'
+ 
+ 
+@@ -41,6 +43,8 @@ def classify(name: str) -> FileFormat:
+     """
+     if name.endswith(BILLING_SUFFIX):
+         return FileFormat.BILLING
++    if name.endswith(LEDGER_SUFFIX):
++        return FileFormat.LEDGER
+     if name.endswith(SCAN_SUFFIX):
+         return FileFormat.SCAN
+     return FileFormat.UNKNOWN
+@@ -56,7 +60,7 @@ def read_inventory(input_dir: Path, rules_path: Path) -> Inventory:
+             per-file outcome.
+ 
+     Returns:
+-        The accepted records of both formats and one outcome per file
++        The accepted records of every format and one outcome per file
+         considered.
+ 
+     Raises:
+@@ -74,6 +78,10 @@ def read_inventory(input_dir: Path, rules_path: Path) -> Inventory:
+         if file_format is FileFormat.BILLING:
+             records, outcome = read_billing_file(path, billed_ids)
+             inventory.billing.extend(records)
++        elif file_format is FileFormat.LEDGER:
++            # Ledger records are billing lines and share the billing side's ids.
++            records, outcome = read_ledger_file(path, billed_ids)
++            inventory.billing.extend(records)
+         elif file_format is FileFormat.SCAN:
+             resources, outcome = read_scan_file(path, scanned_ids)
+             inventory.scanned.extend(resources)
+@@ -91,8 +99,8 @@ def _inventory_files(input_dir: Path, rules_path: Path) -> list[Path]:
+     """List the files to consider, in ascending basename order.
+ 
+     Only the top level is read. Directories, dotfiles and the rules file are
+-    left out; every other entry is considered, even one whose name matches
+-    neither format.
++    left out; every other entry is considered, even one whose name matches no
++    format.
+     """
+     try:
+         resolved_rules = rules_path.resolve()
+diff --git a/v6base_C1/reconciler/ledger_tsv.py b/v6base_C1/reconciler/ledger_tsv.py
+new file mode 100644
+index 0000000..cd07175
+--- /dev/null
++++ b/v6base_C1/reconciler/ledger_tsv.py
+@@ -0,0 +1,63 @@
++"""Reader for the second finance export, ``*.ledger.tsv``.
++
++Like the billing CSV, the ledger carries a cost and no owning team, and its
++records are billing lines. It has no header row: every line that is neither a
++comment nor blank is a record of four tab-separated fields, read by position.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++from .billing_csv import read_billing_row
++from .models import BillingLine, FileFormat, FileOutcome, FileStatus
++
++COMMENT_MARK = '#'
++"""A line whose first non-whitespace character is this is a comment."""
++
++
++def read_ledger_file(
++    path: Path, accepted_resource_ids: set[str]
++) -> tuple[list[BillingLine], FileOutcome]:
++    """Read one ledger file and report what became of every record line.
++
++    Args:
++        path: The file to read.
++        accepted_resource_ids: The billing side's set, shared with the billing
++            CSV reader. See :func:`~reconciler.billing_csv.read_billing_file`;
++            a ``resource_id`` already accepted from either format is rejected.
++
++    Returns:
++        The accepted records in file order, and the file's outcome.
++    """
++    outcome = FileOutcome(path=path.name, file_format=FileFormat.LEDGER, status=FileStatus.OK)
++
++    try:
++        raw_text = path.read_text(encoding='utf-8')
++    except (OSError, UnicodeDecodeError) as error:
++        outcome.status = FileStatus.FAILED
++        outcome.problems.append(f'{path.name}: unreadable ({error})')
++        return [], outcome
++
++    records: list[BillingLine] = []
++    # Split on LF alone and drop one trailing CR, so a CRLF file reads the same.
++    # str.splitlines() is not used: it also breaks on form feeds and other
++    # characters that are ordinary field content here.
++    for line_number, raw_line in enumerate(raw_text.split('\n'), start=1):
++        line = raw_line.removesuffix('\r')
++        # A whitespace-only line has no first non-whitespace character, so it
++        # is blank rather than a record of empty fields.
++        content = line.strip()
++        if not content or content.startswith(COMMENT_MARK):
++            continue
++        record = read_billing_row(
++            line.split('\t'), path.name, line_number, outcome, accepted_resource_ids
++        )
++        if record is not None:
++            records.append(record)
++            accepted_resource_ids.add(record.resource_id)
++
++    if outcome.rejected:
++        outcome.status = FileStatus.PARTIAL
++    outcome.accepted = len(records)
++    return records, outcome
+diff --git a/pristine/v6base/reconciler/models.py b/v6base_C1/reconciler/models.py
+index 194c217..e7673d9 100644
+--- a/pristine/v6base/reconciler/models.py
++++ b/v6base_C1/reconciler/models.py
+@@ -15,6 +15,7 @@ class FileFormat(StrEnum):
+     """Which reader a file is handed to, decided by its name alone."""
+ 
+     BILLING = 'billing'
++    LEDGER = 'ledger'
+     SCAN = 'scan'
+     UNKNOWN = 'unknown'
+ 
+@@ -42,7 +43,7 @@ class FindingKind(StrEnum):
+ 
+ @dataclass(frozen=True, slots=True)
+ class BillingLine:
+-    """One accepted data row of a ``*.billing.csv`` file.
++    """One accepted record of a ``*.billing.csv`` or ``*.ledger.tsv`` file.
+ 
+     ``region`` is the raw string the file wrote. The alias table is applied at
+     comparison time and never stored, because the report must echo the raw form.
+diff --git a/pristine/v6base/reconciler/pipeline.py b/v6base_C1/reconciler/pipeline.py
+index 4cd5ddd..23c8a66 100644
+--- a/pristine/v6base/reconciler/pipeline.py
++++ b/v6base_C1/reconciler/pipeline.py
+@@ -50,9 +50,10 @@ def reconcile(input_dir: str | Path, rules_path: str | Path | None = None) -> Re
+     """Reconcile a bill against an asset scan.
+ 
+     Args:
+-        input_dir: The directory holding the ``*.billing.csv`` and
+-            ``*.scan.json`` files. A directory holding neither is not an error:
+-            the result is empty and the exit code is ``0``.
++        input_dir: The directory holding the ``*.billing.csv``,
++            ``*.ledger.tsv`` and ``*.scan.json`` files. A directory holding none
++            of them is not an error: the result is empty and the exit code is
++            ``0``.
+         rules_path: The rules file. Defaults to ``reconcile.json`` inside
+             ``input_dir``, and may name a path outside it.
+ 

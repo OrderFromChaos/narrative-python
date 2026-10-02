@@ -1,0 +1,43 @@
+diff --git a/pristine/v5fullC4/reconciler/store.py b/v5fullC4_R/reconciler/store.py
+index a7159a7..216466e 100644
+--- a/pristine/v5fullC4/reconciler/store.py
++++ b/v5fullC4_R/reconciler/store.py
+@@ -5,8 +5,8 @@
+ 
+ Rows are keyed on (kind, resource_id), so a re-run over unchanged inputs adds nothing. A finding
+ already recorded under that key keeps the values it was recorded with, which is what makes the
+-count of added rows the count of findings new since the last run. The one exception is a row
+-recorded before the account_id column existed: it takes the finding's account_id on the next run.
++count of added rows the count of findings new since the last run. A row recorded before the
++account_id column existed holds NULL there.
+ """
+ 
+ from __future__ import annotations
+@@ -64,23 +64,13 @@ class FindingStore:
+             '(kind, resource_id, sku, monthly_cents, team, billed_region, scanned_region, account_id) '
+             'VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+         )
+-        BACKFILL_ACCOUNT_ID = (
+-            'UPDATE finding SET account_id = ? WHERE kind = ? AND resource_id = ? AND account_id IS NULL'
+-        )
+-        recorded = tuple(findings)
+-        if not recorded:
++        rows = [_findingRow(finding) for finding in findings]
++        if not rows:
+             return 0
+ 
+-        cursor = self.connection.executemany(INSERT_FINDING, [_findingRow(finding) for finding in recorded])
+-        added_rows = cursor.rowcount
+-        backfill_rows = [
+-            (finding.account_id, finding.kind.value, finding.resource_id)
+-            for finding in recorded
+-            if finding.account_id is not None
+-        ]
+-        self.connection.executemany(BACKFILL_ACCOUNT_ID, backfill_rows)
++        cursor = self.connection.executemany(INSERT_FINDING, rows)
+         self.connection.commit()
+-        return added_rows
++        return cursor.rowcount
+ 
+     def close(self) -> None:
+         self.connection.close()

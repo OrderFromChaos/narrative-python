@@ -5,6 +5,11 @@ rule does not make it fire — test it.**
 
 Tested with ruff 0.16.3, pylint 4.0.7, mypy 2.3.1 and vermin 1.8.0, against the 3.11 floor.
 
+## Environments
+
+**uv** manages environments and packages: `uv venv`, `uv add`, `uv run`. Not pip or virtualenv
+directly. (R10-uv)
+
 ## The split
 
 | Layer | Owns |

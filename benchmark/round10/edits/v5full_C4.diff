@@ -1,0 +1,305 @@
+diff --git a/pristine/v5full/reconciler/billing_csv.py b/v5full_C4/reconciler/billing_csv.py
+index 14259b3..73048b8 100644
+--- a/pristine/v5full/reconciler/billing_csv.py
++++ b/v5full_C4/reconciler/billing_csv.py
+@@ -1,11 +1,11 @@
+ """Read a `*.billing.csv` file from the finance export into InventoryRecords.
+ 
+-    resource_id,sku,monthly_cents,region
+-    i-0001,compute-std,120000,us-east-1
++    resource_id,sku,monthly_cents,region,account_id
++    i-0001,compute-std,120000,us-east-1,acct-4417
+ 
+ A billing line carries a cost and no owning team, so `team` is None on every record this module
+ builds. A wrong header stops the file. A line with the wrong field count or a non-integer cost is
+-rejected on its own and counted.
++rejected on its own and counted, and so is a line with an empty account_id.
+ """
+ 
+ from __future__ import annotations
+@@ -15,6 +15,7 @@ from pathlib import Path
+ 
+ from reconciler.logs import LOG
+ from reconciler.vocabulary import (
++    AccountId,
+     Cents,
+     FileRead,
+     InventoryFileError,
+@@ -27,7 +28,7 @@ from reconciler.vocabulary import (
+ )
+ 
+ 
+-_BILLING_COLUMNS = ('resource_id', 'sku', 'monthly_cents', 'region')
++_BILLING_COLUMNS = ('resource_id', 'sku', 'monthly_cents', 'region', 'account_id')
+ 
+ 
+ def readBillingLines(billing_path: Path) -> FileRead:
+@@ -67,9 +68,11 @@ def readBillingLines(billing_path: Path) -> FileRead:
+ def _parseBillingLine(fields: list[str], billing_path: Path, line_number: int) -> InventoryRecord:
+     if len(fields) != len(_BILLING_COLUMNS):
+         raise _rejectBillingLine(billing_path, line_number, f'{len(fields)} fields, not {len(_BILLING_COLUMNS)}')
+-    resource_id, sku, monthly_cents, region = (field.strip() for field in fields)
++    resource_id, sku, monthly_cents, region, account_id = (field.strip() for field in fields)
+     if not resource_id:
+         raise _rejectBillingLine(billing_path, line_number, 'the resource_id is empty')
++    if not account_id:
++        raise _rejectBillingLine(billing_path, line_number, 'the account_id is empty')
+     if not monthly_cents.removeprefix('-').isdigit():
+         raise _rejectBillingLine(billing_path, line_number, f'monthly_cents is {monthly_cents!r}, not an integer')
+ 
+@@ -80,6 +83,7 @@ def _parseBillingLine(fields: list[str], billing_path: Path, line_number: int) -
+         origin=InventoryFormat.BILLING_CSV,
+         monthly_cents=Cents(int(monthly_cents)),
+         team=None,
++        account_id=AccountId(account_id),
+     )
+ 
+ 
+diff --git a/pristine/v5full/reconciler/join.py b/v5full_C4/reconciler/join.py
+index abdb6ca..44e7d23 100644
+--- a/pristine/v5full/reconciler/join.py
++++ b/v5full_C4/reconciler/join.py
+@@ -5,7 +5,7 @@ takes part in no match and appears in no finding, and a resource_id that both si
+ keeps the last record read.
+ 
+ A finding carries the fields the side that produced it had: a billed_not_found finding names a cost
+-and no team, and a found_not_billed finding names a team and no cost.
++and an account_id and no team, and a found_not_billed finding names a team and no cost or account_id.
+ """
+ 
+ from __future__ import annotations
+@@ -45,6 +45,7 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+                 sku=billing_line.sku,
+                 monthly_cents=billing_line.monthly_cents,
+                 team=None,
++                account_id=billing_line.account_id,
+                 billed_region=billing_line.region,
+                 scanned_region=None,
+             ),
+@@ -60,6 +61,7 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+                 sku=scanned_resource.sku,
+                 monthly_cents=None,
+                 team=scanned_resource.team,
++                account_id=None,
+                 billed_region=None,
+                 scanned_region=scanned_resource.region,
+             ),
+@@ -82,6 +84,7 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+                 sku=billing_line.sku,
+                 monthly_cents=billing_line.monthly_cents,
+                 team=scanned_resource.team,
++                account_id=billing_line.account_id,
+                 billed_region=billing_line.region,
+                 scanned_region=scanned_resource.region,
+             ),
+diff --git a/pristine/v5full/reconciler/report.py b/v5full_C4/reconciler/report.py
+index 1bd9211..33d9984 100644
+--- a/pristine/v5full/reconciler/report.py
++++ b/v5full_C4/reconciler/report.py
+@@ -1,9 +1,9 @@
+ """Format a Reconciliation as a table for a terminal, and write it as a JSON report.
+ 
+-    KIND              RESOURCE  SKU             CENTS  TEAM     BILLED_REGION  SCANNED_REGION  GRACE
+-    billed_not_found  i-0004    compute-gpu   250,000  -        us-east-1      -               over
+-    found_not_billed  i-0008    object-store        -  search   -              us-west-2       -
+-    region_mismatch   i-0003    object-store      900  archive  us-west-2      eu-west-1       -
++    KIND              RESOURCE  SKU             CENTS  TEAM     ACCOUNT    BILLED_REGION  SCANNED_REGION  GRACE
++    billed_not_found  i-0004    compute-gpu   250,000  -        acct-4417  us-east-1      -               over
++    found_not_billed  i-0008    object-store        -  search   -          -              us-west-2       -
++    region_mismatch   i-0003    object-store      900  archive  acct-9002  us-west-2      eu-west-1       -
+ 
+     FILE              ACCEPTED  REJECTED  ERROR
+     edge.scan.json           0         0  not valid JSON: Expecting property name enclosed in double quotes, line 5
+@@ -26,7 +26,7 @@ from reconciler import rules
+ from reconciler.vocabulary import FileOutcome, Finding, ReconcileRules, Reconciliation
+ 
+ 
+-_FINDING_HEADERS = ('KIND', 'RESOURCE', 'SKU', 'CENTS', 'TEAM', 'BILLED_REGION', 'SCANNED_REGION', 'GRACE')
++_FINDING_HEADERS = ('KIND', 'RESOURCE', 'SKU', 'CENTS', 'TEAM', 'ACCOUNT', 'BILLED_REGION', 'SCANNED_REGION', 'GRACE')
+ _FILE_HEADERS = ('FILE', 'ACCEPTED', 'REJECTED', 'ERROR')
+ _ABSENT = '-'
+ 
+@@ -62,6 +62,7 @@ def writeJsonReport(report_path: Path, reconciliation: Reconciliation, reconcile
+                 'sku': finding.sku,
+                 'monthly_cents': finding.monthly_cents,
+                 'team': finding.team,
++                'account_id': finding.account_id,
+                 'billed_region': finding.billed_region,
+                 'scanned_region': finding.scanned_region,
+                 'above_grace': rules.aboveGrace(finding, reconcile_rules),
+@@ -89,6 +90,7 @@ def _findingCells(finding: Finding, reconcile_rules: ReconcileRules) -> list[str
+         finding.sku,
+         cents,
+         finding.team or _ABSENT,
++        finding.account_id or _ABSENT,
+         finding.billed_region or _ABSENT,
+         finding.scanned_region or _ABSENT,
+         'over' if rules.aboveGrace(finding, reconcile_rules) else _ABSENT,
+diff --git a/pristine/v5full/reconciler/scan_json.py b/v5full_C4/reconciler/scan_json.py
+index 1e244f7..8ffa528 100644
+--- a/pristine/v5full/reconciler/scan_json.py
++++ b/v5full_C4/reconciler/scan_json.py
+@@ -3,9 +3,10 @@
+     {"scanned_at": "2026-08-24T03:00:00Z",
+      "resources": [{"id": "i-0001", "sku": "compute-std", "team": "platform", "region": "use1"}]}
+ 
+-A scanned resource carries the owning team and no cost, so `monthly_cents` is None on every record
+-this module builds. Malformed JSON stops the file. One resource entry that states no `id`, or a
+-field that is not a string, is rejected on its own and counted.
++A scanned resource carries the owning team and no cost or account, so `monthly_cents` and
++`account_id` are None on every record this module builds. Malformed JSON stops the file. One
++resource entry that states no `id`, or a field that is not a string, is rejected on its own and
++counted.
+ """
+ 
+ from __future__ import annotations
+@@ -83,6 +84,7 @@ def _parseScannedResource(entry: object, scan_path: Path, index: int) -> Invento
+         origin=InventoryFormat.SCAN_JSON,
+         monthly_cents=None,
+         team=TeamName(entry['team'].strip()),
++        account_id=None,
+     )
+ 
+ 
+diff --git a/pristine/v5full/reconciler/store.py b/v5full_C4/reconciler/store.py
+index 62c53e9..a7159a7 100644
+--- a/pristine/v5full/reconciler/store.py
++++ b/v5full_C4/reconciler/store.py
+@@ -1,11 +1,12 @@
+ """Record findings in a SQLite file, one row per finding.
+ 
+-    ('billed_not_found', 'i-0004', 'compute-gpu', 250000, None, 'us-east-1', None)
+-    ('found_not_billed', 'i-0008', 'object-store', None, 'search', None, 'us-west-2')
++    ('billed_not_found', 'i-0004', 'compute-gpu', 250000, None, 'us-east-1', None, 'acct-4417')
++    ('found_not_billed', 'i-0008', 'object-store', None, 'search', None, 'us-west-2', None)
+ 
+ Rows are keyed on (kind, resource_id), so a re-run over unchanged inputs adds nothing. A finding
+ already recorded under that key keeps the values it was recorded with, which is what makes the
+-count of added rows the count of findings new since the last run.
++count of added rows the count of findings new since the last run. The one exception is a row
++recorded before the account_id column existed: it takes the finding's account_id on the next run.
+ """
+ 
+ from __future__ import annotations
+@@ -22,7 +23,7 @@ class FindingStore:
+ 
+     def __init__(self, database_path: Path) -> None:
+         self.connection = sqlite3.connect(database_path)
+-        self._createFindingTable()
++        self._prepareFindingTable()
+ 
+     def __enter__(self) -> FindingStore:
+         return self
+@@ -30,7 +31,7 @@ class FindingStore:
+     def __exit__(self, *details: object) -> None:
+         self.close()
+ 
+-    def _createFindingTable(self) -> None:
++    def _prepareFindingTable(self) -> None:
+         CREATE_FINDING = (
+             'CREATE TABLE IF NOT EXISTS finding ('
+             'kind TEXT NOT NULL, '
+@@ -40,9 +41,16 @@ class FindingStore:
+             'team TEXT, '
+             'billed_region TEXT, '
+             'scanned_region TEXT, '
++            'account_id TEXT, '
+             'PRIMARY KEY (kind, resource_id))'
+         )
++        ADD_ACCOUNT_ID = 'ALTER TABLE finding ADD COLUMN account_id TEXT'
++
+         self.connection.execute(CREATE_FINDING)
++        # a database written before account_id existed has the table without the column
++        columns = {row[1] for row in self.connection.execute('PRAGMA table_info(finding)')}
++        if 'account_id' not in columns:
++            self.connection.execute(ADD_ACCOUNT_ID)
+         self.connection.commit()
+ 
+     def insertFindings(self, findings: Iterable[Finding]) -> int:
+@@ -53,16 +61,26 @@ class FindingStore:
+         """
+         INSERT_FINDING = (
+             'INSERT OR IGNORE INTO finding '
+-            '(kind, resource_id, sku, monthly_cents, team, billed_region, scanned_region) '
+-            'VALUES (?, ?, ?, ?, ?, ?, ?)'
++            '(kind, resource_id, sku, monthly_cents, team, billed_region, scanned_region, account_id) '
++            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
++        )
++        BACKFILL_ACCOUNT_ID = (
++            'UPDATE finding SET account_id = ? WHERE kind = ? AND resource_id = ? AND account_id IS NULL'
+         )
+-        rows = [_findingRow(finding) for finding in findings]
+-        if not rows:
++        recorded = tuple(findings)
++        if not recorded:
+             return 0
+ 
+-        cursor = self.connection.executemany(INSERT_FINDING, rows)
++        cursor = self.connection.executemany(INSERT_FINDING, [_findingRow(finding) for finding in recorded])
++        added_rows = cursor.rowcount
++        backfill_rows = [
++            (finding.account_id, finding.kind.value, finding.resource_id)
++            for finding in recorded
++            if finding.account_id is not None
++        ]
++        self.connection.executemany(BACKFILL_ACCOUNT_ID, backfill_rows)
+         self.connection.commit()
+-        return cursor.rowcount
++        return added_rows
+ 
+     def close(self) -> None:
+         self.connection.close()
+@@ -77,6 +95,7 @@ def _findingRow(finding: Finding) -> _FindingRow:
+         finding.team,
+         finding.billed_region,
+         finding.scanned_region,
++        finding.account_id,
+     )
+ 
+ 
+@@ -84,4 +103,4 @@ def _findingRow(finding: Finding) -> _FindingRow:
+ 
+ # The DB-API takes one sequence per row, so the row has no dataclass form: passing a dataclass to
+ # executemany raises ProgrammingError. The alias names the column order instead.
+-_FindingRow = tuple[str, str, str, int | None, str | None, str | None, str | None]
++_FindingRow = tuple[str, str, str, int | None, str | None, str | None, str | None, str | None]
+diff --git a/pristine/v5full/reconciler/vocabulary.py b/v5full_C4/reconciler/vocabulary.py
+index 90ec16e..53f1b73 100644
+--- a/pristine/v5full/reconciler/vocabulary.py
++++ b/v5full_C4/reconciler/vocabulary.py
+@@ -1,8 +1,8 @@
+ """The types the reconciler modules pass between them.
+ 
+-An InventoryRecord states only what its own file carried: `monthly_cents` is None on a scanned
+-resource, and `team` is None on a billing line. A check that reads an absent field skips the record
+-rather than assuming a value.
++An InventoryRecord states only what its own file carried: `monthly_cents` and `account_id` are None
++on a scanned resource, and `team` is None on a billing line. A check that reads an absent field skips
++the record rather than assuming a value.
+ 
+ Costs are plain integer cents. A region is the string the file wrote, before `region_aliases` is
+ applied.
+@@ -17,6 +17,7 @@ from pathlib import Path
+ from typing import NewType
+ 
+ 
++AccountId = NewType('AccountId', str)
+ Cents = NewType('Cents', int)
+ RegionName = NewType('RegionName', str)
+ ResourceId = NewType('ResourceId', str)
+@@ -56,6 +57,7 @@ class InventoryRecord:
+     origin: InventoryFormat
+     monthly_cents: Cents | None
+     team: TeamName | None
++    account_id: AccountId | None
+ 
+ 
+ @dataclass(frozen=True)
+@@ -85,6 +87,7 @@ class Finding:
+     sku: Sku
+     monthly_cents: Cents | None
+     team: TeamName | None
++    account_id: AccountId | None
+     billed_region: RegionName | None
+     scanned_region: RegionName | None
+ 

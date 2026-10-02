@@ -1,0 +1,67 @@
+diff --git a/pristine/v6baseC4/reconciler/store.py b/v6baseC4_R/reconciler/store.py
+index f11568a..a56ceed 100644
+--- a/pristine/v6baseC4/reconciler/store.py
++++ b/v6baseC4_R/reconciler/store.py
+@@ -7,9 +7,14 @@ second run over the same inputs touches the same rows and only moves their
+ ``last_seen_at`` forward. A finding whose cost or region has changed is a
+ different finding and gets its own row, which is what leaves a history behind.
+ 
++``account_id`` is stored but is not part of the key, so a finding whose
++account alone has changed matches the row already held, and that row keeps the
++account it was first stored with.
++
+ A database written before ``account_id`` existed is brought forward on open by
+ adding the column. Its rows keep ``NULL`` there, because the account they were
+-billed to was never recorded.
++billed to was never recorded, and a later run that sees the same finding again
++leaves the ``NULL`` in place.
+ """
+ 
+ from __future__ import annotations
+@@ -66,28 +71,25 @@ class StoreOutcome:
+ def fingerprint(finding: Finding) -> str:
+     """Return the dedup key for a finding.
+ 
+-    Every reported value goes into the key, in a form that cannot be confused
+-    across fields, so two findings share a key only when they are the same
+-    mismatch of the same resource with the same numbers behind it.
+-
+-    ``account_id`` joins the key only when the finding carries one. A finding
+-    with no billing side therefore keeps the key it had before the field
+-    existed, and an upgraded store does not hold it twice.
++    Every reported value except ``account_id`` goes into the key, in a form
++    that cannot be confused across fields, so two findings share a key only
++    when they are the same mismatch of the same resource with the same numbers
++    behind it.
+     """
+-    fields: list[object] = [
+-        finding.kind.value,
+-        finding.resource_id,
+-        finding.sku,
+-        finding.monthly_cents,
+-        finding.team,
+-        finding.billed_region,
+-        finding.scanned_region,
+-        finding.above_grace,
+-        list(finding.sources),
+-    ]
+-    if finding.account_id is not None:
+-        fields.append(finding.account_id)
+-    payload = json.dumps(fields, ensure_ascii=False)
++    payload = json.dumps(
++        [
++            finding.kind.value,
++            finding.resource_id,
++            finding.sku,
++            finding.monthly_cents,
++            finding.team,
++            finding.billed_region,
++            finding.scanned_region,
++            finding.above_grace,
++            list(finding.sources),
++        ],
++        ensure_ascii=False,
++    )
+     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+ 
+ 

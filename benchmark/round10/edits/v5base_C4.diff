@@ -1,0 +1,234 @@
+diff --git a/pristine/v5base/reconcile/billing.py b/v5base_C4/reconcile/billing.py
+index e678d51..cc52e36 100644
+--- a/pristine/v5base/reconcile/billing.py
++++ b/v5base_C4/reconcile/billing.py
+@@ -2,9 +2,9 @@
+ 
+ The file has a header row, then one line per charge:
+ 
+-    resource_id,sku,monthly_cents,region
++    resource_id,sku,monthly_cents,region,account_id
+ 
+-The format carries a cost and no owning team.
++The format carries a cost and the billing account, and no owning team.
+ """
+ 
+ from __future__ import annotations
+@@ -15,7 +15,7 @@ from pathlib import Path
+ from .model import BillingLine, MalformedInputError
+ 
+ SUFFIX = ".billing.csv"
+-COLUMNS = ("resource_id", "sku", "monthly_cents", "region")
++COLUMNS = ("resource_id", "sku", "monthly_cents", "region", "account_id")
+ 
+ 
+ def is_billing_file(path: Path) -> bool:
+@@ -29,7 +29,7 @@ def read_billing_file(path: Path) -> tuple[list[BillingLine], list[str]]:
+     bad line is skipped; the rest of the file is still read.
+ 
+     Raises `MalformedInputError` if the file cannot be opened or its header does
+-    not name the four columns.
++    not name the five columns.
+     """
+     try:
+         text = path.read_text(encoding="utf-8")
+@@ -85,10 +85,15 @@ def _read_row(row: dict[str, str | None], number: int, source: str) -> BillingLi
+     if not region:
+         raise ValueError(f"{resource_id}: region is empty")
+ 
++    account_id = values.get("account_id", "")
++    if not account_id:
++        raise ValueError(f"{resource_id}: account_id is empty")
++
+     return BillingLine(
+         resource_id=resource_id,
+         sku=sku,
+         monthly_cents=monthly_cents,
+         region=region,
++        account_id=account_id,
+         source=source,
+     )
+diff --git a/pristine/v5base/reconcile/join.py b/v5base_C4/reconcile/join.py
+index 900ad88..0171d56 100644
+--- a/pristine/v5base/reconcile/join.py
++++ b/v5base_C4/reconcile/join.py
+@@ -3,6 +3,9 @@
+ The two sides join on the resource id. Each record on one side matches at most
+ one record on the other, and the records that fail to match are the report.
+ 
++A finding with a billing side carries that line's `account_id`. The account
++takes part in no comparison.
++
+ A resource whose sku is in `ignored_skus` leaves the join before it starts. It
+ matches nothing and appears in no finding, on either side.
+ """
+@@ -80,6 +83,7 @@ def _billed_not_found(
+             sku=line.sku,
+             monthly_cents=line.monthly_cents,
+             billed_region=line.region,
++            account_id=line.account_id,
+             above_grace=line.monthly_cents > rules.grace_cents,
+             sources=(line.source,),
+         )
+@@ -134,6 +138,7 @@ def _region_mismatch(
+                 team=resource.team,
+                 billed_region=line.region,
+                 scanned_region=resource.region,
++                account_id=line.account_id,
+                 sources=(line.source, resource.source),
+             )
+         )
+diff --git a/pristine/v5base/reconcile/model.py b/v5base_C4/reconcile/model.py
+index f95fea2..ff649fb 100644
+--- a/pristine/v5base/reconcile/model.py
++++ b/v5base_C4/reconcile/model.py
+@@ -1,9 +1,9 @@
+ """Record types shared by the readers, the join, the store and the report.
+ 
+ The two inventory formats do not carry the same fields. A billing line has a
+-cost and no owning team. A scanned resource has an owning team and no cost. The
+-finding record keeps both sides optional, so a reader of the report can tell a
+-missing value from an empty one.
++cost and a billing account, and no owning team. A scanned resource has an owning
++team, and no cost and no account. The finding record keeps both sides optional,
++so a reader of the report can tell a missing value from an empty one.
+ """
+ 
+ from __future__ import annotations
+@@ -40,6 +40,7 @@ class BillingLine:
+     sku: str
+     monthly_cents: int
+     region: str
++    account_id: str
+     source: str
+ 
+ 
+@@ -65,6 +66,7 @@ class Finding:
+     team: str | None = None
+     billed_region: str | None = None
+     scanned_region: str | None = None
++    account_id: str | None = None
+     above_grace: bool = False
+     sources: tuple[str, ...] = ()
+ 
+@@ -88,6 +90,7 @@ class Finding:
+             "team": self.team,
+             "billed_region": self.billed_region,
+             "scanned_region": self.scanned_region,
++            "account_id": self.account_id,
+             "above_grace": self.above_grace,
+             "sources": list(self.sources),
+         }
+diff --git a/pristine/v5base/reconcile/report.py b/v5base_C4/reconcile/report.py
+index d6fc33e..62c4f6f 100644
+--- a/pristine/v5base/reconcile/report.py
++++ b/v5base_C4/reconcile/report.py
+@@ -69,6 +69,7 @@ def _findings_block(result: Reconciliation) -> str:
+             finding.resource_id,
+             finding.sku,
+             finding.team or "-",
++            finding.account_id or "-",
+             _money(finding.monthly_cents),
+             finding.billed_region or "-",
+             finding.scanned_region or "-",
+@@ -77,9 +78,19 @@ def _findings_block(result: Reconciliation) -> str:
+         for finding in result.findings
+     ]
+     table = _table(
+-        ["kind", "resource", "sku", "team", "monthly", "billed", "scanned", "grace"],
++        [
++            "kind",
++            "resource",
++            "sku",
++            "team",
++            "account",
++            "monthly",
++            "billed",
++            "scanned",
++            "grace",
++        ],
+         rows,
+-        aligns="llllrlll",
++        aligns="lllllrlll",
+     )
+     return "FINDINGS\n" + table
+ 
+diff --git a/pristine/v5base/reconcile/store.py b/v5base_C4/reconcile/store.py
+index 2e417f9..b42a7d5 100644
+--- a/pristine/v5base/reconcile/store.py
++++ b/v5base_C4/reconcile/store.py
+@@ -8,6 +8,10 @@ instead of inserting a second one.
+ `last_seen_at` moves to the time of the latest run that found it again. A row
+ whose `last_seen_at` is older than the latest run is a mismatch that the inputs
+ no longer show.
++
++`account_id` is NULL for a finding with no billing side. A database written
++before the column existed gains it on the next write; its earlier rows hold NULL
++there until a run finds them again.
+ """
+ 
+ from __future__ import annotations
+@@ -28,6 +32,7 @@ CREATE TABLE IF NOT EXISTS findings (
+     monthly_cents  INTEGER,
+     billed_region  TEXT,
+     scanned_region TEXT,
++    account_id     TEXT,
+     above_grace    INTEGER NOT NULL,
+     sources        TEXT    NOT NULL,
+     first_seen_at  TEXT    NOT NULL,
+@@ -39,14 +44,16 @@ CREATE TABLE IF NOT EXISTS findings (
+ UPSERT = """
+ INSERT INTO findings (
+     kind, resource_id, sku, team, monthly_cents, billed_region,
+-    scanned_region, above_grace, sources, first_seen_at, last_seen_at
+-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++    scanned_region, account_id, above_grace, sources, first_seen_at,
++    last_seen_at
++) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ ON CONFLICT (kind, resource_id) DO UPDATE SET
+     sku            = excluded.sku,
+     team           = excluded.team,
+     monthly_cents  = excluded.monthly_cents,
+     billed_region  = excluded.billed_region,
+     scanned_region = excluded.scanned_region,
++    account_id     = excluded.account_id,
+     above_grace    = excluded.above_grace,
+     sources        = excluded.sources,
+     last_seen_at   = excluded.last_seen_at;
+@@ -81,6 +88,7 @@ def record_findings(
+     with closing(sqlite3.connect(db_path)) as connection:
+         connection.execute("PRAGMA foreign_keys = ON;")
+         connection.executescript(SCHEMA)
++        _add_missing_columns(connection)
+ 
+         known = {
+             (kind, resource_id)
+@@ -124,6 +132,20 @@ def read_findings(db_path: Path) -> list[dict[str, object]]:
+     return [dict(row) for row in rows]
+ 
+ 
++def _add_missing_columns(connection: sqlite3.Connection) -> None:
++    """Bring a table written by an earlier version up to `SCHEMA`.
++
++    `CREATE TABLE IF NOT EXISTS` leaves an existing table as it is, so a column
++    added to `SCHEMA` after a database was written is added here.
++    """
++    present = {
++        row[1] for row in connection.execute("PRAGMA table_info(findings);")
++    }
++    if "account_id" not in present:
++        with connection:
++            connection.execute("ALTER TABLE findings ADD COLUMN account_id TEXT;")
++
++
+ def _row(finding: Finding, seen_at: str) -> tuple[object, ...]:
+     return (
+         finding.kind.value,
+@@ -133,6 +155,7 @@ def _row(finding: Finding, seen_at: str) -> tuple[object, ...]:
+         finding.monthly_cents,
+         finding.billed_region,
+         finding.scanned_region,
++        finding.account_id,
+         int(finding.above_grace),
+         ",".join(finding.sources),
+         seen_at,

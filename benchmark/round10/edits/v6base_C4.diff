@@ -1,0 +1,254 @@
+diff --git a/pristine/v6base/reconciler/billing_csv.py b/v6base_C4/reconciler/billing_csv.py
+index 9bcd508..3b5d654 100644
+--- a/pristine/v6base/reconciler/billing_csv.py
++++ b/v6base_C4/reconciler/billing_csv.py
+@@ -1,6 +1,6 @@
+ """Reader for the finance export, ``*.billing.csv``.
+ 
+-The export carries a cost and no owning team. Fields are read by position, so
++The export carries a cost and the account it is billed to, and no owning team. Fields are read by position, so
+ the header is checked once and then discarded.
+ """
+ 
+@@ -13,7 +13,7 @@ from pathlib import Path
+ 
+ from .models import BillingLine, FileFormat, FileOutcome, FileStatus
+ 
+-HEADER = ['resource_id', 'sku', 'monthly_cents', 'region']
++HEADER = ['resource_id', 'sku', 'monthly_cents', 'region', 'account_id']
+ """The exact header row a billing file must open with."""
+ 
+ _DIGITS = re.compile(r'[0-9]+')
+@@ -84,15 +84,20 @@ def _read_row(
+     """Turn one data row into a record, or reject it and return ``None``."""
+     where = f'{source} line {line_number}'
+ 
+-    if len(row) != 4:
+-        outcome.reject(f'{where}: holds {len(row)} fields, not 4')
++    if len(row) != len(HEADER):
++        outcome.reject(f'{where}: holds {len(row)} fields, not {len(HEADER)}')
+         return None
+ 
+-    resource_id, sku, monthly_cents, region = row
++    resource_id, sku, monthly_cents, region, account_id = row
+ 
+     empty = [
+         name
+-        for name, value in (('resource_id', resource_id), ('sku', sku), ('region', region))
++        for name, value in (
++            ('resource_id', resource_id),
++            ('sku', sku),
++            ('region', region),
++            ('account_id', account_id),
++        )
+         if not value
+     ]
+     if empty:
+@@ -112,5 +117,6 @@ def _read_row(
+         sku=sku,
+         monthly_cents=int(monthly_cents),
+         region=region,
++        account_id=account_id,
+         source=source,
+     )
+diff --git a/pristine/v6base/reconciler/join.py b/v6base_C4/reconciler/join.py
+index ef34aee..9352294 100644
+--- a/pristine/v6base/reconciler/join.py
++++ b/v6base_C4/reconciler/join.py
+@@ -87,6 +87,7 @@ def _billed_not_found(lines: list[BillingLine], rules: Rules) -> list[Finding]:
+             sku=line.sku,
+             monthly_cents=line.monthly_cents,
+             team=None,
++            account_id=line.account_id,
+             billed_region=line.region,
+             scanned_region=None,
+             above_grace=line.monthly_cents > rules.grace_cents,
+@@ -109,6 +110,7 @@ def _found_not_billed(resources: list[ScannedResource]) -> list[Finding]:
+             sku=resource.sku,
+             monthly_cents=None,
+             team=resource.team,
++            account_id=None,
+             billed_region=None,
+             scanned_region=resource.region,
+             above_grace=False,
+@@ -136,6 +138,7 @@ def _region_mismatches(
+             sku=line.sku,
+             monthly_cents=line.monthly_cents,
+             team=resource.team,
++            account_id=line.account_id,
+             billed_region=line.region,
+             scanned_region=resource.region,
+             above_grace=False,
+diff --git a/pristine/v6base/reconciler/models.py b/v6base_C4/reconciler/models.py
+index 194c217..cdc1f8a 100644
+--- a/pristine/v6base/reconciler/models.py
++++ b/v6base_C4/reconciler/models.py
+@@ -52,6 +52,7 @@ class BillingLine:
+     sku: str
+     monthly_cents: int
+     region: str
++    account_id: str
+     source: str
+ 
+ 
+@@ -95,7 +96,9 @@ class FileOutcome:
+ class Finding:
+     """One mismatch, carrying whichever values its side or sides supplied.
+ 
+-    A value the finding has no side for is ``None``. ``sources`` holds the
++    A value the finding has no side for is ``None``, so ``account_id``, which
++    only the billing side carries, is ``None`` on a ``found_not_billed``. It is
++    carried for the report and takes no part in matching. ``sources`` holds the
+     basenames of the files that supplied an accepted record to this finding,
+     sorted, so a one-sided finding names one file and a ``region_mismatch``
+     names two.
+@@ -106,6 +109,7 @@ class Finding:
+     sku: str
+     monthly_cents: int | None
+     team: str | None
++    account_id: str | None
+     billed_region: str | None
+     scanned_region: str | None
+     above_grace: bool
+diff --git a/pristine/v6base/reconciler/report.py b/v6base_C4/reconciler/report.py
+index bc4a188..0b65e1f 100644
+--- a/pristine/v6base/reconciler/report.py
++++ b/v6base_C4/reconciler/report.py
+@@ -80,6 +80,7 @@ def _finding_entry(finding: Finding) -> dict[str, Any]:
+         'sku': finding.sku,
+         'monthly_cents': finding.monthly_cents,
+         'team': finding.team,
++        'account_id': finding.account_id,
+         'billed_region': finding.billed_region,
+         'scanned_region': finding.scanned_region,
+         'above_grace': finding.above_grace,
+diff --git a/pristine/v6base/reconciler/store.py b/v6base_C4/reconciler/store.py
+index 8204498..f11568a 100644
+--- a/pristine/v6base/reconciler/store.py
++++ b/v6base_C4/reconciler/store.py
+@@ -6,6 +6,10 @@ content, which makes the answer follow the finding rather than the run: a
+ second run over the same inputs touches the same rows and only moves their
+ ``last_seen_at`` forward. A finding whose cost or region has changed is a
+ different finding and gets its own row, which is what leaves a history behind.
++
++A database written before ``account_id`` existed is brought forward on open by
++adding the column. Its rows keep ``NULL`` there, because the account they were
++billed to was never recorded.
+ """
+ 
+ from __future__ import annotations
+@@ -35,7 +39,8 @@ CREATE TABLE IF NOT EXISTS finding (
+     above_grace     INTEGER NOT NULL,
+     sources         TEXT NOT NULL,
+     first_seen_at   TEXT NOT NULL,
+-    last_seen_at    TEXT NOT NULL
++    last_seen_at    TEXT NOT NULL,
++    account_id      TEXT
+ );
+ CREATE INDEX IF NOT EXISTS finding_by_resource ON finding (resource_id);
+ """
+@@ -43,8 +48,9 @@ CREATE INDEX IF NOT EXISTS finding_by_resource ON finding (resource_id);
+ _UPSERT = """
+ INSERT INTO finding (
+     fingerprint, kind, resource_id, sku, monthly_cents, team,
+-    billed_region, scanned_region, above_grace, sources, first_seen_at, last_seen_at
+-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++    billed_region, scanned_region, above_grace, sources, first_seen_at, last_seen_at,
++    account_id
++) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ ON CONFLICT (fingerprint) DO UPDATE SET last_seen_at = excluded.last_seen_at
+ """
+ 
+@@ -63,21 +69,25 @@ def fingerprint(finding: Finding) -> str:
+     Every reported value goes into the key, in a form that cannot be confused
+     across fields, so two findings share a key only when they are the same
+     mismatch of the same resource with the same numbers behind it.
++
++    ``account_id`` joins the key only when the finding carries one. A finding
++    with no billing side therefore keeps the key it had before the field
++    existed, and an upgraded store does not hold it twice.
+     """
+-    payload = json.dumps(
+-        [
+-            finding.kind.value,
+-            finding.resource_id,
+-            finding.sku,
+-            finding.monthly_cents,
+-            finding.team,
+-            finding.billed_region,
+-            finding.scanned_region,
+-            finding.above_grace,
+-            list(finding.sources),
+-        ],
+-        ensure_ascii=False,
+-    )
++    fields: list[object] = [
++        finding.kind.value,
++        finding.resource_id,
++        finding.sku,
++        finding.monthly_cents,
++        finding.team,
++        finding.billed_region,
++        finding.scanned_region,
++        finding.above_grace,
++        list(finding.sources),
++    ]
++    if finding.account_id is not None:
++        fields.append(finding.account_id)
++    payload = json.dumps(fields, ensure_ascii=False)
+     return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+ 
+ 
+@@ -108,12 +118,14 @@ def record_findings(db_path: Path, findings: list[Finding], observed_at: str) ->
+             json.dumps(list(finding.sources), ensure_ascii=False),
+             observed_at,
+             observed_at,
++            finding.account_id,
+         )
+         for finding in findings
+     ]
+ 
+     with closing(sqlite3.connect(db_path)) as connection, connection:
+         connection.executescript(_SCHEMA)
++        _add_missing_columns(connection)
+         before = _row_count(connection)
+         connection.executemany(_UPSERT, rows)
+         inserted = _row_count(connection) - before
+@@ -121,5 +133,17 @@ def record_findings(db_path: Path, findings: list[Finding], observed_at: str) ->
+     return StoreOutcome(inserted=inserted, seen_again=len(rows) - inserted)
+ 
+ 
++def _add_missing_columns(connection: sqlite3.Connection) -> None:
++    """Bring a database written by an earlier version up to the current schema.
++
++    ``CREATE TABLE IF NOT EXISTS`` leaves an existing table as it is, so a
++    column added since must be added here. It goes on the end, which is also
++    where ``_SCHEMA`` declares it, so an upgraded table and a new one agree.
++    """
++    columns = {row[1] for row in connection.execute('PRAGMA table_info(finding)')}
++    if 'account_id' not in columns:
++        connection.execute('ALTER TABLE finding ADD COLUMN account_id TEXT')
++
++
+ def _row_count(connection: sqlite3.Connection) -> int:
+     return int(connection.execute('SELECT count(*) FROM finding').fetchone()[0])
+diff --git a/pristine/v6base/reconciler/summary.py b/v6base_C4/reconciler/summary.py
+index bb22417..09ea60e 100644
+--- a/pristine/v6base/reconciler/summary.py
++++ b/v6base_C4/reconciler/summary.py
+@@ -22,6 +22,7 @@ _FINDING_HEADINGS = (
+     'resource',
+     'sku',
+     'team',
++    'account',
+     'monthly',
+     'billed_region',
+     'scanned_region',
+@@ -58,6 +59,7 @@ def _finding_row(finding: Finding) -> tuple[str, ...]:
+         finding.resource_id,
+         finding.sku,
+         finding.team or ABSENT,
++        finding.account_id or ABSENT,
+         ABSENT if finding.monthly_cents is None else f'{finding.monthly_cents}c',
+         finding.billed_region or ABSENT,
+         finding.scanned_region or ABSENT,

@@ -1,0 +1,343 @@
+diff --git a/pristine/v5full/reconciler/__main__.py b/v5full_C1/reconciler/__main__.py
+index 559c475..3a3ff34 100644
+--- a/pristine/v5full/reconciler/__main__.py
++++ b/v5full_C1/reconciler/__main__.py
+@@ -11,16 +11,18 @@ Exit codes:
+     2  the rules file or the input directory was unusable, so nothing was reconciled
+ 
+ Modules, in reading order:
+-    rules        the rules file, and the region aliases and grace it states
+-    inventory    every inventory file of the input directory, whichever format each one is
+-    billing_csv  one `*.billing.csv` from the finance export
+-    scan_json    one `*.scan.json` from the asset scanner
+-    join         billing lines matched to scanned resources, and what fails to match
+-    reconcile    one reconciliation, for a caller that is not this program
+-    store        the SQLite file that holds every finding
+-    report       the table for the terminal and the JSON report
+-    vocabulary   the types these modules pass between them
+-    logs         the logger they all write to
++    rules         the rules file, and the region aliases and grace it states
++    inventory     every inventory file of the input directory, whichever format each one is
++    billing_csv   one `*.billing.csv` from the finance export
++    ledger_tsv    one `*.ledger.tsv` from the finance ledger export
++    billing_line  one line of either finance export
++    scan_json     one `*.scan.json` from the asset scanner
++    join          billing lines matched to scanned resources, and what fails to match
++    reconcile     one reconciliation, for a caller that is not this program
++    store         the SQLite file that holds every finding
++    report        the table for the terminal and the JSON report
++    vocabulary    the types these modules pass between them
++    logs          the logger they all write to
+ """
+ 
+ from __future__ import annotations
+diff --git a/pristine/v5full/reconciler/billing_csv.py b/v5full_C1/reconciler/billing_csv.py
+index 14259b3..0cba9a7 100644
+--- a/pristine/v5full/reconciler/billing_csv.py
++++ b/v5full_C1/reconciler/billing_csv.py
+@@ -3,9 +3,7 @@
+     resource_id,sku,monthly_cents,region
+     i-0001,compute-std,120000,us-east-1
+ 
+-A billing line carries a cost and no owning team, so `team` is None on every record this module
+-builds. A wrong header stops the file. A line with the wrong field count or a non-integer cost is
+-rejected on its own and counted.
++A wrong header stops the file. A malformed line is rejected on its own and counted.
+ """
+ 
+ from __future__ import annotations
+@@ -13,21 +11,9 @@ from __future__ import annotations
+ import csv
+ from pathlib import Path
+ 
++from reconciler import billing_line
+ from reconciler.logs import LOG
+-from reconciler.vocabulary import (
+-    Cents,
+-    FileRead,
+-    InventoryFileError,
+-    InventoryFormat,
+-    InventoryLineError,
+-    InventoryRecord,
+-    RegionName,
+-    ResourceId,
+-    Sku,
+-)
+-
+-
+-_BILLING_COLUMNS = ('resource_id', 'sku', 'monthly_cents', 'region')
++from reconciler.vocabulary import FileRead, InventoryFileError, InventoryFormat, InventoryLineError
+ 
+ 
+ def readBillingLines(billing_path: Path) -> FileRead:
+@@ -48,8 +34,8 @@ def readBillingLines(billing_path: Path) -> FileRead:
+ 
+     lines = csv.reader(billing_text.splitlines())
+     header = next(lines, None)
+-    if header != list(_BILLING_COLUMNS):
+-        raise _rejectBillingFile(billing_path, f'the header row is {header}, not {list(_BILLING_COLUMNS)}')
++    if header != list(billing_line.BILLING_FIELDS):
++        raise _rejectBillingFile(billing_path, f'the header row is {header}, not {list(billing_line.BILLING_FIELDS)}')
+ 
+     records = []
+     rejected_lines = 0
+@@ -57,37 +43,15 @@ def readBillingLines(billing_path: Path) -> FileRead:
+         if not fields:
+             continue
+         try:
+-            records.append(_parseBillingLine(fields, billing_path, line_number))
++            records.append(
++                billing_line.parseBillingLine(fields, billing_path, line_number, origin=InventoryFormat.BILLING_CSV),
++            )
+         except InventoryLineError:
+             rejected_lines += 1
+ 
+     return FileRead(records=tuple(records), rejected_lines=rejected_lines)
+ 
+ 
+-def _parseBillingLine(fields: list[str], billing_path: Path, line_number: int) -> InventoryRecord:
+-    if len(fields) != len(_BILLING_COLUMNS):
+-        raise _rejectBillingLine(billing_path, line_number, f'{len(fields)} fields, not {len(_BILLING_COLUMNS)}')
+-    resource_id, sku, monthly_cents, region = (field.strip() for field in fields)
+-    if not resource_id:
+-        raise _rejectBillingLine(billing_path, line_number, 'the resource_id is empty')
+-    if not monthly_cents.removeprefix('-').isdigit():
+-        raise _rejectBillingLine(billing_path, line_number, f'monthly_cents is {monthly_cents!r}, not an integer')
+-
+-    return InventoryRecord(
+-        resource_id=ResourceId(resource_id),
+-        sku=Sku(sku),
+-        region=RegionName(region),
+-        origin=InventoryFormat.BILLING_CSV,
+-        monthly_cents=Cents(int(monthly_cents)),
+-        team=None,
+-    )
+-
+-
+-def _rejectBillingLine(billing_path: Path, line_number: int, reason: str) -> InventoryLineError:
+-    LOG.debug('billing.line_rejected', extra={'path': str(billing_path), 'line': line_number, 'reason': reason})
+-    return InventoryLineError(reason)
+-
+-
+ def _rejectBillingFile(billing_path: Path, reason: str) -> InventoryFileError:
+     LOG.debug('billing.file_rejected', extra={'path': str(billing_path), 'reason': reason})
+     return InventoryFileError(reason)
+diff --git a/v5full_C1/reconciler/billing_line.py b/v5full_C1/reconciler/billing_line.py
+new file mode 100644
+index 0000000..3ec9e2f
+--- /dev/null
++++ b/v5full_C1/reconciler/billing_line.py
+@@ -0,0 +1,67 @@
++"""Parse the four fields of one finance billing line into an InventoryRecord.
++
++    ['i-0014', 'compute-gpu', '250000', 'us-east-1']
++    -> InventoryRecord(resource_id='i-0014', sku='compute-gpu', region='us-east-1',
++                       origin=<InventoryFormat.LEDGER_TSV: 'ledger.tsv'>, monthly_cents=250000, team=None)
++
++Both finance exports write these fields in this order. A billing line carries a cost and no owning
++team, so `team` is None on every record this module builds.
++"""
++
++from __future__ import annotations
++
++from collections.abc import Sequence
++from pathlib import Path
++
++from reconciler.logs import LOG
++from reconciler.vocabulary import (
++    Cents,
++    InventoryFormat,
++    InventoryLineError,
++    InventoryRecord,
++    RegionName,
++    ResourceId,
++    Sku,
++)
++
++
++BILLING_FIELDS = ('resource_id', 'sku', 'monthly_cents', 'region')
++
++
++def parseBillingLine(
++    fields: Sequence[str],
++    billing_path: Path,
++    line_number: int,
++    *,
++    origin: InventoryFormat,
++) -> InventoryRecord:
++    """Build the record one billing line states.
++
++    Args:
++        billing_path: Where the line came from, for the rejection log.
++        origin: The export the line was read from.
++
++    Raises:
++        InventoryLineError: the line has the wrong field count, an empty resource_id or a non-integer cost.
++    """
++    if len(fields) != len(BILLING_FIELDS):
++        raise _rejectBillingLine(billing_path, line_number, f'{len(fields)} fields, not {len(BILLING_FIELDS)}')
++    resource_id, sku, monthly_cents, region = (field.strip() for field in fields)
++    if not resource_id:
++        raise _rejectBillingLine(billing_path, line_number, 'the resource_id is empty')
++    if not monthly_cents.removeprefix('-').isdigit():
++        raise _rejectBillingLine(billing_path, line_number, f'monthly_cents is {monthly_cents!r}, not an integer')
++
++    return InventoryRecord(
++        resource_id=ResourceId(resource_id),
++        sku=Sku(sku),
++        region=RegionName(region),
++        origin=origin,
++        monthly_cents=Cents(int(monthly_cents)),
++        team=None,
++    )
++
++
++def _rejectBillingLine(billing_path: Path, line_number: int, reason: str) -> InventoryLineError:
++    LOG.debug('billing.line_rejected', extra={'path': str(billing_path), 'line': line_number, 'reason': reason})
++    return InventoryLineError(reason)
+diff --git a/pristine/v5full/reconciler/inventory.py b/v5full_C1/reconciler/inventory.py
+index 1a898b5..74cd36c 100644
+--- a/pristine/v5full/reconciler/inventory.py
++++ b/v5full_C1/reconciler/inventory.py
+@@ -1,8 +1,9 @@
+ """Read every inventory file of an input directory, whichever format each one is.
+ 
+-A file whose name ends in neither `.billing.csv` nor `.scan.json` is not inventory and is passed
+-over, which is what lets the rules file share the directory. A file that fails as a whole becomes an
+-outcome carrying the reason and contributes no record, so the files after it are still read.
++A file whose name ends in none of `.billing.csv`, `.scan.json` and `.ledger.tsv` is not inventory
++and is passed over, which is what lets the rules file share the directory. A file that fails as a
++whole becomes an outcome carrying the reason and contributes no record, so the files after it are
++still read.
+ 
+ Outcomes are in filename order, one per inventory file. This module logs the per-file tally; the
+ readers log the individual line.
+@@ -12,7 +13,7 @@ from __future__ import annotations
+ 
+ from pathlib import Path
+ 
+-from reconciler import billing_csv, scan_json
++from reconciler import billing_csv, ledger_tsv, scan_json
+ from reconciler.logs import LOG
+ from reconciler.vocabulary import (
+     FileOutcome,
+@@ -87,3 +88,5 @@ def _readInventoryFile(inventory_path: Path, inventory_format: InventoryFormat)
+             return billing_csv.readBillingLines(inventory_path)
+         case InventoryFormat.SCAN_JSON:
+             return scan_json.readScannedResources(inventory_path)
++        case InventoryFormat.LEDGER_TSV:
++            return ledger_tsv.readLedgerLines(inventory_path)
+diff --git a/pristine/v5full/reconciler/join.py b/v5full_C1/reconciler/join.py
+index abdb6ca..65cca72 100644
+--- a/pristine/v5full/reconciler/join.py
++++ b/v5full_C1/reconciler/join.py
+@@ -1,8 +1,9 @@
+ """Match billing lines to scanned resources on resource_id, and report what fails to match.
+ 
+-Each resource_id matches at most one line on each side. A record whose sku is ignored by the rules
+-takes part in no match and appears in no finding, and a resource_id that both sides state twice
+-keeps the last record read.
++A billing line is a record from either finance export, `billing.csv` or `ledger.tsv`. Each
++resource_id matches at most one line on each side. A record whose sku is ignored by the rules takes
++part in no match and appears in no finding, and a resource_id that both sides state twice keeps the
++last record read.
+ 
+ A finding carries the fields the side that produced it had: a billed_not_found finding names a cost
+ and no team, and a found_not_billed finding names a team and no cost.
+@@ -32,8 +33,8 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+         sorted by resource_id.
+     """
+     joinable = [record for record in records if record.sku not in reconcile_rules.ignored_skus]
+-    billed = _indexByResourceId(record for record in joinable if record.origin is InventoryFormat.BILLING_CSV)
+-    scanned = _indexByResourceId(record for record in joinable if record.origin is InventoryFormat.SCAN_JSON)
++    billed = _indexByResourceId(record for record in joinable if _billingFormat(record.origin))
++    scanned = _indexByResourceId(record for record in joinable if not _billingFormat(record.origin))
+ 
+     billed_not_found = []
+     for resource_id in sorted(billed.keys() - scanned.keys()):
+@@ -93,6 +94,14 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+     return findings
+ 
+ 
++def _billingFormat(inventory_format: InventoryFormat) -> bool:
++    match inventory_format:
++        case InventoryFormat.BILLING_CSV | InventoryFormat.LEDGER_TSV:
++            return True
++        case InventoryFormat.SCAN_JSON:
++            return False
++
++
+ def _indexByResourceId(records: Iterable[InventoryRecord]) -> dict[ResourceId, InventoryRecord]:
+     indexed: dict[ResourceId, InventoryRecord] = {}
+     for record in records:
+diff --git a/v5full_C1/reconciler/ledger_tsv.py b/v5full_C1/reconciler/ledger_tsv.py
+new file mode 100644
+index 0000000..382a5a7
+--- /dev/null
++++ b/v5full_C1/reconciler/ledger_tsv.py
+@@ -0,0 +1,53 @@
++"""Read a `*.ledger.tsv` file from the finance ledger export into InventoryRecords.
++
++    # exported 2026-02-01 by ledger-svc
++    i-0014	compute-gpu	250000	us-east-1
++
++There is no header row. A line whose first non-whitespace character is `#` is a comment. A malformed
++line is rejected on its own and counted.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++from reconciler import billing_line
++from reconciler.logs import LOG
++from reconciler.vocabulary import FileRead, InventoryFileError, InventoryFormat, InventoryLineError
++
++
++def readLedgerLines(ledger_path: Path) -> FileRead:
++    """Parse every line of one ledger export.
++
++    Returns:
++        The accepted records in file order, and the count of lines rejected.
++
++    Raises:
++        InventoryFileError: the file could not be read.
++    """
++    try:
++        ledger_text = ledger_path.read_text(encoding='utf-8')
++    except UnicodeDecodeError as exc:
++        raise _rejectLedgerFile(ledger_path, 'the file is not UTF-8 text') from exc
++    except OSError as exc:
++        raise _rejectLedgerFile(ledger_path, 'the file could not be read') from exc
++
++    records = []
++    rejected_lines = 0
++    for line_number, line in enumerate(ledger_text.splitlines(), start=1):
++        if not line.strip() or line.lstrip().startswith('#'):
++            continue
++        fields = line.split('\t')
++        try:
++            records.append(
++                billing_line.parseBillingLine(fields, ledger_path, line_number, origin=InventoryFormat.LEDGER_TSV),
++            )
++        except InventoryLineError:
++            rejected_lines += 1
++
++    return FileRead(records=tuple(records), rejected_lines=rejected_lines)
++
++
++def _rejectLedgerFile(ledger_path: Path, reason: str) -> InventoryFileError:
++    LOG.debug('ledger.file_rejected', extra={'path': str(ledger_path), 'reason': reason})
++    return InventoryFileError(reason)
+diff --git a/pristine/v5full/reconciler/vocabulary.py b/v5full_C1/reconciler/vocabulary.py
+index 90ec16e..65a6813 100644
+--- a/pristine/v5full/reconciler/vocabulary.py
++++ b/v5full_C1/reconciler/vocabulary.py
+@@ -28,6 +28,7 @@ class InventoryFormat(Enum):
+     # The value is the filename suffix that the writing tool gives the format.
+     BILLING_CSV = 'billing.csv'
+     SCAN_JSON = 'scan.json'
++    LEDGER_TSV = 'ledger.tsv'
+ 
+ 
+ class FindingKind(Enum):

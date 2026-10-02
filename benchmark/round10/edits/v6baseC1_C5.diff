@@ -1,0 +1,220 @@
+diff --git a/pristine/v6baseC1/reconciler/__init__.py b/v6baseC1_C5/reconciler/__init__.py
+index 45a5dce..1a09099 100644
+--- a/pristine/v6baseC1/reconciler/__init__.py
++++ b/v6baseC1_C5/reconciler/__init__.py
+@@ -22,8 +22,8 @@ directory is unusable, which is the only failure that stops a whole run; an
+ unreadable inventory file is recorded against that file and the rest are read.
+ 
+ The modules behind it: ``rules`` reads and checks the rules file,
+-``billing_csv``, ``ledger_tsv`` and ``scan_json`` read the three inventory
+-formats, ``inventory`` walks the input directory, ``join`` decides which
++``billing_csv``, ``ledger_tsv``, ``charges_psv`` and ``scan_json`` read the
++four inventory formats, ``inventory`` walks the input directory, ``join`` decides which
+ findings exist, ``store`` keeps them in SQLite, ``report`` writes the JSON,
+ ``summary`` prints the table and ``cli`` wires the command-line tool together.
+ """
+diff --git a/pristine/v6baseC1/reconciler/billing_csv.py b/v6baseC1_C5/reconciler/billing_csv.py
+index 11a06aa..bf80b40 100644
+--- a/pristine/v6baseC1/reconciler/billing_csv.py
++++ b/v6baseC1_C5/reconciler/billing_csv.py
+@@ -83,8 +83,8 @@ def read_billing_row(
+ ) -> BillingLine | None:
+     """Turn one data row into a record, or reject it and return ``None``.
+ 
+-    The ledger export carries the same four fields in the same order, so its
+-    reader checks each row here too.
++    The ledger and charges exports carry the same four fields in the same
++    order, so their readers check each row here too.
+     """
+     where = f'{source} line {line_number}'
+ 
+diff --git a/v6baseC1_C5/reconciler/charges_psv.py b/v6baseC1_C5/reconciler/charges_psv.py
+new file mode 100644
+index 0000000..d890f93
+--- /dev/null
++++ b/v6baseC1_C5/reconciler/charges_psv.py
+@@ -0,0 +1,89 @@
++"""Reader for the third finance export, ``*.charges.psv``.
++
++Like the billing CSV and the ledger, the charges export carries a cost and no
++owning team, and its records are billing lines. Fields are separated by ``|``
++and read by position. Comment and blank lines may appear anywhere; the first
++line that is neither is the header, and it must be the billing CSV's four
++names in the same order.
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++
++from .billing_csv import HEADER, read_billing_row
++from .ledger_tsv import COMMENT_MARK
++from .models import BillingLine, FileFormat, FileOutcome, FileStatus
++
++SEPARATOR = '|'
++"""The character between two fields, in the header and in every record."""
++
++HEADER_LINE = SEPARATOR.join(HEADER)
++"""The exact header line a charges file must hold before its first record."""
++
++
++def read_charges_file(
++    path: Path, accepted_resource_ids: set[str]
++) -> tuple[list[BillingLine], FileOutcome]:
++    """Read one charges file and report what became of every record line.
++
++    Args:
++        path: The file to read.
++        accepted_resource_ids: The billing side's set, shared with the billing
++            CSV and ledger readers. See :func:`~reconciler.billing_csv.read_billing_file`;
++            a ``resource_id`` already accepted from any of the three is rejected.
++
++    Returns:
++        The accepted records in file order, and the file's outcome. A file
++        whose header is missing or wrong fails as a whole and returns no
++        records.
++    """
++    outcome = FileOutcome(path=path.name, file_format=FileFormat.CHARGES, status=FileStatus.OK)
++
++    try:
++        raw_text = path.read_text(encoding='utf-8')
++    except (OSError, UnicodeDecodeError) as error:
++        outcome.status = FileStatus.FAILED
++        outcome.problems.append(f'{path.name}: unreadable ({error})')
++        return [], outcome
++
++    records: list[BillingLine] = []
++    header_seen = False
++    # Lines are split as the ledger reader splits them: on LF alone, with one
++    # trailing CR dropped, so a CRLF file reads the same.
++    for line_number, raw_line in enumerate(raw_text.split('\n'), start=1):
++        line = raw_line.removesuffix('\r')
++        content = line.strip()
++        if not content or content.startswith(COMMENT_MARK):
++            continue
++        if not header_seen:
++            if line != HEADER_LINE:
++                return [], _fail_on_header(outcome, path.name)
++            header_seen = True
++            continue
++        record = read_billing_row(
++            line.split(SEPARATOR), path.name, line_number, outcome, accepted_resource_ids
++        )
++        if record is not None:
++            records.append(record)
++            accepted_resource_ids.add(record.resource_id)
++
++    # A file of comments and blank lines alone has no header either.
++    if not header_seen:
++        return [], _fail_on_header(outcome, path.name)
++
++    if outcome.rejected:
++        outcome.status = FileStatus.PARTIAL
++    outcome.accepted = len(records)
++    return records, outcome
++
++
++def _fail_on_header(outcome: FileOutcome, source: str) -> FileOutcome:
++    """Fail the whole file because its header is absent or wrong.
++
++    Nothing is added to the shared set before the header is found, so
++    failing here leaves no trace on the files read after this one.
++    """
++    outcome.status = FileStatus.FAILED
++    outcome.problems.append(f'{source}: does not hold the header {HEADER_LINE} before its records')
++    return outcome
+diff --git a/pristine/v6baseC1/reconciler/cli.py b/v6baseC1_C5/reconciler/cli.py
+index 9bd6065..97c2ebb 100644
+--- a/pristine/v6baseC1/reconciler/cli.py
++++ b/v6baseC1_C5/reconciler/cli.py
+@@ -75,8 +75,8 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
+     parser.add_argument(
+         'input_dir',
+         help=(
+-            'directory holding the *.billing.csv, *.ledger.tsv and *.scan.json files '
+-            'to reconcile'
++            'directory holding the *.billing.csv, *.ledger.tsv, *.charges.psv and '
++            '*.scan.json files to reconcile'
+         ),
+     )
+     parser.add_argument(
+@@ -122,4 +122,4 @@ def _log_files(result: ReconcileResult) -> None:
+         elif outcome.status is FileStatus.PARTIAL:
+             _log.warning('%s: %d record(s) rejected', outcome.path, outcome.rejected)
+         elif outcome.status is FileStatus.SKIPPED:
+-            _log.info('%s is not a billing, ledger or scan file, skipped', outcome.path)
++            _log.info('%s is not a billing, ledger, charges or scan file, skipped', outcome.path)
+diff --git a/pristine/v6baseC1/reconciler/inventory.py b/v6baseC1_C5/reconciler/inventory.py
+index 2dc7af5..26a910c 100644
+--- a/pristine/v6baseC1/reconciler/inventory.py
++++ b/v6baseC1_C5/reconciler/inventory.py
+@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
+ from pathlib import Path
+ 
+ from .billing_csv import read_billing_file
++from .charges_psv import read_charges_file
+ from .errors import ReconcileError
+ from .ledger_tsv import read_ledger_file
+ from .models import BillingLine, FileFormat, FileOutcome, FileStatus, ScannedResource
+@@ -18,6 +19,7 @@ from .scan_json import read_scan_file
+ 
+ BILLING_SUFFIX = '.billing.csv'
+ LEDGER_SUFFIX = '.ledger.tsv'
++CHARGES_SUFFIX = '.charges.psv'
+ SCAN_SUFFIX = '.scan.json'
+ 
+ 
+@@ -45,6 +47,8 @@ def classify(name: str) -> FileFormat:
+         return FileFormat.BILLING
+     if name.endswith(LEDGER_SUFFIX):
+         return FileFormat.LEDGER
++    if name.endswith(CHARGES_SUFFIX):
++        return FileFormat.CHARGES
+     if name.endswith(SCAN_SUFFIX):
+         return FileFormat.SCAN
+     return FileFormat.UNKNOWN
+@@ -82,6 +86,10 @@ def read_inventory(input_dir: Path, rules_path: Path) -> Inventory:
+             # Ledger records are billing lines and share the billing side's ids.
+             records, outcome = read_ledger_file(path, billed_ids)
+             inventory.billing.extend(records)
++        elif file_format is FileFormat.CHARGES:
++            # Charges records are billing lines too, and share the same ids.
++            records, outcome = read_charges_file(path, billed_ids)
++            inventory.billing.extend(records)
+         elif file_format is FileFormat.SCAN:
+             resources, outcome = read_scan_file(path, scanned_ids)
+             inventory.scanned.extend(resources)
+diff --git a/pristine/v6baseC1/reconciler/models.py b/v6baseC1_C5/reconciler/models.py
+index e7673d9..8cb8ec7 100644
+--- a/pristine/v6baseC1/reconciler/models.py
++++ b/v6baseC1_C5/reconciler/models.py
+@@ -16,6 +16,7 @@ class FileFormat(StrEnum):
+ 
+     BILLING = 'billing'
+     LEDGER = 'ledger'
++    CHARGES = 'charges'
+     SCAN = 'scan'
+     UNKNOWN = 'unknown'
+ 
+@@ -43,7 +44,7 @@ class FindingKind(StrEnum):
+ 
+ @dataclass(frozen=True, slots=True)
+ class BillingLine:
+-    """One accepted record of a ``*.billing.csv`` or ``*.ledger.tsv`` file.
++    """One accepted record of a ``*.billing.csv``, ``*.ledger.tsv`` or ``*.charges.psv`` file.
+ 
+     ``region`` is the raw string the file wrote. The alias table is applied at
+     comparison time and never stored, because the report must echo the raw form.
+diff --git a/pristine/v6baseC1/reconciler/pipeline.py b/v6baseC1_C5/reconciler/pipeline.py
+index 23c8a66..ef9aad4 100644
+--- a/pristine/v6baseC1/reconciler/pipeline.py
++++ b/v6baseC1_C5/reconciler/pipeline.py
+@@ -51,7 +51,7 @@ def reconcile(input_dir: str | Path, rules_path: str | Path | None = None) -> Re
+ 
+     Args:
+         input_dir: The directory holding the ``*.billing.csv``,
+-            ``*.ledger.tsv`` and ``*.scan.json`` files. A directory holding none
++            ``*.ledger.tsv``, ``*.charges.psv`` and ``*.scan.json`` files. A directory holding none
+             of them is not an error: the result is empty and the exit code is
+             ``0``.
+         rules_path: The rules file. Defaults to ``reconcile.json`` inside

@@ -1,0 +1,105 @@
+diff --git a/pristine/v5full/reconciler/join.py b/v5full_C3/reconciler/join.py
+index abdb6ca..3376828 100644
+--- a/pristine/v5full/reconciler/join.py
++++ b/v5full_C3/reconciler/join.py
+@@ -4,6 +4,10 @@ Each resource_id matches at most one line on each side. A record whose sku is ig
+ takes part in no match and appears in no finding, and a resource_id that both sides state twice
+ keeps the last record read.
+ 
++A scanned resource whose team is ignored by the rules is excluded the same way, and so is every
++billing line for its resource_id, unless a scanned resource of another team states that resource_id
++too.
++
+ A finding carries the fields the side that produced it had: a billed_not_found finding names a cost
+ and no team, and a found_not_billed finding names a team and no cost.
+ """
+@@ -32,8 +36,22 @@ def findMismatches(records: Iterable[InventoryRecord], reconcile_rules: Reconcil
+         sorted by resource_id.
+     """
+     joinable = [record for record in records if record.sku not in reconcile_rules.ignored_skus]
+-    billed = _indexByResourceId(record for record in joinable if record.origin is InventoryFormat.BILLING_CSV)
+-    scanned = _indexByResourceId(record for record in joinable if record.origin is InventoryFormat.SCAN_JSON)
++    scanned = _indexByResourceId(
++        record
++        for record in joinable
++        if record.origin is InventoryFormat.SCAN_JSON and record.team not in reconcile_rules.ignored_teams
++    )
++    # A billing line carries no team, so it is exempt only through the scanned resource it would match.
++    exempt = {
++        record.resource_id
++        for record in joinable
++        if record.origin is InventoryFormat.SCAN_JSON and record.team in reconcile_rules.ignored_teams
++    } - scanned.keys()
++    billed = _indexByResourceId(
++        record
++        for record in joinable
++        if record.origin is InventoryFormat.BILLING_CSV and record.resource_id not in exempt
++    )
+ 
+     billed_not_found = []
+     for resource_id in sorted(billed.keys() - scanned.keys()):
+diff --git a/pristine/v5full/reconciler/rules.py b/v5full_C3/reconciler/rules.py
+index 8959b0a..dac042d 100644
+--- a/pristine/v5full/reconciler/rules.py
++++ b/v5full_C3/reconciler/rules.py
+@@ -2,12 +2,14 @@
+ 
+     {
+       "ignored_skus": ["support-plan"],
++      "ignored_teams": ["platform-infra"],
+       "region_aliases": {"us-east-1": "use1", "us-west-2": "usw2"},
+       "grace_cents": 500
+     }
+ 
+-All three keys are required, and the first malformed key stops the read. `region_aliases` maps one
+-spelling of a region to the other, and a region the file does not name stands for itself.
++`ignored_teams` is optional and stands for an empty list when absent. The other three keys are
++required, and the first malformed key stops the read. `region_aliases` maps one spelling of a region
++to the other, and a region the file does not name stands for itself.
+ `grace_cents` is the cost at or below which a billed_not_found finding is recorded and does not
+ fail the run.
+ """
+@@ -18,7 +20,7 @@ import json
+ from pathlib import Path
+ 
+ from reconciler.logs import LOG
+-from reconciler.vocabulary import Cents, Finding, FindingKind, ReconcileRules, RegionName, RulesFileError, Sku
++from reconciler.vocabulary import Cents, Finding, FindingKind, ReconcileRules, RegionName, RulesFileError, Sku, TeamName
+ 
+ 
+ def readRules(rules_path: Path) -> ReconcileRules:
+@@ -51,10 +53,12 @@ def readRules(rules_path: Path) -> ReconcileRules:
+     if absent:
+         raise _rejectRules(rules_path, f'the rules file states no {", no ".join(absent)}')
+     ignored_skus = stated['ignored_skus']
++    ignored_teams = stated.get('ignored_teams', [])
+     region_aliases = stated['region_aliases']
+     grace_cents = stated['grace_cents']
+-    if not isinstance(ignored_skus, list) or not all(isinstance(sku, str) for sku in ignored_skus):
+-        raise _rejectRules(rules_path, '"ignored_skus" is not a list of strings')
++    for key, names in (('ignored_skus', ignored_skus), ('ignored_teams', ignored_teams)):
++        if not isinstance(names, list) or not all(isinstance(name, str) for name in names):
++            raise _rejectRules(rules_path, f'"{key}" is not a list of strings')
+     if not isinstance(region_aliases, dict) or not all(
+         isinstance(alias, str) and isinstance(region, str) for alias, region in region_aliases.items()
+     ):
+@@ -64,6 +68,7 @@ def readRules(rules_path: Path) -> ReconcileRules:
+ 
+     reconcile_rules = ReconcileRules(
+         ignored_skus=frozenset(Sku(sku) for sku in ignored_skus),
++        ignored_teams=frozenset(TeamName(team) for team in ignored_teams),
+         region_aliases={RegionName(alias): RegionName(region) for alias, region in region_aliases.items()},
+         grace_cents=Cents(grace_cents),
+     )
+diff --git a/pristine/v5full/reconciler/vocabulary.py b/v5full_C3/reconciler/vocabulary.py
+index 90ec16e..1a133f9 100644
+--- a/pristine/v5full/reconciler/vocabulary.py
++++ b/v5full_C3/reconciler/vocabulary.py
+@@ -92,6 +92,7 @@ class Finding:
+ @dataclass(frozen=True)
+ class ReconcileRules:
+     ignored_skus: frozenset[Sku]
++    ignored_teams: frozenset[TeamName]
+     region_aliases: Mapping[RegionName, RegionName]
+     grace_cents: Cents
+ 

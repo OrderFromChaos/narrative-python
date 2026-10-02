@@ -65,6 +65,12 @@ produces material a later reader must see to judge the answer.
    of every internal blank line and marked up by hand, which measured `NAR008` at 42% precision and
    22% recall and removed it.
 
+9. **Round 10** — comments. A corpus of 478 comment blocks from the generated arms, the tooling's git
+   history, and 27 edit and reversal runs; a profile of Claude's comments against human-written
+   Python; then 41 forced choices on what a comment says and how. The user's own rewrites are
+   recorded as seeds, listed in `round10/seeds.md`. The rules shipped as `SKILL.md`, **Comments**, with `NAR012` to
+   `NAR016`. Directory: `round10/`.
+
 ## decisions.jsonl schema
 
 One object per line. Every rule in `skill/SKILL.md` must cite an `id` from this file. A rule
@@ -74,7 +80,7 @@ with no `id` and no linter behind it does not ship.
 |---|---|---|
 | `id` | str | `Q07`, `R2-03`, `R3-P1-rank`, `R5-06`, `V-03` |
 | `dimension` | str | dotted, e.g. `errors.chaining` |
-| `round` | str | `1`, `2`, `2b`, `3`, `3a`, `4`, `5`, `6`, `7`, `8`, `validation` |
+| `round` | str | `1`, `2`, `2b`, `3`, `3a`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `validation` |
 | `kind` | str | `control` \| `gap` \| `provocation` \| `derived` |
 | `options` | list[str] | short labels in the order presented |
 | `choice` | str | chosen label, or `depends` |

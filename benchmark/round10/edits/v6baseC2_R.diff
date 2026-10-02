@@ -1,0 +1,28 @@
+diff --git a/pristine/v6baseC2/reconciler/join.py b/v6baseC2_R/reconciler/join.py
+index 6b514b6..e627635 100644
+--- a/pristine/v6baseC2/reconciler/join.py
++++ b/v6baseC2_R/reconciler/join.py
+@@ -151,10 +151,11 @@ def _region_mismatches(
+ def _sku_mismatches(pairs: list[tuple[BillingLine, ScannedResource]]) -> list[Finding]:
+     """Build the findings for matched pairs whose skus differ.
+ 
+-    The skus are compared exactly, with no alias table. The finding carries
+-    both skus and everything else either side supplied. It is never above the
+-    grace: the resource is billed and running, so the bill is not paying for
+-    nothing.
++    The skus are compared ignoring case and surrounding whitespace, with no
++    alias table; ``ignored_skus``, by contrast, matches exactly. The finding
++    carries both skus as the files wrote them, and everything else either side
++    supplied. It is never above the grace: the resource is billed and running,
++    so the bill is not paying for nothing.
+     """
+     findings = [
+         Finding(
+@@ -170,6 +171,6 @@ def _sku_mismatches(pairs: list[tuple[BillingLine, ScannedResource]]) -> list[Fi
+             scanned_sku=resource.sku,
+         )
+         for line, resource in pairs
+-        if line.sku != resource.sku
++        if line.sku.strip().casefold() != resource.sku.strip().casefold()
+     ]
+     return sorted(findings, key=lambda finding: finding.resource_id)

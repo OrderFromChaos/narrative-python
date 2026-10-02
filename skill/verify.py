@@ -134,7 +134,7 @@ def discoverPython(paths: list[Path]) -> list[Path]:
 
 
 def missingConfigSections(pyproject_path: Path) -> list[str]:
-    """Name the Narrative config sections that this file does not carry.
+    """List the Narrative config sections missing from this file.
 
     Returns:
         Human-readable descriptions of what is absent. Empty when the config is usable.

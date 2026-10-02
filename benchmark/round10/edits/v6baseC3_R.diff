@@ -1,0 +1,93 @@
+diff --git a/pristine/v6baseC3/reconciler/join.py b/v6baseC3_R/reconciler/join.py
+index 708ff34..6459933 100644
+--- a/pristine/v6baseC3/reconciler/join.py
++++ b/v6baseC3_R/reconciler/join.py
+@@ -43,17 +43,15 @@ def join_inventory(inventory: Inventory, rules: Rules) -> JoinResult:
+         for resource in inventory.scanned
+         if rules.is_team_ignored(resource.team)
+     }
+-    sku_billed = [line for line in inventory.billing if not rules.is_ignored(line.sku)]
+-    sku_scanned = [
+-        resource for resource in inventory.scanned if not rules.is_ignored(resource.sku)
+-    ]
+     billed = {
+-        line.resource_id: line for line in sku_billed if line.resource_id not in team_ignored_ids
++        line.resource_id: line
++        for line in inventory.billing
++        if not rules.is_ignored(line.sku) and line.resource_id not in team_ignored_ids
+     }
+     scanned = {
+         resource.resource_id: resource
+-        for resource in sku_scanned
+-        if resource.resource_id not in team_ignored_ids
++        for resource in inventory.scanned
++        if not rules.is_ignored(resource.sku) and resource.resource_id not in team_ignored_ids
+     }
+ 
+     matched_ids = billed.keys() & scanned.keys()
+@@ -77,10 +75,8 @@ def join_inventory(inventory: Inventory, rules: Rules) -> JoinResult:
+     totals = Totals(
+         billing_lines=len(inventory.billing),
+         scanned_resources=len(inventory.scanned),
+-        ignored_billing=len(inventory.billing) - len(sku_billed),
+-        ignored_scanned=len(inventory.scanned) - len(sku_scanned),
+-        ignored_billing_by_team=len(sku_billed) - len(billed),
+-        ignored_scanned_by_team=len(sku_scanned) - len(scanned),
++        ignored_billing=len(inventory.billing) - len(billed),
++        ignored_scanned=len(inventory.scanned) - len(scanned),
+         matched=len(matched_ids),
+         findings=len(findings),
+         above_grace=sum(1 for finding in findings if finding.above_grace),
+diff --git a/pristine/v6baseC3/reconciler/models.py b/v6baseC3_R/reconciler/models.py
+index 6198a81..5a952f2 100644
+--- a/pristine/v6baseC3/reconciler/models.py
++++ b/v6baseC3_R/reconciler/models.py
+@@ -118,17 +118,14 @@ class Totals:
+ 
+     ``billing_lines`` and ``scanned_resources`` count accepted records before
+     either filter; ``ignored_billing`` and ``ignored_scanned`` count how many
+-    of those the sku filter then dropped. The two ``_by_team`` counts are the
+-    records the team filter dropped on top of those, so a record both filters
+-    match is counted once, under sku.
++    of those the sku and team filters then dropped. A record both filters match
++    is counted once.
+     """
+ 
+     billing_lines: int
+     scanned_resources: int
+     ignored_billing: int
+     ignored_scanned: int
+-    ignored_billing_by_team: int
+-    ignored_scanned_by_team: int
+     matched: int
+     findings: int
+     above_grace: int
+diff --git a/pristine/v6baseC3/reconciler/report.py b/v6baseC3_R/reconciler/report.py
+index 04538c8..a889597 100644
+--- a/pristine/v6baseC3/reconciler/report.py
++++ b/v6baseC3_R/reconciler/report.py
+@@ -70,8 +70,6 @@ def _totals_block(result: ReconcileResult) -> dict[str, Any]:
+         'scanned_resources': totals.scanned_resources,
+         'ignored_billing': totals.ignored_billing,
+         'ignored_scanned': totals.ignored_scanned,
+-        'ignored_billing_by_team': totals.ignored_billing_by_team,
+-        'ignored_scanned_by_team': totals.ignored_scanned_by_team,
+         'matched': totals.matched,
+         'findings': totals.findings,
+         'above_grace': totals.above_grace,
+diff --git a/pristine/v6baseC3/reconciler/summary.py b/v6baseC3_R/reconciler/summary.py
+index 29c53c9..bb22417 100644
+--- a/pristine/v6baseC3/reconciler/summary.py
++++ b/v6baseC3_R/reconciler/summary.py
+@@ -102,9 +102,9 @@ def _totals(out: TextIO, result: ReconcileResult) -> None:
+     totals = result.totals
+     lines = [
+         f'billing lines      {totals.billing_lines} '
+-        f'({totals.ignored_billing} ignored by sku, {totals.ignored_billing_by_team} by team)',
++        f'({totals.ignored_billing} ignored by sku)',
+         f'scanned resources  {totals.scanned_resources} '
+-        f'({totals.ignored_scanned} ignored by sku, {totals.ignored_scanned_by_team} by team)',
++        f'({totals.ignored_scanned} ignored by sku)',
+         f'matched pairs      {totals.matched}',
+         f'findings           {totals.findings} '
+         f'({totals.above_grace} above the {result.rules.grace_cents}c grace)',

@@ -1,0 +1,17 @@
+diff --git a/pristine/v6baseC1/reconciler/ledger_tsv.py b/v6baseC1_R/reconciler/ledger_tsv.py
+index cd07175..9f1203c 100644
+--- a/pristine/v6baseC1/reconciler/ledger_tsv.py
++++ b/v6baseC1_R/reconciler/ledger_tsv.py
+@@ -40,11 +40,7 @@ def read_ledger_file(
+         return [], outcome
+ 
+     records: list[BillingLine] = []
+-    # Split on LF alone and drop one trailing CR, so a CRLF file reads the same.
+-    # str.splitlines() is not used: it also breaks on form feeds and other
+-    # characters that are ordinary field content here.
+-    for line_number, raw_line in enumerate(raw_text.split('\n'), start=1):
+-        line = raw_line.removesuffix('\r')
++    for line_number, line in enumerate(raw_text.splitlines(), start=1):
+         # A whitespace-only line has no first non-whitespace character, so it
+         # is blank rather than a record of empty fields.
+         content = line.strip()

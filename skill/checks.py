@@ -2,7 +2,8 @@
 
 Each rule is one check. NAR001 and NAR006 cover module state. NAR002 covers class attributes.
 NAR003 covers layout. NAR004, NAR009 and NAR011 cover documentation. NAR005 covers annotation
-complexity. NAR007 covers boolean grouping. NAR010 covers FIXME reachability.
+complexity. NAR007 covers boolean grouping. NAR010 covers FIXME reachability. NAR012 to NAR016
+cover the wording of comments and docstrings.
 
 See tooling.md for what the other tools own.
 
@@ -20,15 +21,15 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import re
 import sys
+import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 
 
-### The rules that no off-the-shelf tool implements. Everything else is ruff, pylint or mypy;
-### see tooling.md for the split and for the evidence that each of those actually fires.
-### Stdlib only, so this runs anywhere python3 does.
+### stdlib only, so checks.py runs wherever python3 does
 
 MAX_BODY_LINES_WITHOUT_DOCSTRING = 20
 MAX_ARGS_ON_ONE_LINE = 3
@@ -45,11 +46,15 @@ RULES = {
     'NAR009': 'module docstring missing, or runnable module without a usage example',
     'NAR010': 'FIXME in reachable code -- a merge blocker, not a danger sign',
     'NAR011': 'docstring body is entirely indented -- `ruff format` will flatten the sample',
+    'NAR012': 'decision id in a comment or docstring -- unresolvable outside the repository that recorded it',
+    'NAR013': 'dash joining clauses in a comment or docstring -- write two sentences, or a semicolon if connected',
+    'NAR014': 'deliberately / on purpose / by design in a comment or docstring -- reassurance, no information',
+    'NAR015': 'changelog wording in a comment or docstring -- state the current code or data plainly',
+    'NAR016': 'container verb in a comment or docstring -- state the fact without making the subject hold or carry it',
     'NAR000': 'file could not be read or parsed',
 }
 
-### Withdrawn codes. A code stays here so that a document naming it still resolves, while `--select`
-### and the findings never offer it.
+### withdrawn codes: kept so documents naming them still resolve, excluded from --select and findings
 
 RETIRED = {
     'NAR008': 'withdrawn: blank lines inside a function are review judgement',
@@ -84,7 +89,6 @@ def main() -> int:
         print(f'{finding} -- {RULES.get(finding.code, "")}')
 
     if targets:
-        # A file already reported as unreadable must not be re-read here just to size the report.
         scanned = 0
         for checked_file in targets:
             try:
@@ -99,8 +103,7 @@ def main() -> int:
 
 
 def bindsAType(value: ast.expr) -> bool:
-    # `ScanId = NewType('ScanId', int)` and `Outcome = Literal['a', 'b']` are module-level Assign
-    # nodes, but they declare types. Reading one inside a function is not touching global state.
+    # `ScanId = NewType('ScanId', int)` and `Outcome = Literal['a', 'b']` parse as Assign nodes
     if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
         return value.func.id in TYPE_FACTORY_CALLS
     if isinstance(value, ast.Subscript):
@@ -109,8 +112,6 @@ def bindsAType(value: ast.expr) -> bool:
 
 
 def moduleLevelVariables(tree: ast.Module) -> set[str]:
-    # Only plain module-level assignments count. Imports, defs, classes and type aliases are
-    # referred to freely; the rule is about *variables* whose value a function depends on.
     names: set[str] = set()
     for node in tree.body:
         if isinstance(node, ast.Assign) and not bindsAType(node.value):
@@ -122,21 +123,14 @@ def moduleLevelVariables(tree: ast.Module) -> set[str]:
     return names
 
 
-### Python already forces `global` in order to REBIND a module name -- omit it and you silently get
-### a local instead. What Python does not force, and what no linter catches, is in-place MUTATION:
-### CONFIG.clear(), CONFIG['k'] = v and CONFIG.field = v all change module state with no declaration
-### and no error. That silent case is what this rule exists for. Read-only access is not flagged.
 # fmt: off
 MUTATING_METHODS = frozenset({
     'append', 'extend', 'insert', 'remove', 'pop', 'clear', 'sort', 'reverse',
     'update', 'setdefault', 'popitem', 'add', 'discard',
     '__setitem__', '__delitem__', '__iadd__',
 })
-# Configuration calls mutate module state just as container methods do -- `LOG.addHandler(...)`
-# changes what every later caller of LOG does. The marker tracks side effects, not containers.
-# Deliberately excludes 'write' and 'load'. `LOG_PATH.write_text(...)` writes a file and mutates
-# no module state, because a Path is a value. Including it made the flagship check fire on the
-# documented pattern, with no way to silence it but a `global` that lied about a side effect.
+# Configuration calls mutate module state too, e.g. `LOG.addHandler(...)`. No 'write' or 'load':
+# `LOG_PATH.write_text(...)` writes a file and mutates no module state.
 MUTATING_PREFIXES = (
     'set', 'add', 'remove', 'register', 'unregister', 'reset', 'delete', 'insert',
     'enable', 'disable', 'configure', 'install', 'attach', 'detach',
@@ -197,8 +191,6 @@ def mutatedModuleNames(func: ast.FunctionDef | ast.AsyncFunctionDef, module_vars
         elif isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             for item in targets:
-                # Plain `NAME = x` is a rebind, which Python already polices; only `NAME[k] = x`
-                # and `NAME.attr = x` slip through without a declaration.
                 if isinstance(item, (ast.Subscript, ast.Attribute)):
                     name = rootName(item)
                     if name in module_vars:
@@ -238,9 +230,8 @@ def locallyBoundNames(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
             bound.add(node.id)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             bound.update(a.asname or a.name.split('.')[0] for a in node.names)
-        # Kept as two branches deliberately. Merging them, even with explicit parentheses, widens
-        # `node` back to a union so mypy sees `node.name` as `str | None`. Type narrowing beats
-        # brevity here.
+        # Two branches: merging them, even with explicit parentheses, widens `node` back to a union,
+        # and mypy then types `node.name` as `str | None`.
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node is not func:
             bound.add(node.name)
         elif isinstance(node, ast.ExceptHandler) and node.name:
@@ -256,7 +247,7 @@ def checkGlobalDeclarations(tree: ast.Module, checked_file: Path) -> list[Findin
     setting. NAR006 is a bare assignment that shadows a module-level name, so the module value
     silently never changes.
 
-    Reads are not flagged (R2b-G1): `global` marks a side effect, not a dependency.
+    Reads aren't flagged: `global` marks a side effect, not a dependency.
     """
     module_vars = moduleLevelVariables(tree)
     findings: list[Finding] = []
@@ -270,16 +261,13 @@ def checkGlobalDeclarations(tree: ast.Module, checked_file: Path) -> list[Findin
             if isinstance(node, (ast.Global, ast.Nonlocal)):
                 declared.update(node.names)
 
-        # A name assigned anywhere in the function is a local, so mutating it is not touching
-        # module state -- that case is NAR006's, not this one's.
+        # names bound in the function are locals, covered by NAR006
         shadowed = locallyBoundNames(func) - declared
         mutated = sorted(mutatedModuleNames(func, module_vars) - declared - shadowed)
         if mutated:
             detail = f'{func.name} mutates {", ".join(mutated)}'
             findings.append(Finding(checked_file, func.lineno, 'NAR001', detail))
 
-        # A bare `NAME = x` with no `global` silently creates a local that shadows module state.
-        # Python accepts it; the module value never changes. Almost always a bug.
         rebound = {n.id for n in ast.walk(func) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Store)}
         shadowing = sorted((rebound & module_vars) - declared)
         if shadowing:
@@ -306,15 +294,14 @@ def checkHasattrSelf(tree: ast.Module, checked_file: Path) -> list[Finding]:
 def checkArgsPerLine(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Flag `def` signatures that keep more than three arguments on one line.
 
-    Scoped to signatures, not calls (R2b-B1): applying it to calls costs about 19% more lines,
-    because exploding an inner call forces the enclosing call to explode with it.
+    Signatures only; calls are exempt.
 
     The formatter cannot do this. `ruff format` leaves a four-argument signature alone while it
     fits in 120 columns, and COM812 only fires once a construct has already been split.
 
-    Only positional parameters count. Keyword-only parameters — anything after `*` — do not, so a
-    function may carry as many of those as it needs. That is also the escape hatch: marking the
-    optional parameters keyword-only both documents them and stops them counting.
+    Only positional parameters count. Keyword-only parameters, after `*`, don't, so a function may
+    have as many of those as it needs. Marking the optional parameters keyword-only documents them
+    and stops them counting.
     """
     findings: list[Finding] = []
 
@@ -337,8 +324,8 @@ def checkArgsPerLine(tree: ast.Module, checked_file: Path) -> list[Finding]:
 def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str, checked_file: Path) -> list[Finding]:
     """Report a function that the docstring trigger caught and whose docstring omits `Raises:`.
 
-    A docstring that exists is not a docstring that carries the contract, so the trigger and the
-    section check are two separate tests over the same function.
+    A docstring can exist without stating the contract, so the trigger and the section check are
+    two separate tests over the same function.
     """
     args = node.args
     every_arg = args.posonlyargs + args.args + args.kwonlyargs
@@ -349,9 +336,6 @@ def missingSections(node: ast.FunctionDef | ast.AsyncFunctionDef, docstring: str
     if arity <= MAX_ARGS_ON_ONE_LINE and body_lines <= MAX_BODY_LINES_WITHOUT_DOCSTRING:
         return []
 
-    # Raises: only. An exception is the one part of the contract that no annotation carries, so
-    # Args: and Returns: are left to review: demanding them produces text that restates the
-    # signature.
     if not any(isinstance(n, ast.Raise) for n in ast.walk(node)) or 'Raises:' in docstring:
         return []
 
@@ -402,7 +386,7 @@ def checkDocstringThreshold(tree: ast.Module, checked_file: Path) -> list[Findin
 
 
 def annotationThings(node: ast.expr) -> int:
-    """Count every name an annotation carries, except the outermost one.
+    """Count every name in an annotation, except the outermost one.
 
     What makes an annotation impossible to say out loud is how many things it names, at any nesting.
     Counting names rather than depth or width catches both
@@ -445,8 +429,6 @@ def checkAnnotationComplexity(tree: ast.Module, checked_file: Path) -> list[Find
                 continue
 
             rendered = ast.unparse(annotation)
-            # The trigger says the thing is too complex to name in conversation. The type says what
-            # to replace it with: a callable becomes a Protocol, anything else becomes a dataclass.
             remedy = 'a Protocol' if 'Callable' in rendered else 'a dataclass'
             detail = f'{count} things: {rendered} -> {remedy}'
             findings.append(Finding(checked_file, annotation.lineno, 'NAR005', detail))
@@ -457,9 +439,8 @@ def checkAnnotationComplexity(tree: ast.Module, checked_file: Path) -> list[Find
 def checkBoolOpParens(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
     """Flag an `and` group inside an `or` that is not parenthesised.
 
-    `A and B or C and D` is correct, because `and` binds tighter — but recovering that costs the
-    reader a precedence lookup, which is the rote parsing the style exists to remove. Merging
-    branches that share a body is encouraged; doing it by precedence is not.
+    `A and B or C and D` is correct, since `and` binds tighter, but reading it needs a precedence
+    lookup. Merging branches that share a body is fine; merging them by precedence isn't.
 
     The AST does not record parentheses, so this reads the source. Both sides must be checked: a
     trailing `)` alone is ambiguous, because the last operand of a parenthesised multi-line
@@ -516,9 +497,9 @@ def calleeName(node: ast.stmt) -> str | None:
 def checkModuleDocstring(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Require a module docstring, and a usage example on anything runnable.
 
-    The docstring is the first thing a reader meets, before `main()`. A module that can be executed
-    has to show how — semantics vary per program, and a reader should not have to reconstruct the
-    invocation from `argparse` calls further down.
+    The docstring is the first thing a reader meets, before `main()`. A runnable module's docstring
+    shows how to run it: invocation varies per program, and a reader shouldn't reconstruct it from
+    `argparse` calls further down.
 
     Returns:
         One finding for a missing docstring, or one for a runnable module whose docstring shows no
@@ -528,10 +509,6 @@ def checkModuleDocstring(tree: ast.Module, checked_file: Path) -> list[Finding]:
 
     docstring = ast.get_docstring(tree)
     if docstring is None:
-        # A package marker has nothing to describe (R7-B01-init), and a module holding one function
-        # is described by that function (R7-B10-scope). The second def is where a module starts
-        # being ABOUT something rather than doing one thing. A runnable module is never exempt: it
-        # still owes the usage example below.
         definitions = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
         exempt = (checked_file.name == '__init__.py' and not tree.body) or (len(definitions) == 1 and not runnable)
         if exempt:
@@ -596,9 +573,8 @@ def reachableFunctions(tree: ast.Module) -> set[str]:
     """
     defined = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
-    # A module with no entry point is a library module: its callers are in other files, which this
-    # per-file checker cannot see. Seeding only from a local `main` would make every function in
-    # such a module look orphaned, which lets a live marker in running code pass the gate.
+    # A library module (no main, no __main__ block) has its callers in other files, which this
+    # check doesn't read, so every function counts as reachable.
     entry = {name for name in defined if name == 'main'}
     runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
     if not entry and not runnable:
@@ -686,8 +662,85 @@ def checkFixmeReachability(tree: ast.Module, source: str, checked_file: Path) ->
     return findings
 
 
+def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
+    """Flag five kinds of wording that no comment or docstring needs.
+
+    - NAR012: a decision id, unresolvable outside the repository that recorded it
+    - NAR013: a dash joining clauses
+    - NAR014: reassurance words, listed in WORDING
+    - NAR015: changelog wording about code that is gone
+    - NAR016: a container verb on a subject that is not a container, listed in WORDING
+
+    `used to` counts as changelog only after a pronoun subject, since `the key used to sort` means
+    employed for. A bare `now` is not flagged; `now that X` and `until now` are common in correct
+    prose. A dash after a list-item term is a separator, not a clause join. Pragmas, section dividers
+    and pasted usage lines (`$`, `>>>`) are skipped.
+
+    Returns:
+        One finding per rule and line.
+    """
+    WORDING = {
+        'NAR012': re.compile(r'\b(?:Q\d{2}|R\d{1,2}[a-z]?-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*|V-\d\d)\b'),
+        'NAR013': re.compile(r'\s--\s|\u2014'),
+        'NAR014': re.compile(r'\b(?:deliberately|on purpose|by design|intentionally)\b', re.IGNORECASE),
+        'NAR015': re.compile(
+            r'\b(?:no longer|any ?more|previously|this change|the old)\b'
+            r'|\b(?:it|this|that|which|they|there)\s+used to\b',
+            re.IGNORECASE,
+        ),
+        'NAR016': re.compile(r'\b(?:carr(?:y|ies|ied|ying)|hold(?:s|ing)?|held)\b', re.IGNORECASE),
+    }
+
+    prose = [*commentLines(source), *docstringLines(tree)]
+    findings: list[Finding] = []
+    for number, text in prose:
+        list_item = re.match(r'[*-]\s', text)
+        for code, pattern in WORDING.items():
+            if code == 'NAR013' and list_item:
+                continue
+            if found := pattern.search(text):
+                findings.append(Finding(checked_file, number, code, repr(found.group(0).strip())))
+
+    return findings
+
+
+def commentLines(source: str) -> list[tuple[int, str]]:
+    lines: list[tuple[int, str]] = []
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+
+        text = token.string.lstrip('#').strip()
+        pragma = re.match(r'(?:noqa|type:|pragma|fmt:|ruff:|pylint:|mypy:)', text)
+        divider = re.search(r'[-=#~*]{4,}$', text)
+        if text and not pragma and not divider:
+            lines.append((token.start[0], text))
+
+    return lines
+
+
+def docstringLines(tree: ast.Module) -> list[tuple[int, str]]:
+    lines: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            continue
+        if ast.get_docstring(node) is None:
+            continue
+
+        literal = node.body[0]
+        if not isinstance(literal, ast.Expr) or not isinstance(literal.value, ast.Constant):
+            continue
+
+        for offset, text in enumerate(str(literal.value.value).splitlines()):
+            stripped = text.strip()
+            if stripped and not stripped.startswith(('$', '>>>')):
+                lines.append((literal.lineno + offset, stripped))
+
+    return lines
+
+
 def suppressedLines(source: str) -> dict[int, set[str]]:
-    """Map each line carrying a `# noqa: NARxxx` comment to the codes it silences.
+    """Map each line with a `# noqa: NARxxx` comment to the codes it silences.
 
     Every check here is a heuristic over syntax, so each one can be wrong. Without a suppression
     the only way to clear a false positive is to change correct code into incorrect code.
@@ -710,8 +763,8 @@ def suppressedLines(source: str) -> dict[int, set[str]]:
 def checkFile(checked_file: Path) -> list[Finding]:
     """Run every check against one file.
 
-    An unreadable file is reported like any other finding rather than aborting the run: a linter
-    invoked over a directory must not stop at the first bad path (Q24).
+    An unreadable file is reported like any other finding, so a run over a directory doesn't stop at
+    the first bad path.
 
     Returns:
         Every finding for this file, or a single NAR000 if it could not be read or parsed.
@@ -739,6 +792,7 @@ def checkFile(checked_file: Path) -> list[Finding]:
         *checkModuleDocstring(tree, checked_file),
         *checkFixmeReachability(tree, source, checked_file),
         *checkDocstringSample(tree, checked_file),
+        *checkProseWording(tree, source, checked_file),
     ]
 
     return [f for f in findings if not (suppressed.get(f.line, set()) & {f.code, 'ALL'})]

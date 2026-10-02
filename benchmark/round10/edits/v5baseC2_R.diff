@@ -1,0 +1,51 @@
+diff --git a/pristine/v5baseC2/reconcile/join.py b/v5baseC2_R/reconcile/join.py
+index 1038a03..0cc9ee2 100644
+--- a/pristine/v5baseC2/reconcile/join.py
++++ b/v5baseC2_R/reconcile/join.py
+@@ -66,7 +66,7 @@ def reconcile(
+         _billed_not_found(billed, found, rules)
+         + _found_not_billed(billed, found)
+         + _region_mismatch(billed, found, rules)
+-        + _sku_mismatch(billed, found, rules)
++        + _sku_mismatch(billed, found)
+     )
+     return JoinResult(findings=findings, stats=stats)
+ 
+@@ -149,18 +149,18 @@ def _region_mismatch(
+ def _sku_mismatch(
+     billed: dict[str, BillingLine],
+     found: dict[str, ScannedResource],
+-    rules: Rules,
+ ) -> list[Finding]:
+     """Both sides matched, but they disagree about the sku.
+ 
+-    The comparison ignores case, as `ignored_skus` does. The finding never sets
+-    the exit code, whatever the cost.
++    The comparison is exact and case-sensitive, so `Compute-Std` and
++    `compute-std` differ. The finding never sets the exit code, whatever the
++    cost.
+     """
+     findings = []
+     for key in sorted(billed.keys() & found.keys()):
+         line = billed[key]
+         resource = found[key]
+-        if rules.same_sku(line.sku, resource.sku):
++        if line.sku == resource.sku:
+             continue
+         findings.append(
+             Finding(
+diff --git a/pristine/v5baseC2/reconcile/rules.py b/v5baseC2_R/reconcile/rules.py
+index 33a74b9..6e05d77 100644
+--- a/pristine/v5baseC2/reconcile/rules.py
++++ b/v5baseC2_R/reconcile/rules.py
+@@ -56,10 +56,6 @@ class Rules:
+ 
+     def same_region(self, left: str, right: str) -> bool:
+         return self.canonical_region(left) == self.canonical_region(right)
+-
+-    def same_sku(self, left: str, right: str) -> bool:
+-        return left.strip().lower() == right.strip().lower()
+-
+     def as_dict(self) -> dict[str, Any]:
+         return {
+             "ignored_skus": sorted(self.ignored_skus),

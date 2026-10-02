@@ -1,0 +1,33 @@
+diff --git a/pristine/v5baseC1/reconcile/ledger.py b/v5baseC1_R/reconcile/ledger.py
+index 0a8006e..954fcef 100644
+--- a/pristine/v5baseC1/reconcile/ledger.py
++++ b/v5baseC1_R/reconcile/ledger.py
+@@ -29,13 +29,12 @@ def read_ledger_file(path: Path) -> tuple[list[BillingLine], list[str]]:
+     """Read one ledger file.
+ 
+     Returns the lines that parsed and a message for each line that did not. A
+-    bad line is skipped; the rest of the file is still read. A file that holds
+-    only comments and blank lines is valid and holds no records.
++    bad line is skipped; the rest of the file is still read.
+ 
+     Raises `MalformedInputError` if the file cannot be opened, is not UTF-8
+-    text, or holds record lines of which none has four tab-separated fields.
+-    The last case is a file in some other format, such as a CSV export with the
+-    wrong name.
++    text, holds only comments and blank lines, or holds record lines of which
++    none has four tab-separated fields. The last case is a file in some other
++    format, such as a CSV export with the wrong name.
+     """
+     try:
+         text = path.read_text(encoding="utf-8")
+@@ -47,7 +46,9 @@ def read_ledger_file(path: Path) -> tuple[list[BillingLine], list[str]]:
+         for number, line in enumerate(text.splitlines(), start=1)
+         if line.strip() and not line.lstrip().startswith("#")
+     ]
+-    if records and not any(
++    if not records:
++        raise MalformedInputError("file is empty, expected at least one record")
++    if not any(
+         len(line.split("\t")) == FIELD_COUNT for _, line in records
+     ):
+         raise MalformedInputError(
