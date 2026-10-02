@@ -19,7 +19,9 @@ round5/                  two measured rule revisions: NAR005 depth, NAR008 data 
 round7/questions.md      41 forced-choice architecture snippets, blind
 round7/key.md            what each probes; do not read before answering
 round8/                  red team: 35 defects from four fresh-context agents, plus the NAR008 measurement
-validation/              two held-out tasks for the blind skill-vs-doc comparison
+round9/                  the skill read as a text: four defects in it, and V4 as the held-out test
+round10/                 comments: the corpus, the profile against human code, 13 cycles of agent runs and ratings
+validation/              held-out tasks for the blind skill-vs-doc comparison
 decisions.jsonl          the evidence base, one answer per line
 ```
 
@@ -54,9 +56,9 @@ produces material a later reader must see to judge the answer.
 
 7. **Round 7** — architecture. Forty-one forced choices about which module imports which, where one file
    becomes several, and what a third-party dependency may touch. The program kinds are a
-   long-running service, an importable library and a monorepo. The one-shot CLI is deliberately
-   absent: it is the shape rounds 1 to 6 already cover, and the shape that hides every question this
-   round asks. Stage 2 builds real multi-module programs only where stage 1 leaves an answer open.
+   long-running service, an importable library and a monorepo. The one-shot CLI is left out: rounds
+   1 to 6 already cover that shape, and none of this round's questions come up in it. Stage 2 builds
+   real multi-module programs only where stage 1 leaves an answer open.
 
 8. **Round 8** — red team. Four agents with no access to the design conversation: one built a
    multi-module service against the skill, one read it hostilely for contradictions, one installed it
@@ -65,11 +67,16 @@ produces material a later reader must see to judge the answer.
    of every internal blank line and marked up by hand, which measured `NAR008` at 42% precision and
    22% recall and removed it.
 
-9. **Round 10** — comments. A corpus of 478 comment blocks from the generated arms, the tooling's git
-   history, and 27 edit and reversal runs; a profile of Claude's comments against human-written
-   Python; then 41 forced choices on what a comment says and how. The user's rewrites are
-   recorded as seeds, listed in `round10/seeds.md`. The rules shipped as `SKILL.md`, **Comments**, with `NAR012` to
-   `NAR016` and `NAR018`. Directory: `round10/`.
+9. **Round 9**: the skill read as a text. The author read the V3 output and reported four defects
+   in the skill's own text, and V4 was the held-out test of the fixes. Directory: `round9/`.
+
+10. **Round 10**: comments. A corpus of 478 comment blocks from the generated arms, the tooling's git
+    history, and 27 edit and reversal runs. A profile of Claude's comments against human-written
+    Python. 41 forced choices on what a comment says and how, with the user's rewrites recorded as
+    seeds in `round10/seeds.md`. Then 13 cycles of agent runs on fresh tasks, each rated by the
+    author, until the comments matched the author's taste. The rules are `SKILL.md`, **Comments**,
+    and the checks are `NAR012` to `NAR019`. `NAR017`, the agent-verb check, parses each sentence
+    with spaCy. Directory: `round10/`.
 
 ## decisions.jsonl schema
 
@@ -92,9 +99,10 @@ with no `id` and no linter behind it does not ship.
 
 ## Validation
 
-Two tasks in `validation/`, never used in elicitation. Each generated three ways — no guidance /
-the pre-existing style doc pasted as context / the finished skill — then shuffled blind for a 1-5
-rating plus violation marking, and scored with `ruff` + `pylint` + `mypy` + `checks.py`.
+Held-out tasks in `validation/`, never used to elicit a decision. Each is generated three ways: with
+no guidance, with the earlier style doc as context, and with the finished skill. The three are
+shuffled blind for a rating from 1 to 5 and for marking violations, and scored with `ruff`, `pylint`,
+`mypy` and `checks.py`.
 
 If the skill does not beat doc-as-context, it has not earned its context budget and should be cut
 back to a shorter rule list. That outcome is a real possible result of this benchmark, not a
