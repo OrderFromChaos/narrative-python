@@ -1,4 +1,4 @@
-# Narrative Python
+# Narrative
 
 **Makes Python Claude outputs pleasing to read: ~33% less code, zero mypy findings, and
 human-like comments.**
