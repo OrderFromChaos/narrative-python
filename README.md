@@ -3,9 +3,6 @@
 **Makes Python Claude outputs pleasing to read: ~33% less code, zero mypy findings, and
 human-like comments.**
 
-Narrative is a Claude Code skill. With it, Claude writes each module as a document you read from the
-top down: `main()` first, then the steps it calls in call order, then the types.
-
 ## What you get
 
 - **A third less code to review.** Programs Claude writes (based on a realistic spec) with the skill have
@@ -22,6 +19,8 @@ top down: `main()` first, then the steps it calls in call order, then the types.
   well.
 
 Rules come from 423 human-selected choices between real working programs.
+
+NOTE: this skill has an opinionated ordering for code (`main()` first, then the steps it calls in call order, then the types). This does produce readable and pleasing code, but may lead to a large refactor on first use. If you ask Claude to scope it to just your changes, it will do so.
 
 ## Before and after
 
