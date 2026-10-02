@@ -12,7 +12,7 @@ directly. (R10-uv)
 
 ## The split
 
-| Layer | Owns |
+| Layer | Job |
 |---|---|
 | `ruff format` | all whitespace, line breaking, quote normalisation |
 | `ruff check` | imports, annotations presence, bugbear, quotes, banned APIs, bare except |
@@ -32,18 +32,18 @@ Run order matters: `ruff check --fix`, then `ruff format`, then `pylint`, `mypy`
 themselves**, because a second copy of them drifts. What follows explains *why* each non-obvious
 setting is there.
 
-`disallow_any_explicit` is not part of `strict`, so a false value is the default. The snippet states
-it because it is a deliberate decision, not an oversight.
+`disallow_any_explicit` is not part of `strict`, so a false value is the default. It is in the
+snippet because it is a decision, not an oversight.
 
 **`global-statement` (W0603) must stay disabled.** `NAR001` *requires* a `global` declaration on
 mutation and W0603 *complains* about every `global`, so conformant code could never be pylint-clean
 and the gate would be unusable. If you want an inventory of module-state touch points,
 `grep -rn '^\s*global '` gives it without breaking the gate.
 
-## The one thing no tool catches at all
+## The one fault outside every tool's checks
 
-The `global` rule (R2b-G1) is about **mutation**, not reference. `global XYZ` is a warning sign at
-the top of a function that says "this has side effects on module state". Read-only access is
+The `global` rule (R2b-G1) is about **mutation**, not reference. `global XYZ` at the top of a
+function is a warning sign: the function has side effects on module state. Read-only access is
 exempt.
 
 Python already enforces half of this for free: you cannot *rebind* a module name without `global`,
@@ -61,10 +61,10 @@ def loadConfig(data: dict[str, int]) -> None:
     SAMPLE_CONFIG['x'] = 1       # module state changed
 ```
 
-No `global`, no error, module state mutated. Verified that **`ruff check --select ALL` and
-`pylint --enable=all` both report the undeclared mutation nowhere.** Each tool does report other
-things about the file, such as a missing docstring and a non-conforming function name. Neither
-reports the mutation. That gap is `NAR001`, and it is the highest-value check in the set.
+No `global`, no error, module state mutated. Verified: **neither `ruff check --select ALL` nor
+`pylint --enable=all` has a finding for the undeclared mutation.** Both have findings for other
+things in the file, such as a missing docstring and a non-conforming function name. That gap is
+`NAR001`, and it is the highest-value check in the set.
 
 `NAR006` covers the adjacent bug: a bare `NAME = x` that shadows a module-level name creates a
 local, so the module value silently never changes.
@@ -88,9 +88,9 @@ local, so the module value silently never changes.
 
 ## Gotchas
 
-**`ruff format` collapses a 4-arg signature back onto one line** unless it carries a magic trailing
-comma. With the comma the formatter keeps the explosion exactly; without it the formatter joins the
-signature.
+**`ruff format` collapses a 4-arg signature back onto one line** unless it ends with a magic
+trailing comma. With the comma, the exploded form survives formatting. Without it, the signature is
+joined onto one line.
 
 So the ">3 args goes multiline" rule in `SKILL.md` survives only because of the trailing comma.
 `COM812` is therefore *enabled*, against the general ruff advice to disable it alongside the
@@ -99,9 +99,10 @@ formatter. Here `COM812` is the mechanism that makes the rule stick.
 **Nothing forces the split in the first place.** Neither `ruff check` nor `ruff format` touches a
 4-arg signature written on one line under 120 columns. That is `NAR003` in `checks.py`.
 
-**The formatter rejects `multiline-quotes = 'single'`.** It warns and enforces double. Set it to
-`'double'`. No real cost: the style avoids `"""` for data strings anyway (implicit concatenation in
-parens instead, Q03), so multiline quotes only ever appear in docstrings.
+**`multiline-quotes = 'single'` conflicts with the formatter.** Ruff prints a warning, and the
+formatter writes double quotes regardless. Set it to `'double'`. No real cost: the style uses no
+`"""` for data strings anyway (implicit concatenation in parens instead, Q03), so multiline quotes
+only ever appear in docstrings.
 
 **`ruff format` deletes the blank line between `class X:` and its first method**, and collapses two
 blank lines between methods to one. Take the formatter defaults rather than fight them: 2 blank
@@ -120,9 +121,9 @@ sample loses its alignment:
 ```
 
 One line of the body at the docstring's own column anchors it, and then the block is left alone.
-`NAR011` checks this, and it agrees with `ruff format` on every form tested: a module docstring whose
-body is all indented, a function docstring whose body is indented past the `def`, and an anchored
-block that ruff leaves alone (R9-08).
+`NAR011` checks this, with the same result as `ruff format` on every form tested: a module docstring
+whose body is all indented, a function docstring whose body is indented past the `def`, and an
+anchored block that ruff leaves alone (R9-08).
 
 A second trap comes with pasting a real file: a blank line inside the sample becomes a
 whitespace-only line once the block is indented, which is ruff `W293`. Strip the trailing space.
@@ -137,7 +138,7 @@ The autofix of `I001` in `ruff check` deletes the second one, because the isort 
 `lines-after-imports` defaults to 1 before a statement. Without `lines-after-imports = 2`,
 `ruff check --fix` silently undoes the rule every time (R3a-14).
 
-**A constant moved inside a function needs two escapes.** An `ALL_CAPS` name on a function-local
+**Moving a constant inside a function takes two escapes.** An `ALL_CAPS` name on a function-local
 constant (R3a-12) trips ruff `N806` and pylint `C0103`, once per constant, which reaches double
 figures in any file that follows the placement rule. Hence `N806` in the ignore list, and on the
 pylint side:
@@ -146,11 +147,11 @@ pylint side:
 variable-rgx = '^([a-z_][a-z0-9_]*|[A-Z][A-Z0-9_]*)$'
 ```
 
-Use `variable-rgx`, **not** `good-names-rgxs`: it relaxes only *locals*, so pylint still flags a
-mixedCase local, a mixedCase argument and a mixedCase attribute.
+Use `variable-rgx`, **not** `good-names-rgxs`: it relaxes only *locals*, so a mixedCase local, a
+mixedCase argument and a mixedCase attribute still fail pylint.
 
-Ruff stops flagging mixedCase locals once the config ignores `N806`, but pylint still catches them,
-so coverage survives (R3a-13).
+With `N806` ignored, mixedCase locals pass ruff but still fail pylint, so coverage survives
+(R3a-13).
 
 **The `SIM114` autofix makes code worse, so the config disables it.** Applied to two adjacent
 `elif` branches with the same body, it produced:
@@ -169,17 +170,18 @@ apply operator precedence to recover two cases that were plainly separate before
 parsing the no-diffing principle (R2b-P0) exists to eliminate.
 
 Explicit parentheses fix the readability and **lose type narrowing**, which is the stronger
-objection. **The loss needs a specific shape: the merged branches must narrow the same attribute
-access to different types.** Here `node.name` is `str` on an `ast.FunctionDef` and `str | None` on
-an `ast.ExceptHandler`, so merging widens `node` back to a union and the attribute with it:
+objection. **The loss happens only in a specific shape: the merged branches must narrow the same
+attribute access to different types.** Here `node.name` is `str` on an `ast.FunctionDef` and
+`str | None` on an `ast.ExceptHandler`, so merging widens `node` back to a union and the attribute
+with it:
 
 ```
 error: Argument 1 to "add" of "set" has incompatible type "str | None"; expected "str"
 ```
 
 Two separate `elif` branches each narrow `node` to one type, so `node.name` is `str`. Merge only
-where the checker keeps its narrowing; where it does not, narrowing wins (R2b-B5). `NAR007` enforces
-the parentheses for the cases where merging is fine.
+where the narrowing survives the merge. Where it does not, narrowing wins (R2b-B5). `NAR007`
+enforces the parentheses for the cases where merging is fine.
 
 **`ruff format` puts one item per line in any collection literal that does not fit on one line**,
 with or without a trailing comma.

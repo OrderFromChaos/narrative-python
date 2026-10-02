@@ -1,0 +1,9 @@
+etude.mid format 0, 1 track, division 96, 2.5 s, 3/4, 2 tempo events, 5 notes, 0 drum hits, A0..C8, longest A0 ch1 start 0.5 for 1.8125 s, polyphony 3, hanging 0, orphan offs 0
+  traps: running status continues after the text meta at tick 96; by ticks the longest is E4 (288 ticks against 264); ons before same-tick offs give polyphony 4; ignoring the tempo change gives 2.0 s
+groove.mid format 1, 3 tracks, division 480, 2.0 s, 6/8, 2 tempo events, 3 notes, 4 drum hits, E2..E5, longest E2 ch2 start 0.0 for 1.2 s, polyphony 2, hanging 0, orphan offs 0
+  traps: a per-track tempo gives E2 1.0 s; the denominator byte 3 read literally gives 6/3; channel byte 1 is channel 2, the E5 is on channel 16
+overlap.mid format 0, 1 track, division 120, 3.0 s, 4/4, 0 tempo events, 4 notes, 0 drum hits, C4..G4, longest C4 ch1 start 0.0 for 1.0 s, polyphony 2, hanging 1 (G4, 2.0 to 3.0 s), orphan offs 1
+  traps: ending the newest open C4 gives a 1.5 s longest; file order at tick 240 (D4 on, then C4 off) gives polyphony 3; the XFIH chunk read as a track breaks the parse
+smpte.mid unreadable: SMPTE division 0xE728
+truncated.mid unreadable: the track chunk claims 40 bytes and 11 follow
+totals: 5 files, 2 unreadable, 12 notes, 4 drum hits; exit 1. Computed with mido 1.3 for parsing and the tempo map (overlap.mid with its unknown chunk removed first), pairing by hand.

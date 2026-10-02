@@ -5,10 +5,18 @@ description: Write or review Python in the Narrative house style — mixedCase f
 
 # Narrative Python
 
-Every rule states its own reason, so read the rule and not the id after it. The ids are provenance:
-they resolve in `benchmark/decisions.jsonl` in the source repository,
-`github.com/OrderFromChaos/narrative-python`, which does not ship with the skill. **A rule with no
-id and no linter behind it does not belong here.**
+**0% of reader effort on rote diffing, 100% on design.** (R2b-P0) Every rule below is a case of
+that, or of the second principle: prefer what the type checker and IDE can follow.
+
+Four near-identical lines that differ in one token make the reader compare them token by token, and
+every comparison is a chance to miss the difference. One parameterised call removes the comparison.
+
+This is the root of DRY, of one-name-for-one-thing, of consistent ordering, and of the ban on
+gratuitous variation. When two rules conflict, the rule that spares the reader diffing wins.
+
+Second principle, for representation choices: **prefer what the type checker and IDE can follow**,
+even when a looser form is more flexible. State in a `dict[str, Any]` passes `mypy --strict` only
+with a `cast()` or a key lookup at every use. Typed attributes pass with neither. (R3-P2-rank)
 
 **This document governs every file, however many there are.** Naming, layout, types, errors and
 docstrings apply to each module of a package exactly as they apply to a single-file program.
@@ -18,19 +26,10 @@ type lives, when one file becomes several, and what a third-party dependency may
 the program spans more than one module or imports a third-party package. Skip it for a single-file
 program, where none of it applies.
 
-## The principle everything else serves
-
-**0% of reader effort on rote diffing, 100% on design.** (R2b-P0)
-
-Four near-identical lines that differ in one token make the reader compare them token by token, and
-every comparison is a chance to miss the difference. One parameterised call removes the comparison.
-
-This is the root of DRY, of one-name-for-one-thing, of consistent ordering, and of the ban on
-gratuitous variation. When two rules conflict, the rule that spares the reader diffing wins.
-
-Second principle, for representation choices: **prefer what the type checker and IDE can follow**,
-even when a looser form is more flexible. State held in a `dict[str, Any]` needs a `cast()` or a
-key lookup at every use to pass `mypy --strict`; typed attributes need neither. (R3-P2-rank)
+The reason for each rule is in its text, so read the rule and not the id after it. The ids are
+provenance: they resolve in `benchmark/decisions.jsonl` in the source repository,
+`github.com/OrderFromChaos/narrative-python`, which does not ship with the skill. **A rule with no
+id and no linter behind it does not belong here.**
 
 ## File layout
 
@@ -90,7 +89,7 @@ class ScanHeader: ...
   only meaning here. Deliberately grouped short guards stay grouped, and two adjacent two-line
   `if ...: raise` checks belong together. No blank line after a docstring. (R3a-01)
 
-  **No tool checks this. Statement length does not decide it, and no threshold on it works.**
+  **No tool checks this. It does not depend on statement length, and no threshold on length works.**
   Place a blank line by these five rules: (`R8-NAR008`, `R8-NAR008-rule`)
 
   - a body of **8 lines or under takes no internal blanks at all**
@@ -110,10 +109,10 @@ class ScanHeader: ...
   under 120 columns. **Calls are exempt**: a signature is read once and a call site is read
   everywhere, so the same rule applied to calls costs lines without buying clarity. (R2b-B1)
 
-- **Keyword-only parameters do not count**, so a function may carry as many as it needs. That is
-  also the escape hatch at exactly four: put `*` before the optional ones and they stop counting,
-  which documents them as optional anyway. Note `NAR004` counts *every* parameter, because each one
-  is part of the contract even when the caller may omit it. (R5-06)
+- **Keyword-only parameters do not count**, so a function may take any number of them. That is also
+  the escape hatch at exactly four: put `*` before the optional ones and they stop counting, and
+  they read as optional in the signature anyway. Note `NAR004` counts *every* parameter, because
+  each one is part of the contract even when the caller may omit it. (R5-06)
 
 - Long strings: implicit concatenation in parens. Never `"""` for data, because its whitespace
   becomes part of the value. (Q03)
@@ -130,26 +129,26 @@ class ScanHeader: ...
   `openDatabase` do not extract, even though each is nameable. A one-line helper called once is
   residue. (R2-09, R2b-E1, R2b-E2)
 
-- If extraction would need 5+ parameters, that is a **missing owner**, not a reason to leave the
-  code inline. Find what owns the values. That owner is a **class** when the program could hold two
-  of it, and a **module** otherwise. A frozen record is the answer only when nothing has behaviour
-  over the values. If a general name for the group is hard to pick, it is not a real grouping.
-  (R7-C05-resolved, R7-C05-naming)
+- If an extracted function would take 5+ parameters, that is a **missing owner**, not a reason to
+  leave the code inline. Find where the values belong. That owner is a **class** when two of it can
+  exist at once, and a **module** otherwise. A frozen record is the answer only when nothing has
+  behaviour over the values. If a general name for the group is hard to pick, it is not a real
+  grouping. (R7-C05-resolved, R7-C05-naming)
 
-- Always collapse duplicated-but-drifting code, even when the shared version needs a parameter. To
-  localise the difference is the whole point. (R2b-E4)
+- Always collapse duplicated-but-drifting code, even when the shared version takes an extra
+  parameter. To localise the difference is the whole point. (R2b-E4)
 
 - Mixed `and`/`or` parenthesises each group explicitly. Never `A and B or C and D`. Ruff cannot
   produce this form, so `SIM114` is disabled and `NAR007` enforces it. (R2b-B4)
 
-- Merge branches that share a body **only where the type checker keeps its narrowing.** If you
-  merge two `isinstance` branches, even with parentheses, mypy widens the subject back to a union
-  and loses the narrowing. Two explicit branches beat one clever condition. (R2b-B5)
+- Merge branches that share a body **only where the type checker's narrowing survives the merge.**
+  If you merge two `isinstance` branches, even with parentheses, mypy widens the subject back to a
+  union and loses the narrowing. Two explicit branches beat one clever condition. (R2b-B5)
 
-- If it names a path, its type is `Path`, not `str`. (R3a-10)
+- A value that is a path has type `Path`, not `str`. (R3a-10)
 
 - Collection literals get one item per line **wherever `ruff format` explodes them**, which is any
-  literal it cannot fit on one line. This describes the formatter rather than adding a rule: a short
+  literal it cannot fit on one line. This is how the formatter behaves, not a further rule: a short
   literal it leaves packed is already correct. A word-list-shaped literal may use a `# fmt: off` /
   `# fmt: on` fence to stay packed. (R2b-B2)
 
@@ -244,13 +243,13 @@ almost every constant, including the ones that belong at module level. This is r
   refer to this type in a normal discussion with another programmer? `park(car: Car)` reads and
   discusses. `park(car: dict[str, list[tuple[float, float]]])` does neither. (NAR005, R8-D27-resolved)
 
-  **One measure: how many things it names, below the outermost.** `Car` names none.
-  `dict[str, list[tuple[float, float]]]` names five, and above four the annotation wants a name.
+  **One measure: how many names it contains, below the outermost.** `Car` contains none.
+  `dict[str, list[tuple[float, float]]]` contains five, and above four, give the annotation a name.
   A callable becomes a `Protocol`; anything else becomes a dataclass. (`NAR005`, `R8-D27`)
 
   Count names rather than nesting depth or argument width. Depth alone admits
   `Callable[[Callable[[Job], Result]], Callable[[Job], Result]]` and width alone admits
-  `tuple[dict[str, str], list[str]]`. One number catches both.
+  `tuple[dict[str, str], list[str]]`. One number covers both.
 
   **The DB-API is the standing exception.** `sqlite3.executemany` takes a sequence per row and
   raises `ProgrammingError: parameters are of unsupported type` on a dataclass. Instead, use a
@@ -300,9 +299,9 @@ case.** No helper, no `assert_never`. (Q18, R3a-07)
 Limitation: this works only when the match returns a value. A side-effecting `-> None` dispatch
 gets no protection. Restructure it to return something.
 
-**Keep the `match` even when a mapping looks more natural.** The `match` is the only form where
-mypy catches a new member. A `dict` lookup and an `IntEnum` both type-check clean and fail at run
-time with `KeyError`.
+**Keep the `match` even when a mapping looks more natural.** Only a `match` fails mypy when a new
+member goes unhandled. A `dict` lookup and an `IntEnum` both type-check clean and fail at run time
+with `KeyError`.
 
 Speed does not change this. A module-level mapping is faster than the `match` by tens of
 nanoseconds per call and a function-local dict is several times slower than either, so end to end
@@ -320,12 +319,12 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   again. The objection to Pydantic/ORMs is *pervasive runtime validation*, not a single gate.
   (Q14, Q17)
 
-- **A parsed record states only what its input carried.** Where one input format carries a field and
+- **A parsed record contains only what its input contained.** Where one input format has a field and
   another does not, the field is optional on the shared record, and the check that reads it skips an
-  absent value. **Never substitute a plausible default**, because the program then reports a fact
-  that the file does not contain. (R9-01)
+  absent value. **Never substitute a plausible default**, because the output then contains a fact
+  that the file does not. (R9-01)
 
-  A lockfile of `name==version` lines declares no source. Give the record `source: SourceName | None`
+  A lockfile of `name==version` lines has no source. Give the record `source: SourceName | None`
   and let the source check pass on `None`. Do not stamp `'pypi'` on every package: under a policy
   that allows only `internal`, an invented source turns every line of every lockfile into a finding
   that the manifest never justified.
@@ -334,24 +333,24 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   asks for. The fix is the optional field, not a second record type.
 
 - The config enforces that **more bluntly than the rationale**. `TID251` bans the `pydantic` import
-  outright, because a linter cannot see whether a model is used once at a gate or on every request.
-  A genuine single-gate use is therefore a per-module `# ruff: noqa: TID251` with the gate named in
-  the module docstring. Writing that suppression twice in one program means the validation is no
-  longer at one gate. (R8-D10)
+  outright, because whether a model is used once at a gate or on every request is not visible to a
+  linter. A genuine single-gate use is therefore a per-module `# ruff: noqa: TID251` with the gate
+  named in the module docstring. Writing that suppression twice in one program means the validation
+  is no longer at one gate. (R8-D10)
 
 - **`frozen=True` is the default for every dataclass.** It has nothing to do with boundaries: a
   record built and consumed inside one function is frozen for the same reason a parsed one is.
   (R8-D11-resolved)
 
-- Drop to mutable only when a **field holds a mutable value**, and treat that as a smell rather than
+- Drop to mutable only when a **field's value is mutable**, and treat that as a smell rather than
   a decision. Reach for a `tuple` where you would write a `list`. A frozen wrapper around mutable
   contents is a half-guarantee: `dataclasses` will not stop you writing through it, so the bug grows
   quietly and surfaces at run time with nothing to catch it. The standing exception is the
   schemaless remainder below, where a `Mapping` field is the prescribed shape and its cost is
   already recorded.
 
-- A dataclass, never a dict of parsed fields. (Q02) That rule is about **what holds the record**,
-  not about what type a field may have. A mapping-typed *field* is fine.
+- A dataclass, never a dict of parsed fields. (Q02) That rule is about **the type of the record
+  itself**, not about what type a field may have. A mapping-typed *field* is fine.
 
 - **Genuinely schemaless input**: promote the fields the program actually computes on to typed
   attributes, and put the remainder in one `Mapping[str, object]` field. To flatten it to a JSON
@@ -368,13 +367,13 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
     run time with no linter warning. Fine until someone dedupes.
 
 - **No ORM on a hot path.** A request handler that returns database values must not pay run-time
-  validation for information the database and Python both already know. Use `sqlite3` and SQL.
-  (Q17, R6-03)
+  validation for information already guaranteed by the database schema and the Python types. Use
+  `sqlite3` and SQL. (Q17, R6-03)
 - **An ORM is a fine tool off the hot path.** A healing script, a migration or a one-off backfill
-  runs once, so developer time outweighs per-request cost. **The module that needs the exception
-  declares it**, with a file-level `# ruff: noqa: TID251`. There is no `per-file-ignores` list: an
-  exception is a property of the module, not of a glob that drifts from the tree it describes.
-  Conformance owes no explanation, so the suppression stands bare. (R6-07, R7-D04,
+  runs once, so developer time outweighs per-request cost. **Declare the exception in the module
+  that uses the ORM**, with a file-level `# ruff: noqa: TID251`. There is no `per-file-ignores`
+  list: an exception is a property of the module, not of a glob that drifts from the tree it
+  matches. Conformance owes no explanation, so the suppression stands bare. (R6-07, R7-D04,
   R7-D04-generalised)
 
 ## Errors
@@ -388,22 +387,22 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 
 - **Related means the handling is the same, not that the classes share a base.** Where two failures
   genuinely produce one outcome, one `except (A, B)` arm is correct and two identical arms are the
-  rote diffing the top principle forbids. But check the premise first: two arms that look identical
-  usually should not be. A timeout and an unreachable host are different facts and deserve different
-  words, and writing the same string twice is how that gets lost. (R8-D24-resolved)
+  rote diffing banned by the top principle. But check the premise first: two arms that look
+  identical usually should not be. A timeout and an unreachable host are different facts and deserve
+  different words, and writing the same string twice is how that gets lost. (R8-D24-resolved)
 
 - `raise NewError(...) from exc`, **and** log it. Both. (Q21)
 
-- **The raise site records the generic fact once, however you factor that.** A parser with six
+- **Log the generic fact once at the raise site, however you factor that.** A parser with six
   raise sites does not get six log statements. Route them through a helper that logs and returns
   the exception, then `raise rejectLine(...) from exc`. The helper emits the same records as six
   inline log calls and costs fewer lines. (Q23, R4-02)
 
-- **The handle site records what it meant here, but in a degrade-and-report loop it logs the
+- **At the handle site, log what the failure meant there, but in a degrade-and-report loop log the
   aggregate, not the item.** This is the rule that matters. Per-item handle-site logging on a file
   of 10,000 bad lines writes a record per line and megabytes of output. Log the item at DEBUG and a
-  per-file tally at WARNING: that is tens of records and kilobytes, and `--verbose` still shows
-  every item. (R4-02)
+  per-file tally at WARNING: that is tens of records and kilobytes, and every item still appears
+  under `--verbose`. (R4-02)
 
 - **Level follows from what an operator can act on**: a per-item failure is DEBUG, the tally is
   WARNING. An operator cannot act on line 4,812 of one file. An operator can act on "4,812 of
@@ -415,10 +414,10 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 - Degrade and report: process the whole batch, collect failures, log a summary, exit nonzero. Never
   abort on the first bad item. (Q24)
 
-- **The config gate is the exception.** (R8-D25-resolved) `Q24` governs the batch a program processes, not
-  the configuration telling it what to process. A half-valid config means the program does not know
-  what it was asked to do, so the gate raises on the first malformed entry and the program exits.
-  Degrading there would run the job the operator did not ask for.
+- **The config gate is the exception.** (R8-D25-resolved) `Q24` governs the batch a program
+  processes, not the configuration telling it what to process. With a half-valid config, what the
+  program was asked to do is unknown, so the gate raises on the first malformed entry and the
+  program exits. Degrading there would run the job the operator did not ask for.
 
 ## Module state
 
@@ -440,14 +439,14 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 
 ## The module docstring
 
-**Every module opens with a docstring. Anything runnable shows how to run it.** A reader meets it
+**Every module opens with a docstring. Anything runnable has a usage example.** A reader meets it
 first, before `main()`, so it carries what the program is *for*, not how it works. (R5-02, NAR009)
 
 **Write for a professional developer who has the file open.** That reader knows the language and the
 vocabulary of the trade, so `API`, `idempotent` and `tuple` are the right words and a plain-English
 circumlocution around them is worse. One idea per sentence. **One word for one thing, and the word
-is the identifier the code uses** — a docstring that says `unassigned` where the code says
-`unattributed` sends a reader to grep for something that is not there. (R9-09)
+is the identifier the code uses** — `unassigned` in a docstring where the code has `unattributed`
+sends a reader to grep for something that is not there. (R9-09)
 
 The prose rules for comments and docstrings are in **Comments**.
 
@@ -500,9 +499,9 @@ already pays under `R9-02`. Keep it small for that reason, and re-paste it when 
 took their docstrings from 4, 4, 5, 7 and 12 lines to 20, 8, 7, 10 and 9. Only the one carrying
 paraphrase and justification got shorter. The sample buys exactness, not brevity: a reader learns
 the column order, the units and the alignment from three rows of a table and cannot learn them from
-a sentence that says the table has columns.
+a sentence about the table having columns.
 
-This generalises `R3a-11`, which said the same thing for file moves and path manipulation.
+`R3a-11` is the same rule for file moves and path manipulation.
 
 ```python
 """Format the result of a reconciliation as a table for a terminal.
@@ -561,7 +560,7 @@ body entirely. (R9-09)
   can share the directory` negates to a scanner that dies on a stray file, which nobody would ship.
   All three are free sentences and all three go. **Assume the reader expects competent code, and
   document only the departures.**
-- **It explains a language feature.** `Such a field holds None` restates what optional means.
+- **It is a language feature, explained.** `Such a field holds None` repeats what optional means.
 - **It goes stale and nothing checks it**, unless it is a sample you accept that cost for.
 
 **Compress what survives:**
@@ -571,20 +570,20 @@ body entirely. (R9-09)
 - **State an ordering as its sort key.** Prose about a multi-level sort cannot say whether it is one
   composite key or two separate sorts. `Teams sort by (-over, -used, team); the paths inside a team
   sort by (-size, path)` says which, and shows that the tie-break on `team` runs ascending while the
-  numbers run descending. Prose cannot carry that without becoming longer than the key.
-- **The summary line names what the code produces, by its real name.** `Read the quota file, and
+  numbers run descending. In prose, the same information is longer than the key.
+- **In the summary line, call what the code produces by its real name.** `Read the quota file, and
   construct a QuotaPolicy accordingly` beats `Read the quota file, and answer what it states about a
-  team and about a path`, which paraphrases a type that already has a name.
-- **Stop at the fact.** `The first malformed field stops the read.` is the rule. The sentence after
-  it explaining why stopping is right is not functionality. This is `R9-02` one step further in: the
+  team and about a path`, a paraphrase of a type that already has a name.
+- **Stop at the fact.** `The first malformed field stops the read.` is the rule. A following
+  sentence on why stopping is right is not functionality. This is `R9-02` one step further in: the
   ban is not only on style-guide justification but on justifying the design at all. Where a reason
-  has to survive, it is a `#` comment at the line that needs it.
+  has to survive, it is a `#` comment at the line it concerns.
 
 **A body earns its place for these, and in practice for nothing else:**
 
 - an **ordering or tie-break**, which is invisible without reading a sort key
-- a **unit, a nullability or a provenance** that the annotation cannot carry — `Sizes are plain byte
-  counts`, `host is null when the report that gave the entry named none`
+- a **unit, a nullability or a provenance** absent from the annotation — `Sizes are plain byte
+  counts`, `host is null when the entry's report has no host`
 - **where the leftover, default and failure cases go**. Most awkward docstrings are awkward because
   they circle an unstated default.
 - a **sample** of concrete text the module reads or writes
@@ -594,18 +593,18 @@ body entirely. (R9-09)
 Seven cuts with no counterweight would drive every docstring to a bare summary line. That list is
 the counterweight, and it is what every surviving sentence in the measured package sits on.
 
-- **A function gets a docstring when its contract is complex**: it takes more than three
-  parameters, or it exceeds 20 lines. Below both, `#` comments carry the contract. Raising is not a
-  trigger, because the style routes raise sites through a `reject*()` helper and every two-line
-  guard that calls one contains a `raise`. (Q05, R2-03, R2-05, R5-05, R8-D18-resolved)
+- **A function gets a docstring when its contract is complex**: it takes more than three parameters,
+  or it exceeds 20 lines. Below both, the contract goes in `#` comments. Raising is not a trigger,
+  because the style routes raise sites through a `reject*()` helper and every two-line guard that
+  calls one contains a `raise`. (Q05, R2-03, R2-05, R5-05, R8-D18-resolved)
 
   The trigger is contract complexity rather than length alone, which is why the parameter count sits
   beside the line count. A bare line threshold would reward fragmentation: splitting a 21-line
   function into two 12-line ones deletes the obligation without simplifying either contract.
 
-- **The docstring carries a summary and a `Raises:` section. It carries `Args:` and `Returns:` only
-  where they say something the signature cannot.** `NAR004` enforces `Raises:`, because an
-  exception is the one part of a contract that no annotation carries. (R8-D28-resolved)
+- **The docstring has a summary and a `Raises:` section. It has `Args:` and `Returns:` only where
+  they give a fact absent from the signature.** `NAR004` enforces `Raises:`, because an exception is
+  the one part of a contract absent from every annotation. (R8-D28-resolved)
 
   Write `Returns:` for an ordering, a nullability, a unit, or a count whose meaning is not obvious:
   `The number of rows this call added, which is 0 on a repeat run.` Do not write `The parsed policy`
@@ -613,22 +612,22 @@ the counterweight, and it is what every surviving sentence in the measured packa
   way: `manifest: Where the text came from, for the rejection message.` Do not write
   `path: The file to read.`
 
-  A section that duplicates the module docstring is worse than an absent one. A `main()` whose
-  module docstring already lists the exit codes does not list them again.
+  A section that duplicates the module docstring is worse than an absent one. When the exit codes
+  are already in the module docstring, leave them out of the docstring of `main()`.
 
-- A docstring must not assert anything the code does not do, and must not state a consequence it
-  already implied. (Q05)
+- Write nothing in a docstring that the code does not do, and no consequence that an earlier
+  sentence already implies. (Q05)
 
-- **A docstring says what the code does. It does not say why the code is shaped the way this style
-  guide requires.** `Two audits can hold two databases at once` is behaviour and belongs.
-  `so this is a class and not a module` argues with the style guide and does not. The reader wants
-  the program explained, not the rulebook. (R9-02)
+- **Write in a docstring what the code does, not why the code is shaped the way this style guide
+  requires.** `Two audits can hold two databases at once` is behaviour and belongs.
+  `so this is a class and not a module` is an argument with the style guide and does not. The
+  reader wants the program explained, not the rulebook. (R9-02)
 
-- **A docstring describes its own file.** Do not assert what another module does, do not claim to be
-  the only place something happens, and do not count callers. `nothing outside this module imports
-  sqlite3` and `this is the one place that builds it` are claims that no tool checks and that the
-  next commit falsifies. Name another module only where a reader of *this* file needs the name in
-  order to use this file. (R9-02)
+- **A docstring is about its file alone.** Do not assert what another module does, do not claim to
+  be the only place something happens, and do not count callers.
+  `nothing outside this module imports sqlite3` and `this is the one place that builds it` are
+  claims that no tool checks and that the next commit falsifies. Name another module only where a
+  reader of *this* file needs the name in order to use this file. (R9-02)
 
 - Where semantics vary by implementation (file moves, copies, path manipulation), **show a
   concrete before/after example**, not prose. (R3a-11) That is one case of the general rule above:
@@ -636,16 +635,16 @@ the counterweight, and it is what every surviving sentence in the measured packa
 
 - **`FIXME:` means one of two things, and only one of them may merge.** (R6-12, NAR010)
   - In code that runs, a `FIXME` is a **merge blocker**. `NAR010` fails the gate on it.
-  - In code that nothing calls, a `FIXME` is a **danger sign**. It marks a known correctness
+  - In code that nothing calls, a `FIXME` is a **danger sign**. It is a note on a known correctness
     problem parked in an orphaned section, for whoever next considers wiring that section into the
     hot loop. This use is allowed, and it is the reason the marker exists.
 
   Reachability separates the two, so `NAR010` walks the call graph from `main` and from module
-  level. It over-approximates reachability on purpose. The check would rather call an orphan live
-  than let a running `FIXME` through.
+  level. It over-approximates reachability on purpose. Calling an orphan live is the safer error
+  than letting a running `FIXME` through.
 
   **A module with no `main` and no `__main__` block is a library module**, and every function in it
-  counts as reachable, because its callers sit in files that this per-file checker never sees.
+  counts as reachable, because its callers are in files outside this per-file check.
   (R8-D02)
 
 ## Comments
@@ -667,11 +666,12 @@ Before writing or rewording a comment, in order:
 1. **Rename first.** If the information fits in a name or a type, rename and write no comment:
    `over_quota: ByteCount`, `total_cents`, `rollingMeanSignedError`. (R10-Q25, R10-Q27, R10-Q16)
 2. **Guarantee it in code.** Establish a cheap precondition, such as sorted input, upstream in the
-   call flow, and write no comment. Not in the function that relies on it: an index lookup doesn't
-   sort its own input. A comment warning of a trap the code could remove: remove the trap instead.
-   If explaining how the code works takes more than one plain clause, rewrite the code instead: name
-   the step, or use the obvious construct. A `dict` filled with `setdefault()` and sliced by insertion
-   order becomes an explicit loop that counts periods. (R10-Q19, R10-footgun, R10-hard-comment)
+   call flow, and write no comment. Not in the function that depends on it: an index lookup doesn't
+   sort its input. A comment warning of a trap the code could remove: remove the trap instead. If
+   explaining how the code works takes more than one plain clause, rewrite the code instead: name
+   the step, or use the obvious construct. A `dict` filled with `setdefault()` and sliced by
+   insertion order becomes an explicit loop that counts periods. (R10-Q19, R10-footgun,
+   R10-hard-comment)
 3. **Match a kind.** Write a comment only if it is one of the four **Comment kinds**, passes that
    kind's test, and is not under **Never**. Deleting is a valid outcome of a rewrite.
 4. **Set the depth and sentence form** by **Depth** and **Sentence form**.
@@ -720,8 +720,8 @@ Before writing or rewording a comment, in order:
 - reassurance that a weakness is fine; `deliberately`, `on purpose` (R10-candor, R10-Q20, `NAR014`)
 - guarantees about other modules. Put them in the module docstring or `architecture.md`. (R10-Q24, R10-Q11)
 - how one function uses a type, written on the type: `member order is the order plan.json lists a
-  snapshot's rules` belongs with the function that writes plan.json, or nowhere if that function
-  states the order itself (R10-usage-placement)
+  snapshot's rules` belongs with the function that writes plan.json, or nowhere if the order is
+  already plain in that function (R10-usage-placement)
 - illustrations of a decision just discussed in the session (R10-Q21)
 - a function's return contract. State it in the docstring, and only if the return type doesn't make it obvious. (R10-return-contract, `NAR019`)
 
@@ -741,8 +741,8 @@ A one-line comment stays one clause. (R10-Q16, R10-seed-2, R10-depth-sentences)
 - possessives and noun compounds over relative clauses: `the archive's collections`, `in read order` (R10-seed-1, R10-seed-9, R10-Q32)
 - trade terms over paraphrase: `has no side effects`. Modifiers before the noun: `JSONL logs`. (R10-seed-3, R10-seed-4)
 - the conclusion, not the derivation: state what the code means, not how it gets there.
-  `None when malformed`, not `None when a malformed line names no customer as a string`. If a
-  clause names an internal check, structure or attribute, cut it unless the reader needs it to act.
+  `None when malformed`, not `None when a malformed line names no customer as a string`. Cut a
+  clause about an internal check, structure or attribute unless the reader needs it to act.
   (R10-conclusion)
 - no intensifiers: drop a word that only stresses, such as `exactly`, `always`, `precisely` or
   `simply`. Keep it when the sentence means something else without it: `exactly two decimal places`.
@@ -758,7 +758,7 @@ A one-line comment stays one clause. (R10-Q16, R10-seed-2, R10-depth-sentences)
   perform the verb. (R10-Q31, R10-Q39, R10-seed-1, R10-seed-6, R10-seed-15, R10-skill-gaps)
 - no `is what`, no `its own` (R10-Q40, R10-Q41, `NAR018`)
 - the general case: `records are separated by blank lines`, not `two records` (R10-Q40)
-- a worked example matches what the code does for every case it shows: not `with a->b and b->c,
+- a worked example matches what the code does for every case in it: not `with a->b and b->c,
   a and c compare unequal` when a and b also compare unequal (R10-worked-example)
 - no semicolon and no dash: write two sentences (R10-no-semicolon, `NAR013`)
 - a Fence as what the simpler code would do wrong: `# without the bool test, JSON true passes as 1`,
@@ -775,11 +775,11 @@ them. A dash after a list-item term is allowed. `NAR015` also flags `no longer` 
 sentence usually gives data an agent verb, so reword it. Silence a false positive with
 `# noqa: NARxxx`. (R10-lint, R10-skill-gaps, R10-list-dash, R10-nar015-scope, R10-nar016, R10-nar018)
 
-`NAR017`, from `agentverbs.py`, the seventh check `verify.py` runs, flags an agent verb on a
-subject that cannot act: a noun that is not a person, with a verb for something only a mind does
-(`a period ranks`, `the report names it`, `a policy can judge`). Documents get no exception: write
-`named in the report`. It parses the sentence, so it also flags some noun compounds and
-participles. Silence those with `# noqa: NAR017`. (R10-agentverb-check)
+`NAR017` is an agent verb on a subject that cannot act: a noun that is not a person, with a verb for
+something only a mind does (`a period ranks`, `the report names it`, `a policy can judge`).
+Documents get no exception: write `named in the report`. It comes from `agentverbs.py`, the seventh
+check in `verify.py`. The check parses each sentence, and some noun compounds and participles are
+flagged by mistake. Silence those with `# noqa: NAR017`. (R10-agentverb-check)
 
 **Before you finish, read the list `verify.py` prints after a passing run**: every comment and
 docstring summary in the code. For each one, name the subject and the verb and ask whether that
@@ -822,14 +822,14 @@ class FieldFormatter(logging.Formatter):
 ```
 
 That prints `WARNING merge.rejected funcName=merge lineno=88 module=loader rejected=4812
-total=10000`, which is the tally an operator acts on and the location that finds the call site.
+total=10000`, which is the tally an operator acts on and the location of the call site.
 
 ## Configuration
 
 Most explicit first:
 
 1. **A config file tracked in the repo**, parsed into a frozen dataclass. This is the default for
-   anything that describes a deployment. Infrastructure becomes code-defined and diffable. (R3a-02)
+   any deployment setting. Infrastructure becomes code-defined and diffable. (R3a-02)
 
 2. **CLI arguments** for the inputs of a batch tool invoked by hand. `argparse`.
 
@@ -900,8 +900,8 @@ absent. **Do not replace it with a loop that greps tool output for findings**: a
 missing config then produces empty output, which reads as a pass.
 
 It runs, in the order that converges: `ruff check --fix`, `ruff format`, `pylint`, `mypy --strict`,
-`checks.py`, `vermin`, `agentverbs.py`. After a passing run it lists every comment and docstring
-summary (**Comments**).
+`checks.py`, `vermin`, `agentverbs.py`. A passing run ends with a list of every comment and
+docstring summary (**Comments**).
 
 | exit | meaning |
 |---|---|
@@ -909,6 +909,6 @@ summary (**Comments**).
 | 1 | at least one tool reported a finding |
 | 2 | the toolchain or the config is missing, so nothing was checked |
 
-`tooling.md` explains what each layer owns and documents the gotchas. A tool default silently
+The job of each layer and the gotchas are in `tooling.md`. A tool default silently
 undoes several rules here. `ruff check --fix` collapses blank lines after imports, and `SIM114`
 merges branches in a way that loses type narrowing. Read `tooling.md` before you change config.

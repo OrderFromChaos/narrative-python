@@ -551,6 +551,20 @@ illegal position (`k7/8/2Q5/…` with Black in check); the fixture now starts it
 `noqa` (`the Move it names`, `what a SAN without suffixes states`); the check now catches the
 first. Review file: `cycles/cycle11_review.md`.
 
+### Cycle 12
+
+Task P7, MIDI file analyser with no MIDI library (`tasks/P7/`): running status across a meta event,
+a tempo map in the first track of a format 1 file, a tempo change during a note, a retriggered
+pitch, a note on placed before a same-tick note off, a hanging note, SMPTE time and a truncated
+file. Expected results computed with mido. Two runs of `skill/` as shipped, with the Depth rule of
+R10-depth-sentences, the semicolon ban (R10-no-semicolon), `NAR017` and the comment listing. Both
+runs matched every expected value. They wrote 14 `#` comments (6 and 8). One is two sentences, and
+it restates the variable-length quantity encoding from the task spec. No comment has a semicolon
+or a dash, and `agentverbs.py` passed both runs with no `noqa`. The MIDI facts (velocity 0, channel
+10, running status) went into module docstrings. Review file: `cycles/cycle12_review.md`. The user
+kept all 14 comments, with one wording nitpick: `for time signatures on one tick`, not `of`
+(R10-rating13).
+
 ## Open
 
 - Kinds against lists (R10-instruction-design): the cycles ran with kinds plus the gate and T
