@@ -38,22 +38,22 @@ MAX_ANNOTATION_THINGS = 4
 
 RULES = {
     'NAR001': 'module-level object mutated in a function without a `global` declaration',
-    'NAR006': 'assignment shadows a module-level name -- add `global`, or rename the local',
-    'NAR002': 'hasattr(self, ...) -- attributes must not be conditionally defined',
+    'NAR006': 'assignment shadows a module-level name. Add `global`, or rename the local',
+    'NAR002': 'hasattr(self, ...). Attributes must not be conditionally defined',
     'NAR003': f'def signature with more than {MAX_ARGS_ON_ONE_LINE} POSITIONAL args on one line',
     'NAR004': 'docstring missing or without Raises: on a function that takes >3 parameters or runs long',
     'NAR005': f'annotation naming more than {MAX_ANNOTATION_THINGS} things: give it a name',
-    'NAR007': '`and` inside `or` without parentheses -- do not make the reader apply precedence',
+    'NAR007': '`and` inside `or` without parentheses. Do not make the reader apply precedence',
     'NAR009': 'module docstring missing, or runnable module without a usage example',
-    'NAR010': 'FIXME in reachable code -- a merge blocker, not a danger sign',
-    'NAR011': 'docstring body is entirely indented -- `ruff format` will flatten the sample',
-    'NAR012': 'decision id in a comment or docstring -- unresolvable outside the repository that recorded it',
-    'NAR013': 'dash or semicolon joining clauses in a comment or docstring -- write two sentences',
-    'NAR014': 'deliberately / on purpose / by design in a comment or docstring -- reassurance, no information',
-    'NAR015': 'changelog wording in a comment or docstring -- state the current code or data plainly',
-    'NAR016': 'container verb in a comment or docstring -- state the fact without making the subject hold or carry it',
-    'NAR018': 'possessive "own" in a comment or docstring -- drop "own", or name the owner',
-    'NAR019': 'return contract as a comment at the top of a function body -- move it to the docstring, or cut it',
+    'NAR010': 'FIXME in reachable code. A merge blocker, not a danger sign',
+    'NAR011': 'docstring body is entirely indented. `ruff format` will flatten the sample',
+    'NAR012': 'decision id in a comment or docstring. Unresolvable outside the repository that recorded it',
+    'NAR013': 'dash or semicolon joining clauses in a comment or docstring. Write two sentences',
+    'NAR014': 'deliberately / on purpose / by design in a comment or docstring. Reassurance, no information',
+    'NAR015': 'changelog wording in a comment or docstring. State the current code or data plainly',
+    'NAR016': 'container verb in a comment or docstring. State the fact without making the subject hold or carry it',
+    'NAR018': 'possessive "own" in a comment or docstring. Drop "own", or name the owner',
+    'NAR019': 'return contract as a comment at the top of a function body. Move it to the docstring, or cut it',
     'NAR000': 'file could not be read or parsed',
 }
 
@@ -97,7 +97,7 @@ def main() -> int:
         findings = [f for f in findings if f.code in args.select]
 
     for finding in sorted(findings, key=lambda f: (str(f.checked_file), f.line)):
-        print(f'{finding} -- {RULES.get(finding.code, "")}')
+        print(f'{finding}: {RULES.get(finding.code, "")}')
 
     if targets:
         scanned = 0
@@ -692,7 +692,9 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
         One finding per rule and line.
     """
     WORDING = {
+        # matches `Q08`, `R10-fence-form`, `R2b-B5`, `V-03`. Rejects `Q8`  # noqa: NAR012
         'NAR012': re.compile(r'\b(?:Q\d{2}|R\d{1,2}[a-z]?-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*|V-\d\d)\b'),
+        # matches `a -- b` and an em dash. Rejects `a-b`, `--flag`  # noqa: NAR013
         'NAR013': re.compile(r'\s--\s|\u2014'),
         'NAR014': re.compile(r'\b(?:deliberately|on purpose|by design|intentionally)\b', re.IGNORECASE),
         'NAR015': re.compile(
@@ -704,6 +706,7 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
         'NAR018': re.compile(r"\b(?:its|their|his|her|our|your|\w+'s) own\b", re.IGNORECASE),
     }
 
+    # matches `a; b`. Rejects `a;b`
     SEMICOLON = re.compile(r';(?:\s|$)')
     prose = [*commentLines(source), *docstringLines(tree)]
     findings: list[Finding] = []

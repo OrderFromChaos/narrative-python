@@ -88,10 +88,13 @@ SINGULAR_DETERMINERS = frozenset({'a', 'an', 'each', 'every', 'this', 'its', 'on
 # a container verb counts only with an object: `a file holds whole bytes`, not `the invariant holds`  # noqa: NAR016
 CONTAINER_VERBS = frozenset({'hold', 'keep', 'carry', 'own'})
 MODALS = frozenset({'can', 'cannot', 'could', 'would', 'will', 'may', 'might', 'must', 'should'})
+# matches `raw_at`, `f()`, `mixedCase`. Rejects `plain`
 IDENTIFIER = re.compile(r'[_()`.\[\]]|[a-z][A-Z]')
 PRAGMA = re.compile(r'(?:noqa|type:|pragma|fmt:|ruff:|pylint:|mypy:)')
+# matches `# noqa` and `# noqa: NAR017, NAR020`
 NOQA = re.compile(r'#\s*noqa(?::\s*(?P<codes>[A-Z0-9, ]+))?')
-# a quoted span is code or an example, not a sentence of the comment
+# a quoted span is code or an example, not a sentence of the comment. Matches `x` in backticks and
+# 'name'. Rejects `don't`
 QUOTED = re.compile(r"`[^`]*`|(?<!\w)'[^'\n]+'(?!\w)")
 AGREEMENT_WINDOW = 5
 SO_JOIN = re.compile(r',\s+so\b')

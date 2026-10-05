@@ -161,7 +161,7 @@ does not reach `__main__.py`, whose names stay bare.
 **`__all__` declares a package's exports.** (`R7-B05`) A library's `__init__.py` is a re-export façade
 with `__all__`, holding no state and no constants. An application package's `__init__.py` is empty.
 
-**`__main__.py` holds `main`.** (`R7-B09`) Users type `python3 -m collector` and never see the dunder.
+**`main` is in `__main__.py`.** (`R7-B09`) Users type `python3 -m collector` and never see the dunder.
 Split the workflow out only when `main` grows long.
 
 **The entry point has the list of modules and nothing about any of them.** (`R7-A05-entry`) Two
@@ -176,8 +176,8 @@ module and no map.
 a docstring is about its file alone.** The entry point is the file whose subject *is* the module
 list. Every other module docstring is about what that module does, and nothing else. (`R9-02`)
 
-**`main()`-first generalises to a library.** (`R7-E05`) The public entry takes the position `main()`
-holds, callees follow in first-call order, types last under the divider. It does not replace the
+**`main()`-first generalises to a library.** (`R7-E05`) The public entry takes `main()`'s
+position, callees follow in first-call order, types last under the divider. It does not replace the
 module docstring.
 
 ## What earns a class, a Protocol, a bundle
@@ -301,7 +301,7 @@ Exception: a program may contain the name of a rule it **implements**. `checks.p
 
 ## Not architecture, learned alongside
 
-**The last return names its value.** (`R7-return-naming`) At the end of a long function, the name of
+**Name the value of the last return.** (`R7-return-naming`) At the end of a long function, the name of
 the returned value is enough, and the reader does not scroll to the signature. Early returns and
 guard exits are exempt, because a name on those produces near-identical pairs and creates the rote
 diffing banned by `R2b-P0`. `RET504` stays disabled, so this form is legal. *No size threshold is

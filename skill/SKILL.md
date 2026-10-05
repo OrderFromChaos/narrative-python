@@ -75,8 +75,8 @@ class ScanHeader: ...
   definition. Watch for a constant whose **value** references an Enum member or class. Annotations
   are safe, because the future import makes them lazy. (R2-10, R3a-03)
 
-- That is an **ordering** rule, not a placement ban. A constant whose value names an Enum member is
-  perfectly legal in `### vocabulary` immediately after that Enum, and that is its only legal
+- That is an **ordering** rule, not a placement ban. A constant whose value is an Enum member is
+  legal in `### vocabulary` immediately after that Enum, and that is its only legal
   module-level home. Do not contort around it. (R4-03)
 
 - Order constants by concern. Constants a dev would look for at the same moment go together. All the `_S`
@@ -162,14 +162,14 @@ class ScanHeader: ...
 
 - Spell names out. No `img_arr`, `cfg`, `idx`. (Q11)
 
-- **A function name leads with a verb, and the verb's object names what the function returns.**
+- **A function name leads with a verb, and the verb's object is what the function returns.**
   `parsePolicy`, `readManifest`, `extractPackagesFromLockfileText`, `computeDeletionCutoff`. Not
-  `policyIn`, not `cutoffFor`. A name built from a preposition points at what the function takes.
+  `policyIn`, not `cutoffFor`. A name built from a preposition is about the input instead.
   (R9-03)
 
 - **A name stands alone**, and the module qualifier does not count toward it. A reader who has
-  never opened the module must understand the name. `requirements_lock.packagesIn` reads at the call
-  site and says nothing at the definition, and nothing stops a second module declaring a second
+  never opened the module must understand the name. `requirements_lock.packagesIn` is clear at the call
+  site and unclear at the definition, and nothing stops a second module declaring a second
   `packagesIn`. **Two functions in one package do not share a name.** (R9-03, R7-B06)
 
   **Length is not the defect.** Where the clear name is the longer one, write the longer one.
@@ -179,10 +179,10 @@ class ScanHeader: ...
   Dunder and protocol methods are named by the language.
 
 - **Do not restate a domain type in a parameter name**: `config: RebinConfig`, not
-  `rebin_config: RebinConfig`. The type already names the thing, so the prefix adds nothing. (Q11)
+  `rebin_config: RebinConfig`. The prefix repeats the type and adds nothing. (Q11)
 
-- **A generic type names no thing, so the parameter name must.** `Path`, `str`, `int`, `bytes`,
-  `dict` and `object` give a value's shape and never say which value it is. Write
+- **With a generic type, the parameter name is the only place the thing is named.** `Path`, `str`,
+  `int`, `bytes`, `dict` and `object` constrain only a value's shape. Write
   `policy_json_path: Path`, not `path: Path`, and `manifest_text: str`, not `text: str`. The rule
   above bans a redundant prefix, not an informative one.
 
@@ -379,7 +379,7 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 
 - `raise NewError(...) from exc`, **and** log it. Both. (Q21)
 
-- **An error for malformed input names the expected form.** `bad --now value '2028-11-05'
+- **An error message for malformed input includes the expected form.** `bad --now value '2028-11-05'
   (expected "2028-11-05T08:00:00Z")`. An example in the docstring also works. (R10-expected-form)
 
 - **Log the generic fact once at the raise site, however you factor that.** A parser with six
@@ -492,7 +492,7 @@ a sentence about the table having columns.
     archive         120.0G    100.0G     20.0G
     search            1.2T      2.0T         -
 
-Teams over quota come first, worst first. A team within its quota shows `-`.
+Teams over quota come first, worst first. A team within its quota has `-` as its overage.
 """
 ```
 
@@ -506,7 +506,7 @@ Avoid the same table as prose:
 ```python
 """Format the result of a reconciliation as a table for a terminal.
 
-The table holds one row for each team, then the largest paths of each team above its quota, then
+The table has one row for each team, then the largest paths of each team above its quota, then
 the bytes that no team owns, then the outcome of every file. Every size carries a unit suffix.
 """
 ```
@@ -546,9 +546,9 @@ The summary line is mandatory. **A body is not, and usually does not earn its pl
 
 - **Name the property, do not explain it.** `Rows are keyed on team, total and quota, so runs are
   idempotent` replaces three sentences describing idempotence.
-- **State an ordering as its sort key.** Prose about a multi-level sort cannot say whether it is one
-  composite key or two separate sorts. `Teams sort by (-over, -used, team). The paths inside a team
-  sort by (-size, path)` says which, and shows that the tie-break on `team` runs ascending while the
+- **State an ordering as its sort key.** In prose, a multi-level sort is ambiguous between one
+  composite key and two separate sorts. `Teams sort by (-over, -used, team). The paths inside a team
+  sort by (-size, path)` settles that, and the tie-break on `team` is visibly ascending while the
   numbers run descending. In prose, the same information is longer than the key.
 - **In the summary line, call what the code produces by its real name.** `Read the quota file, and
   construct a QuotaPolicy accordingly` beats `Read the quota file, and answer what it states about a
@@ -739,7 +739,7 @@ R10-depth-example, R10-period-join)
 - a worked example matches what the code does for every case in it: not `with a->b and b->c,
   a and c compare unequal` when a and b also compare unequal (R10-worked-example)
 - no semicolon and no dash. Write two sentences (R10-no-semicolon, `NAR013`)
-- a Fence states the fact the code depends on, and what it forces: `# bool subclasses Python int.
+- a Fence is the fact the code depends on, and what it forces: `# bool subclasses Python int.
   Reject it too`, `# isdigit() admits non-ASCII digits such as '²'. Check isascii() too`. Write
   `without X` or `X would` only when that fact can't be stated directly, as when it concerns code
   the file doesn't run (R10-fence-form, R10-fence-fact):
@@ -749,8 +749,8 @@ R10-depth-example, R10-period-join)
   csv_bytes = csv_path.read_bytes()
   ```
 - a comment on one branch of a `match` or `if` chain is about what only that branch does. A reason
-  that covers every branch goes above them once, or nowhere if a name already says it
-  (R10-branch-comment)
+  that covers every branch goes above them once. Cut it when a name such as `local` already makes it
+  obvious (R10-branch-comment)
 - directly above the statement it concerns, not above its enclosing block. Inside `try:`, it goes above the
   call it concerns, not above `try:`. A comment on an argument goes above the call that passes it,
   above `pendulum.parse(raw_at, tz=None)`, not below the `try` block. End-of-line for a short note.
@@ -869,7 +869,7 @@ cancels every task when one raises. (R7-E07-floor, R10-taskgroup-scope)
 
 - Anything added in 3.12 or later is out, including the `type` statement and PEP 695 generics.
 
-- A guard for a runtime newer than the floor names the version: `# on 3.12.1 and later,
+- A comment on a guard for a runtime newer than the floor gives the version: `# on 3.12.1 and later,
   wait_closed() waits for open connections`. (R10-version-guard)
 
 ## Verify

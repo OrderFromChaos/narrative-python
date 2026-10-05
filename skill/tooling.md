@@ -29,7 +29,7 @@ Run order matters: `ruff check --fix`, then `ruff format`, then `pylint`, `mypy`
 ## The config
 
 **`pyproject-snippet.toml` is the config. Read the file rather than this section for the settings
-themselves**, because a second copy of them drifts. What follows explains *why* each non-obvious
+themselves**, because a second copy of them drifts. Below is *why* each non-obvious
 setting is there.
 
 `disallow_any_explicit` is not part of `strict`, so a false value is the default. It is in the
@@ -73,11 +73,11 @@ local, so the module value silently never changes.
 
 | Rule | Tool | Code | Confirmed |
 |---|---|---|---|
-| `mixedCase` function/method names | pylint | `C0103` | flags `snake_case_function` |
-| PascalCase classes | pylint | `C0103` / ruff `N801` | flags `scanSession` |
-| snake_case locals and args | pylint / ruff | `C0103` / `N806` | flags `reallyLongLocal` |
-| Attribute assigned outside `__init__` | pylint | `W0201` | flags `self.frame_buffer` |
-| Relative imports | ruff | `TID252` | flags `from . import sibling` |
+| `mixedCase` function/method names | pylint | `C0103` | `snake_case_function` fails |
+| PascalCase classes | pylint | `C0103` / ruff `N801` | `scanSession` fails |
+| snake_case locals and args | pylint / ruff | `C0103` / `N806` | `reallyLongLocal` fails |
+| Attribute assigned outside `__init__` | pylint | `W0201` | `self.frame_buffer` fails |
+| Relative imports | ruff | `TID252` | `from . import sibling` fails |
 | Import grouping and order | ruff | `I001` | fires |
 | Missing annotations | ruff + mypy | `ANN001/201/204`, `no-untyped-def` | both fire |
 | Double quotes | ruff | `Q000` | fires |
