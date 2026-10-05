@@ -70,6 +70,12 @@ def main() -> int:
     # is the usual state. A tool with no Narrative section runs with its defaults, and then double
     # quotes and snake_case functions pass.
     snippet = Path(__file__).resolve().parent / 'pyproject-snippet.toml'
+    # ruff reads any other file name as a ruff.toml, with its keys at the top level instead of under [tool.ruff]
+    if args.config.name != 'pyproject.toml':
+        print(f'config at {args.config} is not named pyproject.toml', file=sys.stderr)
+        print(f'  fix: copy or merge {snippet} into a file named pyproject.toml', file=sys.stderr)
+        return EXIT_NO_TOOLCHAIN
+
     absent = missingConfigSections(args.config)
     if absent:
         print(f'config at {args.config} is not a Narrative config', file=sys.stderr)

@@ -631,6 +631,16 @@ exception ended that connection only.
 
 Review file: `cycles/samesession_review.md`.
 
+### New-rules cycle
+
+P3, P5 and P8, each written by one agent with the skill at commit a3d2346 (R10-fence-fact,
+R10-period-join, R10-we, R10-reason-order and the rule pass over the skill's own text). All three
+passed their fixture and `verify.py`. They wrote 35 `#` comments: 27 full-line, 8 trailing labels on
+fields. None opens with `without` or contains `would`, and none joins clauses with `, which`,
+`, since` or `, so`. Twelve take the form of a fact, then a command: `is_file() follows symbolic
+links. Check is_symlink() too`. Three repeat the skill's bool example nearly word for word
+(`bool subclasses int. Reject it too`, `… Test it first`). Review file: `cycles/newrules_review.md`.
+
 ## Open
 
 - Kinds against lists (R10-instruction-design): the cycles ran with kinds plus the gate and T

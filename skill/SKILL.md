@@ -121,6 +121,10 @@ class ScanHeader: ...
 
 - Guard clauses and early return over nesting. (Q06)
 
+- **Write a skip guard as the negation of what a valid item is.** `if not (name_match and
+  entry.is_file() and not entry.is_symlink()):`, not `if name_match is None or entry.is_symlink()
+  or not entry.is_file():`. (R10-positive-guard)
+
 - Comprehensions may have any number of `if` clauses at a single level. Any **nesting** becomes an
   explicit loop. (Q07)
 
@@ -375,6 +379,9 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 
 - `raise NewError(...) from exc`, **and** log it. Both. (Q21)
 
+- **An error for malformed input names the expected form.** `bad --now value '2028-11-05'
+  (expected "2028-11-05T08:00:00Z")`. An example in the docstring also works. (R10-expected-form)
+
 - **Log the generic fact once at the raise site, however you factor that.** A parser with six
   raise sites does not get six log statements. Route them through a helper that logs and returns
   the exception, then `raise rejectLine(...) from exc`. The helper emits the same records as six
@@ -616,7 +623,7 @@ Before writing or rewording a comment, in order:
    `over_quota: ByteCount`, `total_cents`, `rollingMeanSignedError`. (R10-Q25, R10-Q27, R10-Q16)
 2. **Guarantee it in code.** Establish a cheap precondition, such as sorted input, upstream in the
    call flow, not in the function that depends on it, and write no comment. An index lookup doesn't
-   sort its input. Remove a trap the code could avoid, and write no comment about it. If
+   sort its input. If a code change removes a trap, make the change and write no comment. If
    explaining how the code works takes more than one plain clause, rewrite the code instead. Name
    the step, or use the obvious construct. A `dict` filled with `setdefault()` and sliced by
    insertion order becomes an explicit loop that counts periods. (R10-Q19, R10-footgun,
@@ -653,6 +660,9 @@ fits.** (R10-cleanup-rewrite)
   look it up. State the intent, not the mechanism. (R10-Q42, R10-Q46)
   - `SIZE_PATTERN = re.compile(...)  # number, then an optional binary unit suffix`
   - `# fsum() for accurate floating point math`
+  - a regex gets a string it matches, and one it rejects where the boundary is unclear:
+    `# matches: search_v2, db-host. Rejects: x.y`. A developer can paste both into regex101.
+    (R10-regex-sample)
 - **Marker**: no test needed. (R10-candor, R10-Q03, R10-Q05, R10-Q36, R10-Q38, R6-12, R8-block-comments)
   - `FIXME:` incorrect behaviour, or behaviour that breaks soon after deploy. In reachable code it
     blocks the merge (`NAR010`). In code nothing calls, it is a warning to whoever wires that code
@@ -674,7 +684,10 @@ fits.** (R10-cleanup-rewrite)
 - risks far outside the task's scale, and decisions too inconsequential for a later reader to reconsider (R10-Q13, R10-rating)
 - future needs nobody has documented or planned (R10-Q15)
 - reassurance that a weakness is fine, such as `deliberately` or `on purpose` (R10-candor, R10-Q20, `NAR014`)
-- guarantees about other modules. Put them in the project's architecture document. (R10-Q24, R10-Q11, R10-other-modules)
+- guarantees about other modules or functions. Put a module's guarantee in the project's architecture
+  document. Where the code depends on another function's guarantee and the check is cheap, check it
+  in the code: `while self.items and …`, not `# store() rejects an oversized item, so the cache is
+  never empty` (R10-Q24, R10-Q11, R10-other-modules, R10-check-invariant)
 - how one function uses a type, written on the type: `member order is the order plan.json lists a
   snapshot's rules` belongs with the function that writes plan.json, or nowhere if the order is
   already plain in that function (R10-usage-placement)
@@ -735,6 +748,9 @@ R10-depth-example, R10-period-join)
   # inside a quoted CSV field.
   csv_bytes = csv_path.read_bytes()
   ```
+- a comment on one branch of a `match` or `if` chain is about what only that branch does. A reason
+  that covers every branch goes above them once, or nowhere if a name already says it
+  (R10-branch-comment)
 - directly above the statement it concerns, not above its enclosing block. Inside `try:`, it goes above the
   call it concerns, not above `try:`. A comment on an argument goes above the call that passes it,
   above `pendulum.parse(raw_at, tz=None)`, not below the `try` block. End-of-line for a short note.
@@ -852,6 +868,9 @@ cancels every task when one raises. (R7-E07-floor, R10-taskgroup-scope)
   *is* the builtin, so the two are one class. (R3a-06)
 
 - Anything added in 3.12 or later is out, including the `type` statement and PEP 695 generics.
+
+- A guard for a runtime newer than the floor names the version: `# on 3.12.1 and later,
+  wait_closed() waits for open connections`. (R10-version-guard)
 
 ## Verify
 

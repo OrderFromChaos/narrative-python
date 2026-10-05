@@ -76,7 +76,7 @@ LITERAL = frozenset({
 ROLES = frozenset({
     'i', 'you', 'we', 'he', 'she', 'they', 'who', 'someone', 'nobody', 'everyone', 'user', 'caller',
     'reader', 'developer', 'operator', 'customer', 'maintainer', 'reviewer', 'whoever', 'anyone',
-    'anybody', 'somebody',
+    'anybody', 'somebody', 'person', 'people',
 })  # fmt: skip
 # noun.person in WordNet, but programs in code
 PROGRAMS = frozenset({
