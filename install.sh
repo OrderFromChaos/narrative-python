@@ -8,6 +8,9 @@
 # This file is the list of what the skill contains. A file in the destination that this list does
 # not name is removed, because a file left by an earlier version keeps rules the skill has withdrawn.
 # The prune removes regular files only, and refuses a destination that holds no SKILL.md.
+#
+# It also writes INSTALLED: the commit installed from, and when. verify.py prints it first, so a
+# stale install shows in every run.
 
 set -euo pipefail
 
@@ -23,7 +26,8 @@ FILES=(
     pyproject-snippet.toml
 )
 
-source_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/skill"
+repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source_dir="$repo_dir/skill"
 destination="${1:-$HOME/.claude/skills/narrative}"
 
 for name in "${FILES[@]}"; do
@@ -48,10 +52,16 @@ for name in "${FILES[@]}"; do
     cp "$source_dir/$name" "$destination/$name"
 done
 
+version="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo 'unknown commit')"
+if [[ -n "$(git -C "$repo_dir" status --porcelain -- skill 2>/dev/null || true)" ]]; then
+    version+=' with uncommitted changes'
+fi
+printf '%s, installed %s\n' "$version" "$(date -u +%Y-%m-%dT%H:%MZ)" > "$destination/INSTALLED"
+
 shopt -s nullglob dotglob
 for path in "$destination"/*; do
     name="$(basename "$path")"
-    for kept in "${FILES[@]}"; do
+    for kept in "${FILES[@]}" INSTALLED; do
         if [[ "$name" == "$kept" ]]; then
             continue 2
         fi
@@ -65,4 +75,4 @@ for path in "$destination"/*; do
 done
 shopt -u nullglob dotglob
 
-echo "installed ${#FILES[@]} files to $destination"
+echo "installed ${#FILES[@]} files to $destination: $(cat "$destination/INSTALLED")"

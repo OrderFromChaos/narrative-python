@@ -55,6 +55,7 @@ def main() -> int:
     parser.add_argument('--config', type=Path, default=Path('pyproject.toml'))
     parser.add_argument('--no-fix', action='store_true', help='report only, do not rewrite files')
     args = parser.parse_args()
+    print(f'narrative skill: {readInstalledVersion()}')
 
     toolchain = resolveToolchain(args.venv)
     if toolchain.missing:
@@ -66,8 +67,8 @@ def main() -> int:
         return EXIT_NO_TOOLCHAIN
 
     # Presence is not enough. Every real project already has a pyproject.toml, so present-but-wrong
-    # is the DEFAULT state, not an edge case. Without the Narrative sections each tool runs with its
-    # defaults, so double quotes and snake_case functions pass and the run comes out clean.
+    # is the usual state. A tool with no Narrative section runs with its defaults, and then double
+    # quotes and snake_case functions pass.
     snippet = Path(__file__).resolve().parent / 'pyproject-snippet.toml'
     absent = missingConfigSections(args.config)
     if absent:
@@ -110,8 +111,7 @@ def main() -> int:
 
     failed = [r for r in results if not r.passed]
     if failed:
-        # Print the output of each failing tool. A bare count would force the reader to re-run the
-        # tools by hand, which is the one thing this script exists to stop them doing.
+        # nobody should need to re-run a tool by hand to see why it failed
         for result in failed:
             print(f'\n--- {result.tool} ---')
             print(result.detail.rstrip() or '(no output)')
@@ -129,8 +129,7 @@ def main() -> int:
 def discoverPython(paths: list[Path]) -> list[Path]:
     """Find every Python file at or below the given paths.
 
-    A directory expands to everything below it, which is what lets one command cover a whole
-    project.
+    A directory expands to everything below it, so one command covers a whole project.
     """
     code: list[Path] = []
     for target in paths:
@@ -154,8 +153,7 @@ def missingConfigSections(pyproject_path: Path) -> list[str]:
     except (OSError, UnicodeDecodeError) as exc:
         return [f'unreadable: {exc}']
 
-    # Matched by text rather than parsed. The floor is now 3.11 so `tomllib` is available, and this
-    # tool that enforces the floor must not itself break it.
+    # TODO: parse with tomllib. A pattern can match inside a comment or under another table.
     required = (
         (r'\[tool\.ruff\]', '[tool.ruff]'),
         (r'\[tool\.ruff\.lint\]', '[tool.ruff.lint]'),
@@ -166,12 +164,20 @@ def missingConfigSections(pyproject_path: Path) -> list[str]:
     return [label for pattern, label in required if not re.search(pattern, text)]
 
 
+def readInstalledVersion() -> str:
+    """Return the commit and date that install.sh wrote to INSTALLED beside this script."""
+    stamp = Path(__file__).resolve().parent / 'INSTALLED'
+    try:
+        return stamp.read_text(encoding='utf-8').strip()
+    except FileNotFoundError:
+        return f'not installed by install.sh, running from {stamp.parent}'
+
+
 def resolveToolchain(venv: Path) -> Toolchain:
     """Find every tool as an absolute path.
 
-    A relative path breaks the moment anything changes directory, which is how a missing binary
-    starts looking like a clean run. Prefer the venv, fall back to PATH, and report what is absent
-    rather than proceeding without it.
+    A relative path breaks the moment anything changes directory, and then a missing binary looks
+    like a clean run. The venv comes first, then PATH, and anything absent is reported.
 
     Args:
         venv: Directory of a virtual environment, searched before PATH.
@@ -196,7 +202,7 @@ def resolveToolchain(venv: Path) -> Toolchain:
 
         missing.append(tool)
 
-    # absolute, not resolved: the symlink target lacks the venv's packages
+    # not resolved. The symlink's target runs without the venv's packages
     venv_python = (venv / 'bin' / 'python').absolute()
     python = str(venv_python) if venv_python.is_file() else sys.executable
     probe = 'import importlib.util, sys; sys.exit(any(importlib.util.find_spec(m) is None for m in sys.argv[1:]))'
@@ -245,8 +251,8 @@ def gradeAgentVerbs(output: Output) -> Result:
 
 
 def gradeVermin(output: Output) -> Result:
-    # `--violations` matters. Without it vermin fails any file it cannot date, such as one using no
-    # version-specific syntax at all, shown in vermin's output as `~2, ~3` and counted as target-not-met.
+    # Vermin fails a file it cannot date unless given `--violations`. A file with no version-specific
+    # syntax shows as `~2, ~3` and counts as target-not-met.
     if output.code == 0:
         return Result('vermin', True, f'{PYTHON_FLOOR} or lower', output.text)
 

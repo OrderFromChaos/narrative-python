@@ -1,7 +1,7 @@
 # Tooling: what enforces what
 
 Every claim here was tested by running the tool against a fixture that breaks the rule. **Enabling a
-rule does not make it fire — test it.**
+rule does not make it fire. Test it.**
 
 Tested with ruff 0.16.3, pylint 4.0.7, mypy 2.3.1 and vermin 1.8.0, against the 3.11 floor.
 
@@ -16,7 +16,7 @@ directly. (R10-uv)
 |---|---|
 | `ruff format` | all whitespace, line breaking, quote normalisation |
 | `ruff check` | imports, annotations presence, bugbear, quotes, banned APIs, bare except |
-| `pylint` (naming only) | `mixedCase` functions — **no other linter can require this** |
+| `pylint` (naming only) | `mixedCase` functions. **No other linter can require this** |
 | `mypy --strict` | type correctness |
 | `checks.py` | the residual rules no tool implements |
 | `agentverbs.py` | `NAR017`, an agent verb on a subject that cannot act, and `NAR020`, a clause with no subject before `, so`, from a spaCy parse |
@@ -43,11 +43,11 @@ and the gate would be unusable. If you want an inventory of module-state touch p
 ## The one fault outside every tool's checks
 
 The `global` rule (R2b-G1) is about **mutation**, not reference. `global XYZ` at the top of a
-function is a warning sign: the function has side effects on module state. Read-only access is
+function is a warning sign. The function has side effects on module state. Read-only access is
 exempt.
 
-Python already enforces half of this for free: you cannot *rebind* a module name without `global`,
-because if you omit it, Python silently gives you a local instead. That half is self-policing.
+Python already enforces half of this. A module name cannot be *rebound* without `global`, because
+without it, Python silently binds a local instead.
 
 Nothing enforces the other half:
 
@@ -66,7 +66,7 @@ No `global`, no error, module state mutated. Verified: **neither `ruff check --s
 things in the file, such as a missing docstring and a non-conforming function name. That gap is
 `NAR001`, and it is the highest-value check in the set.
 
-`NAR006` covers the adjacent bug: a bare `NAME = x` that shadows a module-level name creates a
+`NAR006` covers the adjacent bug. A bare `NAME = x` that shadows a module-level name creates a
 local, so the module value silently never changes.
 
 ## Verified firing
@@ -100,12 +100,12 @@ formatter. Here `COM812` is the mechanism that makes the rule stick.
 4-arg signature written on one line under 120 columns. That is `NAR003` in `checks.py`.
 
 **`multiline-quotes = 'single'` conflicts with the formatter.** Ruff prints a warning, and the
-formatter writes double quotes regardless. Set it to `'double'`. No real cost: the style uses no
+formatter writes double quotes regardless. Set it to `'double'`. There is no real cost. The style uses no
 `"""` for data strings anyway (implicit concatenation in parens instead, Q03), so multiline quotes
 only ever appear in docstrings.
 
 **`ruff format` deletes the blank line between `class X:` and its first method**, and collapses two
-blank lines between methods to one. Take the formatter defaults rather than fight them: 2 blank
+blank lines between methods to one. Take the formatter defaults: 2 blank
 lines between top-level definitions, 1 between methods, none after the `class` statement.
 
 **`ruff format` strips the common leading indent from a docstring body.** A docstring whose body is
@@ -120,19 +120,19 @@ sample loses its alignment:
 """                             """
 ```
 
-One line of the body at the docstring's own column anchors it, and then the block is left alone.
-`NAR011` checks this, with the same result as `ruff format` on every form tested: a module docstring
+With one line of the body at the docstring's own column, the block is left alone.
+`NAR011` checks this, with the same result as `ruff format` on every form tested. The forms are a module docstring
 whose body is all indented, a function docstring whose body is indented past the `def`, and an
 anchored block that ruff leaves alone (R9-08).
 
-A second trap comes with pasting a real file: a blank line inside the sample becomes a
-whitespace-only line once the block is indented, which is ruff `W293`. Strip the trailing space.
+A second trap comes with pasting a real file. A blank line inside the sample becomes a
+whitespace-only line once the block is indented, and ruff reports it as `W293`. Strip the trailing space.
 
 **mypy reports `import-not-found` for banned libraries** before ruff gets to say why. Read the ruff
 message, not the mypy one.
 
 **Two blank lines after the import block is an isort setting, not a formatter setting.** This one
-is backwards from expectation: `ruff format` *preserves* two blank lines quite happily.
+is backwards from expectation. `ruff format` *preserves* two blank lines quite happily.
 
 The autofix of `I001` in `ruff check` deletes the second one, because the isort setting
 `lines-after-imports` defaults to 1 before a statement. Without `lines-after-imports = 2`,
@@ -147,7 +147,7 @@ pylint side:
 variable-rgx = '^([a-z_][a-z0-9_]*|[A-Z][A-Z0-9_]*)$'
 ```
 
-Use `variable-rgx`, **not** `good-names-rgxs`: it relaxes only *locals*, so a mixedCase local, a
+Use `variable-rgx`, **not** `good-names-rgxs`. `variable-rgx` relaxes only *locals*, so a mixedCase local, a
 mixedCase argument and a mixedCase attribute still fail pylint.
 
 With `N806` ignored, mixedCase locals pass ruff but still fail pylint, so coverage survives
@@ -166,12 +166,12 @@ elif (
 ```
 
 The result is semantically correct, because `and` binds tighter than `or`. But the reader now has to
-apply operator precedence to recover two cases that were plainly separate before, which is the rote
+apply operator precedence to recover two cases that were plainly separate before. That is the rote
 parsing the no-diffing principle (R2b-P0) exists to eliminate.
 
-Explicit parentheses fix the readability and **lose type narrowing**, which is the stronger
-objection. **The loss happens only in a specific shape: the merged branches must narrow the same
-attribute access to different types.** Here `node.name` is `str` on an `ast.FunctionDef` and
+Explicit parentheses fix the readability and **lose type narrowing**. That is the stronger
+objection. **The loss happens only when the merged branches narrow the same attribute access to
+different types.** Here `node.name` is `str` on an `ast.FunctionDef` and
 `str | None` on an `ast.ExceptHandler`, so merging widens `node` back to a union and the attribute
 with it:
 

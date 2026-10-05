@@ -1,9 +1,8 @@
 """Flag comments and docstrings whose subject cannot act, and clauses with their subject cut.
 
 NAR017 is an agent verb on a subject that cannot act. NAR020 is a clause with no subject before
-`, so`: `Named, so a recreated container gets it back`. The full sentence is `The volume is named,
-so a recreated container gets it back`.
-
+`, so`: `Named, so a recreated container gets it back`. The rewrite has a subject: `Named volumes
+persist when a container is recreated`.
 
 `a period ranks by its newest snapshot` makes a period rank, and `the report names it` makes a
 report speak. A subject acts when it is a person, an animal, a role such as `caller`, or a pronoun
@@ -72,7 +71,7 @@ LITERAL = frozenset({
     'compare', 'accept', 'reject', 'contain', 'count', 'sort', 'map', 'have', 'be', 'fail', 'admit',
     'split', 'follow', 'drop', 'stop', 'start', 'run', 'pass', 'take', 'mean', 'imply', 'indicate',
     'look', 'seem', 'appear', 'specify', 'require', 'signal', 'point', 'check', 'will', 'decode',
-    'encode', 'subtract', 'refer', 'resolve',
+    'encode', 'subtract', 'refer', 'resolve', 'iterate', 'compute', 'rewrite',
 })  # fmt: skip
 ROLES = frozenset({
     'i', 'you', 'we', 'he', 'she', 'they', 'who', 'someone', 'nobody', 'everyone', 'user', 'caller',

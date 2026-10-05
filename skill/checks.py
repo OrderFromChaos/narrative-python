@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-### stdlib only, so checks.py runs wherever python3 does
+### standard library only. checks.py runs wherever python3 does
 
 MAX_BODY_LINES_WITHOUT_DOCSTRING = 20
 MAX_ARGS_ON_ONE_LINE = 3
@@ -57,7 +57,7 @@ RULES = {
     'NAR000': 'file could not be read or parsed',
 }
 
-### withdrawn codes: kept so a reference to one in a document still resolves, excluded from --select and findings
+### withdrawn codes. They stay listed so a document citing one still resolves, and are never reported
 
 RETIRED = {
     'NAR008': 'withdrawn: blank lines inside a function are review judgement',
@@ -140,8 +140,8 @@ MUTATING_METHODS = frozenset({
     'update', 'setdefault', 'popitem', 'add', 'discard',
     '__setitem__', '__delitem__', '__iadd__',
 })
-# Configuration calls mutate module state too, e.g. `LOG.addHandler(...)`. No 'write' or 'load':
-# `LOG_PATH.write_text(...)` writes a file and mutates no module state.
+# Configuration calls mutate module state too, e.g. `LOG.addHandler(...)`. 'write' and 'load' are not
+# listed. `LOG_PATH.write_text(...)` writes a file and mutates no module state.
 MUTATING_PREFIXES = (
     'set', 'add', 'remove', 'register', 'unregister', 'reset', 'delete', 'insert',
     'enable', 'disable', 'configure', 'install', 'attach', 'detach',
@@ -153,9 +153,9 @@ MUTATING_PREFIXES = (
 def mutatesByName(method: str) -> bool:
     """Decide whether a method name reads as a mutation.
 
-    Exact names first, then a prefix sweep for the configuration verbs. This is a heuristic and
-    cannot be otherwise: an arbitrary domain method may mutate without saying so in its name.
-    NAR001 therefore under-reports rather than crying wolf.
+    Exact names first, then a prefix sweep for the configuration verbs. This can only be a
+    heuristic. An arbitrary domain method may mutate without saying so in its name, so a
+    mutation hidden behind another name is not flagged.
     """
     if method in MUTATING_METHODS:
         return True
@@ -169,8 +169,8 @@ def mutatedModuleNames(func: ast.FunctionDef | ast.AsyncFunctionDef, module_vars
     """Find module-level names this function changes in place.
 
     Detects mutating method calls, augmented assignment, `del`, and assignment through a subscript
-    or attribute. A plain `NAME = x` rebind is excluded: Python already refuses to rebind a module
-    name without `global`, so that case cannot go undeclared.
+    or attribute. A plain `NAME = x` rebind is not counted. Without `global`, it binds a local, and
+    NAR006 reports that case.
 
     Args:
         module_vars: Names bound by a plain assignment at module level.
@@ -241,7 +241,7 @@ def locallyBoundNames(func: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
             bound.add(node.id)
         elif isinstance(node, (ast.Import, ast.ImportFrom)):
             bound.update(a.asname or a.name.split('.')[0] for a in node.names)
-        # Two branches: merging them, even with explicit parentheses, widens `node` back to a union,
+        # Keep two branches. Merging them, even with explicit parentheses, widens `node` back to a union,
         # and mypy then types `node.name` as `str | None`.
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node is not func:
             bound.add(node.name)
@@ -450,7 +450,7 @@ def checkAnnotationComplexity(tree: ast.Module, checked_file: Path) -> list[Find
 def checkBoolOpParens(tree: ast.Module, source: str, checked_file: Path) -> list[Finding]:
     """Flag an `and` group inside an `or` that is not parenthesised.
 
-    `A and B or C and D` is correct, since `and` binds tighter, but a reader has to look up the
+    `and` binds tighter, so `A and B or C and D` is correct. A reader still has to look up the
     precedence. Merging branches that share a body is fine. Merging them by precedence isn't.
 
     Parentheses are not in the AST, so this check reads the source. Both sides must be checked: a
@@ -548,8 +548,8 @@ SKIPPED_DIRECTORIES = frozenset({
 def discoverPython(root: Path) -> list[Path]:
     """Find every Python file under a directory, skipping the trees no linter should read.
 
-    Ruff already excludes a virtual environment. Without the same exclusion here, `checks.py .`
-    reports findings from installed third-party code.
+    Ruff already excludes a virtual environment. This function skips the same trees, so
+    `checks.py .` reports nothing from installed third-party code.
 
     Returns:
         Every `.py` file outside a skipped directory.
@@ -576,16 +576,16 @@ def reachableFunctions(tree: ast.Module) -> set[str]:
     """Find every function reachable from module level or from `main`.
 
     Names are matched without scope analysis, so a method and a function that share a name are one
-    node. That over-approximates reachability, which is the safe direction: NAR010 would rather
-    call an orphan reachable than let a live FIXME through.
+    node. That over-approximates reachability. A false NAR010 finding on an orphan is safer than a
+    missed live FIXME.
 
     A module with no `main` and no `__main__` block is a library module. Its callers are in files
     outside this check, so every function in it counts as reachable.
     """
     defined = {node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
 
-    # A library module (no main, no __main__ block) has its callers in other files, which this
-    # check doesn't read, so every function counts as reachable.
+    # A library module (no main, no __main__ block) has its callers in other files. This check
+    # doesn't read them, so every function counts as reachable.
     entry = {name for name in defined if name == 'main'}
     runnable = any(isinstance(node, ast.If) and '__main__' in ast.unparse(node.test) for node in tree.body)
     if not entry and not runnable:
@@ -653,7 +653,7 @@ def checkFixmeReachability(tree: ast.Module, source: str, checked_file: Path) ->
     either a merge blocker, or a known correctness problem parked in code nothing calls, left as a
     danger sign for whoever next considers wiring it into the hot loop.
 
-    Only the first kind is a defect, and reachability is what separates them.
+    Only the first kind is a defect. Reachability separates the two.
 
     Returns:
         One finding per FIXME inside a function reachable from an entry point.
@@ -683,7 +683,7 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
     - NAR016: a container verb on a subject that is not a container, listed in WORDING
     - NAR018: a possessive followed by `own`, listed in WORDING
 
-    `used to` counts as changelog only after a pronoun subject, since `the key used to sort` means
+    `used to` counts as changelog only after a pronoun subject. In `the key used to sort`, it means
     employed for. A bare `now` is not flagged. `now that X` and `until now` are common in correct
     prose. A dash after a list-item term is a separator, not a clause join. Pragmas, section dividers
     and pasted usage lines (`$`, `>>>`) are skipped.
@@ -714,7 +714,7 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
                 continue
             if found := pattern.search(text):
                 findings.append(Finding(checked_file, number, code, repr(found.group(0).strip())))
-        # a semicolon in backticked code is code, and a list item gets no exemption from this one
+        # a semicolon in backticked code is code. A list item gets no semicolon exemption
         if SEMICOLON.search(re.sub(r'`[^`]*`', '', text)):
             findings.append(Finding(checked_file, number, 'NAR013', repr(';')))
 
@@ -812,8 +812,8 @@ def docstringLines(tree: ast.Module) -> list[tuple[int, str]]:
 def suppressedLines(source: str) -> dict[int, set[str]]:
     """Map each line with a `# noqa: NARxxx` comment to the codes it silences.
 
-    Every check here is a heuristic over syntax, so each one can be wrong. Without a suppression
-    the only way to clear a false positive is to change correct code into incorrect code.
+    Every check here is a heuristic over syntax, so each one can be wrong. A suppression clears a
+    false positive with no change to correct code.
 
     Returns:
         Line number to the set of codes suppressed on that line, or `{'ALL'}` for a bare `# noqa`.

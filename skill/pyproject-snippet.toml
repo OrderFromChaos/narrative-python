@@ -14,17 +14,17 @@ select = [
     'TID',                # tidy-imports (relative import ban)
     'UP',                 # pyupgrade: modern syntax for the target version
     'SIM',                # flake8-simplify
-    'RET',                # flake8-return -- NOTE RET504 forbids a named value before `return`
-    'PTH',                # flake8-use-pathlib -- NOTE PTH123 bans open(), PTH118 bans os.path.join
+    'RET',                # flake8-return
+    'PTH',                # flake8-use-pathlib. PTH123 bans open() and PTH118 bans os.path.join
     'LOG', 'G',           # logging-format: no f-strings in log calls
 ]
 ignore = [
-    'N802',               # function name should be lowercase -- we require mixedCase instead
+    'N802',               # function name should be lowercase. The style requires mixedCase
     'ISC001',             # conflicts with the formatter
     'SIM114',            # autofix loses type narrowing (R2b-B5)
-    'SIM103',            # demands the last of a run of parallel guards read differently (R4-06)
-    'RET504',            # forbids a named value before `return`, which often names the result (R6-06)
-    'N806',              # a constant moved into its function keeps ALL_CAPS (R3a-12)
+    'SIM103',            # makes the last of a run of parallel guards read differently (R4-06)
+    'RET504',            # bans naming the result before `return` (R6-06)
+    'N806',              # a constant moved into its function stays ALL_CAPS (R3a-12)
 ]
 
 [tool.ruff.lint.flake8-quotes]
@@ -48,11 +48,11 @@ ban-relative-imports = 'all'
 'sqlobject'.msg = 'Validates in Python on write and on every row read. Use SQLAlchemy, or sqlite3 and SQL.'
 
 # No per-file-ignores. A lint exception is a property of the module that needs it, so it is declared
-# there as a file-level `# ruff: noqa: TID251` and not in a central glob list that drifts from the
-# tree it describes (R7-D04, R7-D04-generalised).
+# there as a file-level `# ruff: noqa: TID251`. A central glob list drifts from the tree (R7-D04,
+# R7-D04-generalised).
 
 [tool.ruff.lint.isort]
-lines-after-imports = 2   # R3a-09 -- isort collapses to 1 without this
+lines-after-imports = 2   # R3a-09. isort's default is 1
 
 [tool.ruff.format]
 quote-style = 'single'

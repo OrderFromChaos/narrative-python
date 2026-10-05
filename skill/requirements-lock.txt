@@ -4,7 +4,7 @@ ruff==0.16.3
 pylint==4.0.7
 mypy==2.3.1
 vermin==1.8.0
-# Not a linter. R2-12 mandates property-based tests, so mypy --strict needs the stubs or every
+# Not a linter. Property-based tests are required (R2-12), so mypy --strict needs the stubs or every
 # test module fails on an untyped decorator. hypothesis ships py.typed (R8-F05).
 hypothesis==6.165.10
 # Not a linter. Dates and times use pendulum (R10-pendulum), so mypy --strict needs it importable.

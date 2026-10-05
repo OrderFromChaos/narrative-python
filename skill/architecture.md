@@ -1,13 +1,13 @@
-# Narrative Python — architecture
+# Narrative Python architecture
 
 `SKILL.md` governs one file. This governs several.
 
 Read this when the program spans more than one module, or imports a third-party package. Do not read
-it for a single-file program: none of it applies, and it is pure context cost.
+it for a single-file program. None of it applies, and reading it is pure context cost.
 
 The reason for each rule is in its text. The ids are provenance and resolve in
-`benchmark/decisions.jsonl` in the source repository, which does not ship with the skill. Rules that
-no tool can check say so.
+`benchmark/decisions.jsonl` in the source repository, which does not ship with the skill. A rule that
+no tool can check is marked as such.
 
 ## The measure
 
@@ -30,7 +30,7 @@ diff does not need to know what the device is.
 
 1. a parameter threaded through functions that do not use it
 2. one more file
-3. one more named type, which is free when the field belongs to the thing it is about
+3. one more named type. It costs nothing when the field belongs to the thing it is about
 
 Spend a named type or a file to delete a threaded parameter. Never the reverse.
 
@@ -73,7 +73,7 @@ scheduler that applies it. Four questions that look unrelated have their answer 
   def canonicaliseRegion(region: RegionName, reconcile_rules: ReconcileRules) -> RegionName:
       return reconcile_rules.region_aliases.get(region, region)
 
-  # Yes. The pattern and the fold are the PEP 503 rule, and the name is what states it.
+  # Yes. The pattern and the fold are the PEP 503 rule. A reader learns that from the name.
   def normalizeName(name: PackageName) -> PackageName:
       return _NAME_SEPARATORS.sub('-', name.strip().lower())
   ```
@@ -85,8 +85,8 @@ scheduler that applies it. Four questions that look unrelated have their answer 
   sorted(path for path in directory.iterdir() if path.is_file() and isReport(path))  # name it
   ```
 
-  The first is three `Path` calls. The second composes `isReport`, which is a concept from the
-  problem, and from the name of the whole, a reader learns that the two conditions belong together.
+  The first is three `Path` calls. The second composes `isReport`, a concept from the
+  problem. From the name of the whole, a reader learns that the two conditions belong together.
 
   This is judgement and no tool checks it. Measured over eight packages, seven functions forwarded to
   a single expression and only one was the defect, so a mechanical threshold would be six false
@@ -103,46 +103,46 @@ and no linter reports.
 
 `io/reader.py` importing `io/checksum.py` is correct, because a checksum is below a reader whatever
 the directory layout. Directory depth is not the level. A declared layer order fails for a different
-reason: layers inferred from current imports make every existing edge legal by construction.
+reason. Layers inferred from current imports make every existing edge legal by construction.
 
 **A cycle is a wrong cut, not an import problem.** (`R7-A02`) Break it with a shared vocabulary
-module. Do not reach for `if TYPE_CHECKING`, which is cheap only because the future import is
-mandatory. Do not dissolve the shared type into primitives: **a callee that takes primitives
+module. Do not reach for `if TYPE_CHECKING`. It is cheap only because the future import is
+mandatory. Do not dissolve the shared type into primitives. **A callee that takes primitives
 pushes its own destructuring decision onto every caller.**
 
 **Call a first-party module by name.** `from collector import store`, then `store.insertReading`.
-(`R7-B06`) `R3a-08` governs this too: import the class, keep the verb qualified.
+(`R7-B06`) `R3a-08` applies here too. Import the class, and keep the verb qualified.
 
 **The qualifier is not part of the function name.** `store.insertReading` reads well because
 `insertReading` reads well on its own. A module-qualified call invites a shorter and vaguer function
-name, which breaks `SKILL.md`'s naming rules: the name must make sense to a reader who has never
+name, which breaks `SKILL.md`'s naming rules. The name must make sense to a reader who has never
 opened the module. Note also that the import burns the identifier `store` at module scope, so a
 local of that type becomes `results_store: Store`. (`R9-03`, `R8-B06-Q11`)
 
 ## Where the cuts go
 
-**A coherent concern earns a module. Line count is not the criterion**, in either direction: a
+**A coherent concern earns a module. Line count is not the criterion**, in either direction. A
 28-line concern earns its own file, and a 340-line file with six concerns in it becomes six.
 (`R7-B01-B03-criterion`)
 
 **The test is whether you can name it without saying "and".** (`R8-D12-resolved`) `retention.py` is
-retention. `store.py` is storage. A `protocol.py` that also holds `crc32Of` is "the wire format
+retention. `store.py` is storage. A `protocol.py` that also has `crc32Of` is "the wire format
 **and** checksums", so the checksum leaves and gets its own module. This is `R7-C05-naming` one
-level up: a group described only with "and" is two groups.
+level up. A group described only with "and" is two groups.
 
 **Split.** (`R7-B01`) Six modules of 40 to 90 lines beat one file of 340, because each module is a
 bucket a reader can put a group of functions into. Do not wait for a second program to use the code.
 
 **There is no fixed split axis.** (`R7-B02`) Cut by technical role when the program has one of
 everything. Cut by subject when it has several vendors, several formats, or several sites. Apply the
-measure directly: cut on the axis the expected changes land in more cleanly.
+measure directly. Cut on the axis the expected changes land in more cleanly.
 
 **Naming a concept and crossing a boundary are two tests, and they can disagree.** (`R7-B04`,
 `R8-D39`) A helper that leaves the package must be findable by someone who did not write it, which
-forces it to name a concept: a checksum earns `checksum.py`. A byte formatter and a batcher that
+forces it to name a concept. A checksum earns `checksum.py`. A byte formatter and a batcher that
 never leave can share one module. But a version comparator can be a clean concept and still be
 imported by one module and cross nothing. Where the two tests disagree, no order between them is
-settled — treat it as a question for review, not a rule.
+settled. Treat it as a question for review, not a rule.
 
 **Shared code inside one system starts as one `common.py`, scoped to that system's directory.**
 (`R7-A05-growth`) Split it when it grows: definitions first, then implementation. This is never a
@@ -153,7 +153,7 @@ project-wide `utils.py`.
 **Prefix every internal module-level name with an underscore:** functions, constants,
 classes, and type aliases. (`R7-B08`, `R7-B08-scope`) A module filename does not take one.
 
-Decide by the callers the name has now, not by the callers you expect: **a name that nothing outside
+Decide by the callers the name has now, not by the callers you expect. **A name that nothing outside
 this module calls today takes the underscore.** When a later change uses it elsewhere, drop the
 underscore in that change. A module nothing can import has no public surface to mark, so the rule
 does not reach `__main__.py`, whose names stay bare.
@@ -169,7 +169,7 @@ files is the floor for adding a new subject: the new module, and the one line wi
 
 **The reading order lives in `__main__.py`.** (`R7-B01-map`) Its docstring is the program's purpose,
 then the modules in reading order. What every other module owes is `SKILL.md`'s rule, not a second
-one stated here. Known cost, accepted: a reader arriving at one module from a stack trace sees that
+one stated here. This cost is known and accepted. A reader arriving at one module from a stack trace sees that
 module and no map.
 
 **This is the one docstring with other modules' names in it, and the only exception to the rule that
@@ -195,8 +195,8 @@ two of it can exist at once. One object, one implementation, and a class is the 
 the next. One function calls them in turn, with the intermediates in its local variables.
 
 **A pure core earns its place by the number of decisions in it.** (`R7-C06`, `R7-C07`) Four routing
-rules and three effects: compute a plan, then apply it. One f-string: build the line where you emit
-it.
+rules and three effects earn one. Compute a plan, then apply it. One f-string does not. Build the
+line where you emit it.
 
 **Every case of a closed set is in one module, in an exhaustive `match`.** (`R7-A06`) A decorator
 that registers each handler at import inverts the import arrows and puts the dispatch table beyond
@@ -220,14 +220,14 @@ global. A connection is not. An operator-tunable default is not either. It belon
 file.
 
 **One program-scoped config object reaches every module.** (`R7-E03`) Per-module slices make
-consumers re-derive a local version, which is new surface. There is one config for the whole
+consumers re-derive a local version, and each version is new surface. There is one config for the whole
 program, so unlike every other bundle it takes no class with behaviour around it.
 
 **It travels as a module-level singleton, not as a parameter.** (`R8-D09-resolved`) Parse it once at
 import into a frozen record and import that name where it is needed. A frozen config has nothing to
 close, so the singleton rule above already allows it. Not allowed under that rule: a *hardcoded
 default* invented in a module, which belongs in the config file instead. The singleton is **assigned
-once and never rebound**: a function that reassigns it mutates module state and owes a `global`, and
+once and never rebound.** A function that reassigns it mutates module state and owes a `global`, and
 fails `NAR001`.
 
 **Leaf modules import the constants they need**, when those constants exist at import time.
@@ -245,9 +245,9 @@ loop, and then justify it.
 
 Two steps, often mistaken for one.
 
-**Take the dependency when it is simpler at the call site.** (`R7-D02`) **The dependency must buy
-something there**: `json`, `struct`, `sqlite3`, `pathlib` and `dataclasses` already read well and
-nothing replaces them. At equal ergonomics the standard library wins by costing nothing to install.
+**Take the dependency when it is simpler at the call site.** (`R7-D02`) **The dependency must be
+simpler there.** `json`, `struct`, `sqlite3`, `pathlib` and `dataclasses` already read well, and
+no package improves on them. At equal ergonomics the standard library wins by costing nothing to install.
 (`R7-D02-stdlib`)
 
 **Then contain it.** (`R7-D03`, `R7-D01`) One module imports the library. Everything downstream gets
@@ -277,17 +277,17 @@ so the formatter emits `module`, `lineno` and `funcName` to locate the record in
 
 **The source pushes and the service follows**, when the source supports it. (`R7-E07`) A poll loop
 is the fallback, not the shape. This was decided for instruments on a socket, and it extends to any
-source with notifications — a queue, a filesystem watch, a webhook. It does **not** reach a source
-that can only be asked, such as an HTTP endpoint you do not control; there, polling is the shape and
-not a defeat.
+source with notifications, such as a queue, a filesystem watch or a webhook. It does **not** reach a
+source that can only be asked, such as an HTTP endpoint you do not control. There, polling is the
+shape and not a defeat.
 
-Without rounds there is no natural batch, so the reporting unit becomes a **time window**: `Q24` then
+Without rounds there is no natural batch, so the reporting unit becomes a **time window**. `Q24` then
 aggregates over a window rather than over a batch.
 
 ## Where degrade-and-report splits
 
 **The module doing the work collects per-item failures, and the module above logs the aggregate.**
-(`Q24`, `R7-A08`) `SKILL.md` states the rule; this is the only thing a module boundary adds to it.
+(`Q24`, `R7-A08`) The rule is in `SKILL.md`. This is the only thing a module boundary adds to it.
 Real dependencies in tests (`R2-02`, `R7-C08`) need no adjustment at module scale at all.
 
 ## Comments
@@ -305,7 +305,7 @@ Exception: a program may contain the name of a rule it **implements**. `checks.p
 the returned value is enough, and the reader does not scroll to the signature. Early returns and
 guard exits are exempt, because a name on those produces near-identical pairs and creates the rote
 diffing banned by `R2b-P0`. `RET504` stays disabled, so this form is legal. *No size threshold is
-set: apply it where the signature is off the screen.*
+set. Apply it where the signature is off the screen.*
 
 **Order module constants by who changes the value.** (`R7-A05-ordering`) Operator-tunable first,
 developer-only bindings last. Where execution order forces a constant later in the block, it joins

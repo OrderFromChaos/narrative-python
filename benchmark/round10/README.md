@@ -599,6 +599,38 @@ labels on fields (`chunk x and z`, `in chunks, None for no limit`). Neither arm 
 so these files do not reproduce the 15% of predicate fragments in GT5-Unofficial PR 6, a Java
 cleanup. Review file: `cycles/cleanup_review.md`.
 
+### Same-session cleanup cycle
+
+Tasks P3, P5 and P8, each written by one agent without the skill, then cleaned up by the same agent in
+the same conversation with the skill: three agents with the skill before R10-cleanup-rewrite and
+R10-subject-verb, three with it. All six kept the fixture output. Opening sentences of the comment
+and docstring blocks, by the classifier of the cleanup cycle:
+
+| | blocks | clause | label | imperative | fronted | `NAR020` |
+|---|---|---|---|---|---|---|
+| old skill, phase 1 | 53 | 55% | 9% | 26% | 5 | 0 |
+| old skill, cleaned | 66 | 38% | 8% | 50% | 3 | 0 |
+| new skill, phase 1 | 72 | 57% | 21% | 17% | 4 | 0 |
+| new skill, cleaned | 74 | 35% | 9% | 46% | 7 | 0 |
+
+Read by hand, one of the cleaned "fronted" blocks has its subject cut (`# dotted, such as
+'flags.search_v2.rollout'`, a trailing comment on a type alias). The rest are labels or open with a
+`without X,` clause. The same-session workflow did not reproduce the fragments of GT5-Unofficial PR 6
+either.
+
+The cleanups converged on one comment form instead. Of the 44 `#` comments the cleanups added or
+changed, 14 open with `without` and 15 contain `would`, and 27 (61%) have one or the other. Four of
+the six runs wrote the same bool fence: `# without the bool test, JSON true passes as 1`. The rates
+are 30% in cycle 13 (written with the skill) and 16% in the fresh-agent cleanup cycle. By arm: 14 of
+19 old, 13 of 25 new.
+
+Both P8 cleanups moved the connection handlers into one `asyncio.TaskGroup`, after the skill's
+3.11 bullet. An unexpected exception in one handler then cancels every other connection and stops
+the server. Before the cleanup, `asyncio.start_server` ran each handler as its own task, and the
+exception ended that connection only.
+
+Review file: `cycles/samesession_review.md`.
+
 ## Open
 
 - Kinds against lists (R10-instruction-design): the cycles ran with kinds plus the gate and T
@@ -617,7 +649,6 @@ cleanup. Review file: `cycles/cleanup_review.md`.
 - What the user keeps, from R10-rating3 to R10-rating5 and R10-F03: outside facts, rules for future
   changers, facts not visible from the comment's position, gotcha guards the reader does not already
   know (R10-audience), and a one-line summary above a dense comprehension.
-- `install.sh` has not been run, so `~/.claude/skills/narrative` holds the skill from before round 10.
 - The agent-verb check (R10-agentverb-check, `NAR017`) is `skill/agentverbs.py`. It reads spaCy's
   `en_core_web_md` parse and two word lists that `agentverb/build_words.py` derives from WordNet 3.0
   (`skill/words.json`, with WordNet's license), so it needs no NLTK at run time. spaCy 3.8.16 and
