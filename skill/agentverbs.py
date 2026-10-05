@@ -1,4 +1,9 @@
-"""Flag comments and docstrings whose subject cannot act, paired with a verb for a mental act.
+"""Flag comments and docstrings whose subject cannot act, and clauses with their subject cut.
+
+NAR017 is an agent verb on a subject that cannot act. NAR020 is a clause with no subject before
+`, so`: `Named, so a recreated container gets it back`. The full sentence is `The volume is named,
+so a recreated container gets it back`.
+
 
 `a period ranks by its newest snapshot` makes a period rank, and `the report names it` makes a
 report speak. A subject acts when it is a person, an animal, a role such as `caller`, or a pronoun
@@ -19,11 +24,12 @@ verify.py runs it with the interpreter of the lint venv.
 Usage:
     $ .lintenv/bin/python agentverbs.py src/
     src/join.py:73: NAR017 'period ranks': agent verb on a subject that cannot act
+    src/store.py:12: NAR020 'Named': clause with no subject before ", so"
     $ .lintenv/bin/python agentverbs.py --lines sample.txt
     $ .lintenv/bin/python agentverbs.py --score gold.tsv
     precision 1.00, recall 0.91 (29 of 32 found, 0 false)
 
-A line with `# noqa: NAR017` or a bare `# noqa` is skipped.
+A line with `# noqa: NAR017`, `# noqa: NAR020` or a bare `# noqa` is skipped for that code.
 
 Exit codes:
     0  nothing flagged
@@ -49,6 +55,8 @@ from spacy.tokens import Doc, Token
 
 CODE = 'NAR017'
 MESSAGE = 'agent verb on a subject that cannot act'
+FRAGMENT_CODE = 'NAR020'
+FRAGMENT_MESSAGE = 'clause with no subject before ", so"'
 WORDS_PATH = Path(__file__).resolve().parent / 'words.json'
 MODEL = 'en_core_web_md'
 
@@ -87,6 +95,9 @@ NOQA = re.compile(r'#\s*noqa(?::\s*(?P<codes>[A-Z0-9, ]+))?')
 # a quoted span is code or an example, not a sentence of the comment
 QUOTED = re.compile(r"`[^`]*`|(?<!\w)'[^'\n]+'(?!\w)")
 AGREEMENT_WINDOW = 5
+SO_JOIN = re.compile(r',\s+so\b')
+# the parse of a longer clause before `, so` is unreliable
+FRAGMENT_MAX_WORDS = 8
 # Google-style docstring sections, whose indented entries are prose
 SECTION_HEADER = re.compile(r'(?:Args|Arguments|Returns|Yields|Raises|Attributes|Notes?):$')
 
@@ -109,7 +120,7 @@ def main() -> int:
     if args.lines:
         flagged = 0
         for text in args.lines.read_text(encoding='utf-8').splitlines():
-            if hits := reader.agentVerbs(text):
+            if hits := [*reader.agentVerbs(text), *(f'{head},' for head in reader.fragments(text))]:
                 flagged += 1
                 print(f'{text}   <- {"; ".join(hits)}')
         return 1 if flagged else 0
@@ -118,7 +129,8 @@ def main() -> int:
     for checked_file in discoverPython(args.paths):
         findings.extend(checkFile(reader, checked_file))
     for finding in findings:
-        print(f'{finding.checked_file}:{finding.line}: {CODE} {finding.hit!r}: {MESSAGE}')
+        message = MESSAGE if finding.code == CODE else FRAGMENT_MESSAGE
+        print(f'{finding.checked_file}:{finding.line}: {finding.code} {finding.hit!r}: {message}')
     return 1 if findings else 0
 
 
@@ -156,42 +168,66 @@ def discoverPython(paths: list[Path]) -> list[Path]:
 
 
 def checkFile(reader: SentenceReader, checked_file: Path) -> list[Finding]:
-    """Flag every comment and docstring line of one file, skipping lines silenced with noqa.
+    """Flag every comment and docstring passage of one file, skipping codes silenced with noqa.
+
+    A passage is checked as one text, so a sentence wrapped over several lines is parsed whole. A
+    noqa on any line of a passage silences that code for the whole passage.
 
     Returns:
-        One finding per agent verb.
+        One finding per agent verb and per clause with no subject, on the line of its last word.
     """
     source = checked_file.read_text(encoding='utf-8')
-    silenced = silencedLines(source)
+    passages = [*commentPassages(source), *docstringPassages(ast.parse(source))]
+    agent_silenced = silencedLines(source, CODE)
+    fragment_silenced = silencedLines(source, FRAGMENT_CODE)
     findings: list[Finding] = []
-    for number, text in sorted([*commentLines(source), *docstringLines(ast.parse(source))]):
-        if number in silenced:
-            continue
-        findings.extend(Finding(checked_file, number, hit) for hit in reader.agentVerbs(text))
+    for passage in sorted(passages, key=lambda passage: passage.lines[0]):
+        if not agent_silenced & set(passage.lines):
+            for hit in reader.agentVerbs(passage.text):
+                findings.append(Finding(checked_file, passage.lineOf(hit), CODE, hit))
+        if not fragment_silenced & set(passage.lines):
+            for head in reader.fragments(passage.text):
+                findings.append(Finding(checked_file, passage.lineOf(head), FRAGMENT_CODE, head))
     return findings
 
 
-def silencedLines(source: str) -> set[int]:
+def silencedLines(source: str, code: str) -> set[int]:
     silenced: set[int] = set()
     for number, line in enumerate(source.splitlines(), start=1):
-        if (pragma := NOQA.search(line)) and (pragma['codes'] is None or CODE in pragma['codes']):
+        if (pragma := NOQA.search(line)) and (pragma['codes'] is None or code in pragma['codes']):
             silenced.add(number)
     return silenced
 
 
-def commentLines(source: str) -> list[tuple[int, str]]:
-    lines: list[tuple[int, str]] = []
+def commentPassages(source: str) -> list[Passage]:
+    """Group comments into passages: a run of whole-line comments at one column, or one trailing comment.
+
+    Returns:
+        The passages in line order.
+    """
+    passages: list[Passage] = []
+    run_column = -1
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.type != tokenize.COMMENT:
             continue
         text = token.string.lstrip('#').strip()
-        if text and not PRAGMA.match(text):
-            lines.append((token.start[0], text))
-    return lines
+        whole_line = token.line[: token.start[1]].strip() == ''
+        if not text or PRAGMA.match(text):
+            run_column = -1
+            continue
+        joins_run = (
+            whole_line and passages and run_column == token.start[1] and passages[-1].lines[-1] == token.start[0] - 1
+        )
+        if joins_run:
+            passages[-1] = passages[-1].extendedBy(token.start[0], text)
+        else:
+            passages.append(Passage((token.start[0],), (text,)))
+        run_column = token.start[1] if whole_line else -1
+    return passages
 
 
-def docstringLines(tree: ast.Module) -> list[tuple[int, str]]:
-    lines: list[tuple[int, str]] = []
+def docstringPassages(tree: ast.Module) -> list[Passage]:
+    passages: list[Passage] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             continue
@@ -200,8 +236,15 @@ def docstringLines(tree: ast.Module) -> list[tuple[int, str]]:
         literal = node.body[0].value
         if not isinstance(literal, ast.Constant) or not isinstance(literal.value, str):
             continue
-        lines.extend((literal.lineno + offset, text) for offset, text in proseLines(literal.value))
-    return lines
+        previous_offset = -2
+        for offset, text in proseLines(literal.value):
+            number = literal.lineno + offset
+            if offset == previous_offset + 1:
+                passages[-1] = passages[-1].extendedBy(number, text)
+            else:
+                passages.append(Passage((number,), (text,)))
+            previous_offset = offset
+    return passages
 
 
 def proseLines(docstring: str) -> list[tuple[int, str]]:
@@ -235,9 +278,37 @@ def proseLines(docstring: str) -> list[tuple[int, str]]:
 
 
 @dataclass(frozen=True)
+class Passage:
+    """Consecutive lines of comment or docstring prose, read as one text."""
+
+    lines: tuple[int, ...]
+    texts: tuple[str, ...]
+
+    @property
+    def text(self) -> str:
+        return ' '.join(self.texts)
+
+    def extendedBy(self, number: int, text: str) -> Passage:
+        return Passage((*self.lines, number), (*self.texts, text))
+
+    def lineOf(self, hit: str) -> int:
+        """Find the line with the last word of a hit, or the first line when no line has it.
+
+        Returns:
+            A line number of the file.
+        """
+        last_word = hit.split()[-1]
+        for number, text in zip(self.lines, self.texts, strict=True):
+            if re.search(rf'\b{re.escape(last_word)}\b', text):
+                return number
+        return self.lines[0]
+
+
+@dataclass(frozen=True)
 class Finding:
     checked_file: Path
     line: int
+    code: str
     hit: str
 
 
@@ -271,6 +342,32 @@ class SentenceReader:
             **self._modalSubjects(doc),
         }
         return [hits[index] for index in sorted(hits)]
+
+    def fragments(self, text: str) -> list[str]:
+        """Find each clause before `, so` that has no subject and is not a noun phrase or a command.
+
+        `Named, so…` and `In float, so…` count. `constant-time comparison, so…` is a label, and
+        `Sort by key, so…` is an imperative, so neither counts.
+
+        Returns:
+            The words before `, so` of each such clause, in sentence order.
+        """
+        heads: list[str] = []
+        for clause in re.split(r'(?<=[.!?;])\s+', QUOTED.sub('value', text)):
+            joint = SO_JOIN.search(clause)
+            head = clause[: joint.start()].strip() if joint else ''
+            if not head or len(head.split()) > FRAGMENT_MAX_WORDS:
+                continue
+            doc = self.nlp(head)
+            root = next(token for token in doc if token.dep_ == 'ROOT')
+            has_subject = any(token.dep_ in ('nsubj', 'nsubjpass', 'expl', 'csubj') for token in doc)
+            has_finite_verb = any(token.tag_ in ('VBZ', 'VBP', 'VBD', 'MD') for token in doc)
+            label = root.pos_ in ('NOUN', 'PROPN', 'PRON', 'NUM')
+            command = doc[0].tag_ == 'VB' or root.tag_ in ('VB', 'VBG')
+            interjection = doc[0].pos_ == 'INTJ'
+            if not (has_subject or has_finite_verb or label or command or interjection):
+                heads.append(head)
+        return heads
 
     def _parsedSubjects(self, doc: Doc) -> dict[int, str]:
         hits: dict[int, str] = {}

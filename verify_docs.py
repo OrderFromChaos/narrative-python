@@ -148,9 +148,9 @@ def main() -> int:
             registries[name] = {k.value for k in keys if isinstance(k, ast.Constant) and isinstance(k.value, str)}
 
     rule_codes, retired = registries['RULES'], registries['RETIRED']
-    # the code of each agentverbs.py finding is its CODE constant
+    # the codes of agentverbs.py findings are its CODE and FRAGMENT_CODE constants
     for node in ast.parse((ROOT / 'skill/agentverbs.py').read_text()).body:
-        if not isinstance(node, ast.Assign) or getattr(node.targets[0], 'id', '') != 'CODE':
+        if not isinstance(node, ast.Assign) or getattr(node.targets[0], 'id', '') not in ('CODE', 'FRAGMENT_CODE'):
             continue
         if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
             rule_codes = rule_codes | {node.value.value}
@@ -188,7 +188,7 @@ def main() -> int:
                 ast.parse(block.replace('...', 'pass'))
 
     readme = (ROOT / 'README.md').read_text()
-    claimed = re.search(r'(\d+) forced choices', readme)
+    claimed = re.search(r'(\d+) (?:forced|human-selected) choices', readme)
     if claimed and int(claimed.group(1)) != len(decision_ids):
         problems.append(f'README claims {claimed.group(1)} decisions, decisions.jsonl has {len(decision_ids)}')
 

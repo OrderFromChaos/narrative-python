@@ -588,6 +588,17 @@ copied word for word. No comment has a semicolon, a dash or an agent verb, and n
 `NAR017`. Review file: `cycles/cycle13_review.md`.
 
 
+### Cleanup cycle
+
+Three comment-heavy scripts of gtnh-determinism, written by Claude without the skill
+(`seedsearch/loot-csv.py`, `seedsearch/chest-attribution.py`, `scripts/diff-chests.py`), each
+cleaned up twice: with the skill before R10-cleanup-rewrite and R10-subject-verb, and with them.
+All six reproduced the original's output on their own test inputs. Opening sentences of the
+comment and docstring blocks: the originals had no fragment, and each arm had 2 of about 40, all
+labels on fields (`chunk x and z`, `in chunks, None for no limit`). Neither arm triggered `NAR020`,
+so these files do not reproduce the 15% of predicate fragments in GT5-Unofficial PR 6, a Java
+cleanup. Review file: `cycles/cleanup_review.md`.
+
 ## Open
 
 - Kinds against lists (R10-instruction-design): the cycles ran with kinds plus the gate and T
@@ -620,7 +631,10 @@ copied word for word. No comment has a semicolon, a dash or an agent verb, and n
   participles after a quantifier (`one denied id`), noun compounds (`the rules file`). It skips a docstring
   line indented past the body, a pasted sample, unless it is an entry under a section header such as
   `Returns:`. Before that, in cycle 13, a sample summary line (`4/4  C minor  3 notes`) read as `C
-  notes`, and the P10 run moved the key signature to the end of its summary line to clear it.
+  notes`, and the P10 run moved the key signature to the end of its summary line to clear it. It reads a
+  run of whole-line comments at one column, or a docstring paragraph, as one passage. Checked line
+  by line, it missed a sentence wrapped between its subject and its verb: `the mongo image` at the
+  end of one line and `declares` at the start of the next, in a Python docstring from a work repo.
 - The comment listing (R10-prose-inventory) is `checks.py --prose`, which `verify.py` prints after a
   passing run.
 - The task specs P1 to P4 are reworded so the agent-verb check flags only its two known false

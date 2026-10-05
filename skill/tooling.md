@@ -19,7 +19,7 @@ directly. (R10-uv)
 | `pylint` (naming only) | `mixedCase` functions — **no other linter can require this** |
 | `mypy --strict` | type correctness |
 | `checks.py` | the residual rules no tool implements |
-| `agentverbs.py` | `NAR017`, an agent verb on a subject that cannot act, from a spaCy parse |
+| `agentverbs.py` | `NAR017`, an agent verb on a subject that cannot act, and `NAR020`, a clause with no subject before `, so`, from a spaCy parse |
 | `verify.py` | running all of the above correctly, with the toolchain and config guards |
 
 Run order matters: `ruff check --fix`, then `ruff format`, then `pylint`, `mypy`, `checks.py`,

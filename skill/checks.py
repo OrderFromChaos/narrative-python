@@ -509,8 +509,8 @@ def checkModuleDocstring(tree: ast.Module, checked_file: Path) -> list[Finding]:
     """Require a module docstring, and a usage example on anything runnable.
 
     The docstring is the first thing a reader meets, before `main()`. A runnable module's docstring
-    shows how to run it: invocation varies per program, and a reader shouldn't reconstruct it from
-    `argparse` calls further down.
+    has an example invocation: invocation varies per program, and a reader shouldn't reconstruct it
+    from `argparse` calls further down.
 
     Returns:
         One finding for a missing docstring, or one for a runnable module with no example invocation

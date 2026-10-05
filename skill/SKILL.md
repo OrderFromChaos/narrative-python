@@ -625,6 +625,9 @@ Before writing or rewording a comment, in order:
    kind's test, and is not under **Never**. Deleting is a valid outcome of a rewrite.
 4. **Set the depth and sentence form** by **Depth** and **Sentence form**.
 
+**When shortening an existing comment, rewrite the sentence. Do not delete words from it until it
+fits.** (R10-cleanup-rewrite)
+
 **Comment kinds:** (R10-topic-lists, R10-fp-fn, R10-kinds)
 
 - **Source**: a fact or requirement from outside the code. Test: it would still be true if the code
@@ -641,7 +644,7 @@ Before writing or rewording a comment, in order:
   and neither does adding a feature. Say what the fact forces in the code.
   (R10-Q20, R10-Q42, R10-Q44, R10-Q45, R10-Q50, R10-Q53, R10-Q55, R10-fence-consequence)
   - `# without the bool test, JSON true passes as 1`, not `# JSON true is a Python int`
-  - `# constant-time comparison, so response timing doesn't reveal the token`
+  - `# constant-time comparison to avoid timing attacks`
   - `# walk backwards so deleting an item doesn't shift the indexes still to visit`
   - `# migrate before load: load reads the account_id column`
   - not `# file can change between calls, so not cached`: a cache is a feature, not a simplification
@@ -689,7 +692,12 @@ A one-line comment stays one clause. (R10-Q16, R10-seed-2, R10-depth-sentences, 
 
 **Sentence form:**
 - a one-line `#` comment: lowercase start, no period. Several lines, and every docstring: sentences. (R10-Q26, R10-Q35, R10-docstrings)
-- terse: drop articles where nothing is lost (R10-seed-10)
+- terse: drop articles where nothing is lost, never the subject or the verb (R10-seed-10, R10-terse-narrow)
+- every clause has a subject and a verb. A label naming the thing is fine: `# least recently used
+  first`, `Exact, case-sensitive comparison.` A predicate with its subject cut is not:
+  `Bound to one machine` → `The modifier is bound to one machine`, and
+  `Named, so a recreated container gets it back` → `The volume is named, so a recreated container
+  gets it back`. (R10-subject-verb, `NAR020`)
 - possessives and noun compounds over relative clauses: `the archive's collections`, `in read order` (R10-seed-1, R10-seed-9, R10-Q32)
 - trade terms over paraphrase: `has no side effects`. Modifiers before the noun: `JSONL logs`. (R10-seed-3, R10-seed-4)
 - the conclusion, not the derivation: state what the code means, not how it gets there.
@@ -732,6 +740,10 @@ something only a mind does (`a period ranks`, `the report names it`, `a policy c
 Documents get no exception: write `named in the report`. It comes from `agentverbs.py`, the seventh
 check in `verify.py`. The check parses each sentence, and some noun compounds and participles are
 flagged by mistake. Silence those with `# noqa: NAR017`. (R10-agentverb-check)
+
+`NAR020`, from the same check, is a clause with no subject before `, so`: `Named, so a recreated
+container gets it back`. It flags only that form. Check every other clause against the subject and
+verb rule in **Sentence form** by hand. (R10-subject-verb, R10-nar020)
 
 **Before you finish, read the list `verify.py` prints after a passing run**: every comment and
 docstring summary in the code. For each one, name the subject and the verb and ask whether that

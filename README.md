@@ -7,7 +7,7 @@ human-like comments.**
 
 - ✂️ **A third less code to review.** Programs Claude writes (based on a realistic spec) with the skill have
   33% fewer executable lines. With a highly detailed output spec contract, the savings are 9%.
-- ✅ **Passes mypy --strict.** Contains an opinionated linting pipeline including ruff, pylint, `mypy --strict`, 18 custom AST checks, and NLP inanimate agent-verb compliance.
+- ✅ **Passes mypy --strict.** Contains an opinionated linting pipeline including ruff, pylint, `mypy --strict`, 17 custom AST checks, and NLP checks for inanimate agent verbs and cut subjects.
 - 🎯 **No loss in spec correctness.** Guided and unguided programs pass the same blind conformance tests.
 - 💬 **Comments a reviewer wants.** Most of Claude's writing tics fall to the human rate or below, and comments are added for good reasons only.
 - 🔧 **Does not cause catastrophic tech debt problems.** Two consecutive change requests cost 329 changed lines with the
@@ -18,7 +18,7 @@ human-like comments.**
   experience, asking Claude to take the good parts of `/narrative` into another language works
   well.
 
-Rules come from 423 human-selected choices between real working programs.
+Rules come from 427 human-selected choices between real working programs.
 
 ⚠️ This skill has an opinionated ordering for code (`main()` first, then the steps it calls in call order, then the types). This does produce readable and pleasing code, but may lead to code differences between your PRs and the rest of your codebase. It will not force migrate the rest of your codebase to this style unless you tell it to.
 
@@ -200,7 +200,7 @@ that a professional reader would get from the code below it is cut.
 
 After a passing run, `verify.py` prints every comment and docstring summary, so the agent double checks its work.
 
-## The eighteen lint custom rules
+## The nineteen lint custom rules
 
 | rule | finding |
 |---|---|
@@ -222,6 +222,7 @@ After a passing run, `verify.py` prints every comment and docstring summary, so 
 | `NAR017` | an agent verb on a subject that cannot act: `a period ranks`, `the report names it` |
 | `NAR018` | a possessive `own` in a comment or docstring |
 | `NAR019` | a return contract written as a comment at the top of a function body |
+| `NAR020` | a clause with its subject cut before `, so`: `Named, so a recreated container gets it back` |
 
 `NAR000` is code for a file that could not be read or parsed.
 
@@ -232,7 +233,7 @@ After a passing run, `verify.py` prints every comment and docstring summary, so 
 | `skill/` | the nine files of the skill. `architecture.md` has the multi-module rules |
 | `install.sh` | the list of files in the skill, and the installer |
 | `verify_docs.py` | checks that every decision id and rule code in the documents exists |
-| `benchmark/decisions.jsonl` | all 423 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 427 decisions, each with its reasoning and evidence |
 | `benchmark/round1/` to `round10/` | the rounds that produced the decisions. `benchmark/README.md` describes each |
 | `benchmark/GAPS.md` | gaps found by writing real programs against the skill, and the rule each one became |
 | `validation/` | held-out tasks, in three arms each: no guidance, the earlier style doc, the skill |
