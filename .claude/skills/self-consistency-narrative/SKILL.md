@@ -43,7 +43,7 @@ cp skill/pyproject-snippet.toml S/pyproject.toml
 cd S && PATH=<repo>/.lintenv/bin:$PATH <repo>/.lintenv/bin/python <repo>/skill/verify.py --venv <repo>/.lintenv <repo>/skill/verify.py <repo>/skill/checks.py <repo>/skill/agentverbs.py
 ```
 
-All 7 checks must pass. Read the comment and docstring list it prints against the Comments section.
+All 7 checks must pass. Read the comment and docstring list it prints, and the scripts' error messages and `--help` text, through the steps of **Prose review** under **Procedures**.
 
 ```bash
 .lintenv/bin/python skill/agentverbs.py --score benchmark/round10/agentverb/gold.tsv

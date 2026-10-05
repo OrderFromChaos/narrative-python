@@ -18,6 +18,8 @@ Second principle, for representation choices: **prefer what the type checker and
 even when a looser form is more flexible. State in a `dict[str, Any]` passes `mypy --strict` only
 with a `cast()` or a key lookup at every use. Typed attributes pass with neither. (R3-P2-rank)
 
+**The steps to run while writing and before you finish are in Procedures, the last section.**
+
 **This document governs every file, however many there are.** Naming, layout, types, errors and
 docstrings apply to each module of a package exactly as they apply to a single-file program.
 
@@ -116,6 +118,22 @@ class ScanHeader: ...
 
 - Long strings: implicit concatenation in parens. Never `"""` for data, because its whitespace
   becomes part of the value. (Q03)
+
+## Python 3.11 floor
+
+`ruff` targets `py311`. Check with `vermin -t=3.11- --violations`. (R7-E07-floor)
+
+Run tasks that should fail together in an `asyncio.TaskGroup`. Hand-rolled cancellation fails
+silently. Give independent handlers, such as one per client connection, a task each. A `TaskGroup`
+cancels every task when one raises. (R7-E07-floor, R10-taskgroup-scope)
+
+- **`except TimeoutError` is correct** around `asyncio.wait_for`. At 3.11 `asyncio.TimeoutError`
+  *is* the builtin, so the two are one class. (R3a-06)
+
+- Anything added in 3.12 or later is out, including the `type` statement and PEP 695 generics.
+
+- A comment on a guard for a runtime newer than the floor gives the version: `# on 3.12.1 and later,
+  wait_closed() waits for open connections`. (R10-version-guard)
 
 ## Structure inside a function
 
@@ -422,6 +440,85 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 
 - Every attribute declared in `__init__`. `hasattr(self, ...)` is a red flag. (Q04)
 
+## Logging
+
+One stable event name plus structured `extra={...}` fields, never an f-string of prose. The
+message is a queryable key. (Q08)
+
+**Get each module's logger with `logging.getLogger(__name__)`.** In a package used as a library, add
+`logging.NullHandler()` to the package logger once, in its top-level `__init__.py`. Without it, the
+last-resort handler prints the package's warnings to stderr in a program that configures no logging.
+In a program, configure logging once, in `main()`, and add no NullHandler. (R10-nullhandler)
+
+**JSONL output is for machine reading. For terminal output, don't use JSONL.** (R5-03,
+R8-D23-resolved)
+
+- **A service, or any program whose logs are collected**: JSONL. Always import JSONL logging from a
+  shared module. Don't vendor it.
+
+- **A single-file tool run by hand**: the short field formatter below.
+
+**Do not use `basicConfig(format='%(levelname)s %(message)s')`.** The standard formatter discards
+everything in `extra`. `LOG.warning('merge.rejected', extra={'rejected': 4812, 'total': 10000})`
+then prints `WARNING merge.rejected`, and the operator never sees the number that the tally rule
+exists to give them. Follow the event-name rule with that formatter and the logs are worse than an
+f-string. (R5-09)
+
+```python
+_STANDARD = frozenset(logging.LogRecord('', 0, '', 0, '', None, None).__dict__) | {'message', 'asctime'}
+_LOCATION = ('module', 'lineno', 'funcName')
+
+
+class FieldFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        extra = {k: v for k, v in record.__dict__.items() if k not in _STANDARD}
+        located = {key: getattr(record, key) for key in _LOCATION}
+        fields = ' '.join(f'{k}={v}' for k, v in sorted({**located, **extra}.items()))
+        return f'{record.levelname} {record.getMessage()} {fields}'
+```
+
+That prints `WARNING merge.rejected funcName=merge lineno=88 module=loader rejected=4812
+total=10000`. It has the tally an operator acts on and the location of the call site.
+
+## Configuration
+
+Most explicit first:
+
+1. **A config file tracked in the repo**, parsed into a frozen dataclass. This is the default for
+   any deployment setting. Infrastructure becomes code-defined and diffable. (R3a-02)
+
+2. **CLI arguments** for the inputs of a batch tool invoked by hand. `argparse`.
+
+3. **Environment** for secrets and DB URLs, via `python-decouple`, not `os.environ`. (R2-06)
+
+4. **`ALL_CAPS` constants** for tuning knobs that do not vary by deployment.
+
+## Concurrency
+
+asyncio is the default for I/O-bound work. (R2-04)
+
+## Testing
+
+- **Real dependencies**: a real socket on loopback, a real temp SQLite file, a real temp directory.
+  A test double is a last resort for something you cannot run. Flag each one as a known
+  gap. A fake transport produces tests that pass while production fails. (R2-02, Q16)
+
+- **Property-based tests (hypothesis) wherever there is an invariant**: round-trips, ordering,
+  conservation, numeric range. Example-based tests cover specific regressions on top. A very slow
+  stateful property test may be opt-in rather than run in CI. (R2-12)
+
+- **Test functions are `testSomethingDescriptive`**, in camelCase with a `test` prefix. The
+  conventional `test_parse_header_roundtrips` fails the `mixedCase` gate this style mandates. The
+  camelCase spelling passes pylint, *and* the pytest default `python_functions = test*` still
+  collects it.
+
+- Tests are in a separate module, not in the program file. A `from hypothesis import given` at
+  module scope makes the program raise `ModuleNotFoundError` before it reaches `main()` on any
+  machine without the test library.
+
+  Where a single file is required, put the tests behind `### tests` before the
+  `### vocabulary` divider and import hypothesis lazily.
+
 ## The module docstring
 
 **Every module opens with a docstring. Anything runnable has a usage example.** A reader meets it
@@ -607,7 +704,8 @@ The summary line is mandatory. **A body is not, and usually does not earn its pl
 
 **Test: what information does this comment provide over the code itself?** (R10-Q25)
 
-These rules cover docstring prose too. (R10-docstrings)
+These rules cover docstring prose, error messages and `--help` text too. `verify.py` lists comments
+and docstrings only, so read messages and help text by hand. (R10-docstrings, R10-message-scope)
 
 **Comments are not thinking traces.** While writing, you reasoned through edge cases, alternatives
 and spec gaps. That reasoning is a thinking trace. It belongs in your report to the user, not in
@@ -617,20 +715,7 @@ the code. (R10-stance)
 names), no matter how the comment is phrased or what rule category it seems to fit.**
 (R10-restatement-gate)
 
-Before writing or rewording a comment, in order:
-
-1. **Rename first.** If the information fits in a name or a type, rename and write no comment:
-   `over_quota: ByteCount`, `total_cents`, `rollingMeanSignedError`. (R10-Q25, R10-Q27, R10-Q16)
-2. **Guarantee it in code.** Establish a cheap precondition, such as sorted input, upstream in the
-   call flow, not in the function that depends on it, and write no comment. An index lookup doesn't
-   sort its input. If a code change removes a trap, make the change and write no comment. If
-   explaining how the code works takes more than one plain clause, rewrite the code instead. Name
-   the step, or use the obvious construct. A `dict` filled with `setdefault()` and sliced by
-   insertion order becomes an explicit loop that counts periods. (R10-Q19, R10-footgun,
-   R10-hard-comment)
-3. **Match a kind.** Write a comment only if it is one of the four **Comment kinds**, passes that
-   kind's test, and is not under **Never**. Deleting is a valid outcome of a rewrite.
-4. **Set the depth and sentence form** by **Depth** and **Sentence form**.
+Before writing or rewording a comment, follow **Writing a comment** under **Procedures**.
 
 **When shortening an existing comment, rewrite the sentence. Do not delete words from it until it
 fits.** (R10-cleanup-rewrite)
@@ -725,6 +810,31 @@ R10-depth-example, R10-period-join)
   `Bound to one machine` → `The modifier is bound to one machine`, and
   `# named, so a recreated container gets it back` → `# named volumes persist when a container
   is recreated (e.g. docker compose down && docker compose up)`. (R10-subject-verb, `NAR020`)
+- every noun phrase refers to one real thing, at the moment the sentence is about. Name the object in
+  the program each noun phrase refers to, and rewrite when:
+  - the thing does not exist yet, or does not have its property yet: `# open() creates a missing log
+    file` → `# open() creates the log file if it doesn't exist`
+  - the property belongs to another object: `# in the snapshot's timezone` → `# in the policy's
+    timezone`. A snapshot name is in UTC, and the timezone comes from the policy
+  - the referent is gone or ambiguous: `tz=None leaves TOML local times without one` → `without a
+    UTC offset`. A pronoun at the start of a sentence can refer to the subject of either sentence
+    before it, so repeat the noun
+  (R10-referent)
+- a claim is true in every case that reaches it. Otherwise, name the case in the sentence. List the
+  paths that reach the sentence:
+  - `# an expired item is removed on lookup` → `# an expired item is removed on lookup, or before
+    any eviction`
+  - `Returns the cached copy.` → `Returns the cached copy when one exists, otherwise the downloaded
+    one.`
+  - count the unit the code counts: `# every file is counted` → `# the lines of every file are
+    counted`
+  - in an error message, advise only steps the program has not taken: `no policy file found.
+    Check the input directory` → `no policy.json in fixture/. Pass --policy to use another file`
+  (R10-case-coverage)
+- when a comment moves from one approach to another, mark the switch with `Alternatively,`:
+  `# open(path, 'w') would empty the file before writing. Alternatively, os.replace() swaps in a
+  complete copy`. Without the marker, the second sentence reads as more about the first approach
+  (R10-alternative-marker)
 - possessives and noun compounds over relative clauses: `the archive's collections`, `in read order` (R10-seed-1, R10-seed-9, R10-Q32)
 - trade terms over paraphrase: `has no side effects`. Modifiers before the noun: `JSONL logs`. (R10-seed-3, R10-seed-4)
 - the conclusion, not the derivation. State what the code means, not how it gets there.
@@ -781,107 +891,48 @@ flagged by mistake. Silence those with `# noqa: NAR017`. (R10-agentverb-check)
 container gets it back`. Only that form is flagged. Check every other clause against the subject and
 verb rule in **Sentence form** by hand. (R10-subject-verb, R10-nar020)
 
-**Before you finish, read the list `verify.py` prints after a passing run.** It has every comment and
-docstring summary in the code. For each one, name the subject and the verb and ask whether that
-subject can perform that verb. Then test the sentence against **Sentence form** and the comment
-against the restatement gate. Fix what fails and run `verify.py` again. (R10-prose-inventory)
+## Procedures
 
-## Logging
+Take these in order. **Setup** happens once per machine and once per project. **Writing a comment**
+applies to each comment as you write it. **Verify** and **Prose review** follow once the code is
+written. (R10-procedures)
 
-One stable event name plus structured `extra={...}` fields, never an f-string of prose. The
-message is a queryable key. (Q08)
+### Setup
 
-**Get each module's logger with `logging.getLogger(__name__)`.** In a package used as a library, add
-`logging.NullHandler()` to the package logger once, in its top-level `__init__.py`. Without it, the
-last-resort handler prints the package's warnings to stderr in a program that configures no logging.
-In a program, configure logging once, in `main()`, and add no NullHandler. (R10-nullhandler)
+Once per machine, make one lint venv and reuse it for every project. A venv per project means a
+separate install of about 430 MB in each. (R10-setup)
 
-**JSONL output is for machine reading. For terminal output, don't use JSONL.** (R5-03,
-R8-D23-resolved)
-
-- **A service, or any program whose logs are collected**: JSONL. Always import JSONL logging from a
-  shared module. Don't vendor it.
-
-- **A single-file tool run by hand**: the short field formatter below.
-
-**Do not use `basicConfig(format='%(levelname)s %(message)s')`.** The standard formatter discards
-everything in `extra`. `LOG.warning('merge.rejected', extra={'rejected': 4812, 'total': 10000})`
-then prints `WARNING merge.rejected`, and the operator never sees the number that the tally rule
-exists to give them. Follow the event-name rule with that formatter and the logs are worse than an
-f-string. (R5-09)
-
-```python
-_STANDARD = frozenset(logging.LogRecord('', 0, '', 0, '', None, None).__dict__) | {'message', 'asctime'}
-_LOCATION = ('module', 'lineno', 'funcName')
-
-
-class FieldFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        extra = {k: v for k, v in record.__dict__.items() if k not in _STANDARD}
-        located = {key: getattr(record, key) for key in _LOCATION}
-        fields = ' '.join(f'{k}={v}' for k, v in sorted({**located, **extra}.items()))
-        return f'{record.levelname} {record.getMessage()} {fields}'
+```bash
+uv venv --python 3.11 ~/.local/share/narrative/lintenv
+uv pip install --python ~/.local/share/narrative/lintenv/bin/python -r ~/.claude/skills/narrative/requirements-lock.txt
 ```
 
-That prints `WARNING merge.rejected funcName=merge lineno=88 module=loader rejected=4812
-total=10000`. It has the tally an operator acts on and the location of the call site.
+Install again when `requirements-lock.txt` changes. `verify.py` uses this venv by default. Pass
+`--venv` for a venv at another path.
 
-## Configuration
+Once per project, merge `pyproject-snippet.toml` into the project's `pyproject.toml`. The file must be
+named `pyproject.toml`. Ruff reads a config file with any other name as a `ruff.toml`, and
+`verify.py` exits 2.
 
-Most explicit first:
+### Writing a comment
 
-1. **A config file tracked in the repo**, parsed into a frozen dataclass. This is the default for
-   any deployment setting. Infrastructure becomes code-defined and diffable. (R3a-02)
+Take these steps in order before writing or rewording a comment. The kinds, the **Never** list,
+**Depth** and **Sentence form** are in **Comments**.
 
-2. **CLI arguments** for the inputs of a batch tool invoked by hand. `argparse`.
+1. **Rename first.** If the information fits in a name or a type, rename and write no comment:
+   `over_quota: ByteCount`, `total_cents`, `rollingMeanSignedError`. (R10-Q25, R10-Q27, R10-Q16)
+2. **Guarantee it in code.** Establish a cheap precondition, such as sorted input, upstream in the
+   call flow, not in the function that depends on it, and write no comment. An index lookup doesn't
+   sort its input. If a code change removes a trap, make the change and write no comment. If
+   explaining how the code works takes more than one plain clause, rewrite the code instead. Name
+   the step, or use the obvious construct. A `dict` filled with `setdefault()` and sliced by
+   insertion order becomes an explicit loop that counts periods. (R10-Q19, R10-footgun,
+   R10-hard-comment)
+3. **Match a kind.** Write a comment only if it is one of the four **Comment kinds**, passes that
+   kind's test, and is not under **Never**. Deleting is a valid outcome of a rewrite.
+4. **Set the depth and sentence form** by **Depth** and **Sentence form**.
 
-3. **Environment** for secrets and DB URLs, via `python-decouple`, not `os.environ`. (R2-06)
-
-4. **`ALL_CAPS` constants** for tuning knobs that do not vary by deployment.
-
-## Concurrency
-
-asyncio is the default for I/O-bound work. (R2-04)
-
-## Testing
-
-- **Real dependencies**: a real socket on loopback, a real temp SQLite file, a real temp directory.
-  A test double is a last resort for something you cannot run. Flag each one as a known
-  gap. A fake transport produces tests that pass while production fails. (R2-02, Q16)
-
-- **Property-based tests (hypothesis) wherever there is an invariant**: round-trips, ordering,
-  conservation, numeric range. Example-based tests cover specific regressions on top. A very slow
-  stateful property test may be opt-in rather than run in CI. (R2-12)
-
-- **Test functions are `testSomethingDescriptive`**, in camelCase with a `test` prefix. The
-  conventional `test_parse_header_roundtrips` fails the `mixedCase` gate this style mandates. The
-  camelCase spelling passes pylint, *and* the pytest default `python_functions = test*` still
-  collects it.
-
-- Tests are in a separate module, not in the program file. A `from hypothesis import given` at
-  module scope makes the program raise `ModuleNotFoundError` before it reaches `main()` on any
-  machine without the test library.
-
-  Where a single file is required, put the tests behind `### tests` before the
-  `### vocabulary` divider and import hypothesis lazily.
-
-## Python 3.11 floor
-
-`ruff` targets `py311`. Check with `vermin -t=3.11- --violations`. (R7-E07-floor)
-
-Run tasks that should fail together in an `asyncio.TaskGroup`. Hand-rolled cancellation fails
-silently. Give independent handlers, such as one per client connection, a task each. A `TaskGroup`
-cancels every task when one raises. (R7-E07-floor, R10-taskgroup-scope)
-
-- **`except TimeoutError` is correct** around `asyncio.wait_for`. At 3.11 `asyncio.TimeoutError`
-  *is* the builtin, so the two are one class. (R3a-06)
-
-- Anything added in 3.12 or later is out, including the `type` statement and PEP 695 generics.
-
-- A comment on a guard for a runtime newer than the floor gives the version: `# on 3.12.1 and later,
-  wait_closed() waits for open connections`. (R10-version-guard)
-
-## Verify
+### Verify
 
 Run `verify.py`. Do not call the tools by hand.
 
@@ -889,15 +940,15 @@ Run `verify.py`. Do not call the tools by hand.
 python3 verify.py .
 ```
 
-Give it any path, and every Python file below it is checked.
+Pass `verify.py` any path. Every Python file below that path is checked.
 
-It resolves every tool to an absolute path and exits 2 if one is missing or if `pyproject.toml` is
-absent. **Do not replace it with a loop that greps tool output for findings.** A missing binary or a
-missing config then produces empty output, and empty output reads as a pass.
+`verify.py` resolves every tool to an absolute path. It exits 2 when a tool is missing or
+`pyproject.toml` is absent. **Do not replace it with a loop that greps tool output for findings.**
+With such a loop, a missing binary or config produces empty output, and empty output reads as a pass.
 
-It runs, in the order that converges: `ruff check --fix`, `ruff format`, `pylint`, `mypy --strict`,
-`checks.py`, `vermin`, `agentverbs.py`. A passing run ends with a list of every comment and
-docstring summary (**Comments**).
+`verify.py` runs these tools, in the order that converges: `ruff check --fix`, `ruff format`,
+`pylint`, `mypy --strict`, `checks.py`, `vermin`, `agentverbs.py`. A passing run ends with a list of every comment and
+docstring summary, the input to **Prose review**.
 
 | exit | meaning |
 |---|---|
@@ -905,6 +956,27 @@ docstring summary (**Comments**).
 | 1 | at least one tool reported a finding |
 | 2 | the toolchain or the config is missing, so nothing was checked |
 
-The job of each layer and the gotchas are in `tooling.md`. A tool default silently
-undoes several rules here. `ruff check --fix` collapses blank lines after imports, and `SIM114`
-merges branches in a way that loses type narrowing. Read `tooling.md` before you change config.
+The job of each layer, and the tool defaults that break rules of this skill, are in `tooling.md`. For
+example, `ruff check --fix` collapses blank lines after imports, and the `SIM114` fix merges branches
+and loses type narrowing. Read `tooling.md` before you change config.
+
+### Prose review
+
+**After a passing `verify.py` run, read the list it prints, plus every error message and `--help`
+string.** The list has every comment and docstring summary in the code. Take these
+steps for each sentence. (R10-prose-inventory, R10-closing-review)
+
+1. Name the subject and the verb. Can that subject perform that verb?
+2. For each noun phrase, name the variable, function, file or value it refers to. If none fits, or
+   two do, rewrite.
+3. List the code paths that reach the line: each branch, each caller, each failure. Check the claim
+   on every path.
+4. Test the sentence against **Sentence form**, and the comment against the restatement gate.
+
+For `# an expired item is removed on lookup`:
+- `an expired item` is an `Item` whose `deadline` has passed. `lookup` is `getItem()`.
+- Two paths remove an expired item: `getItem()`, and `dropExpired()` before an eviction. The
+  comment covers only `getItem()`.
+- The rewrite: `# an expired item is removed on lookup, or before any eviction`.
+
+Fix what fails and run `verify.py` again.

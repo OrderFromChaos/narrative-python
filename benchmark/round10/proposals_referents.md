@@ -4,7 +4,7 @@ Source: a review pass by another agent on a PR in a private repository, with the
 its eleven rewrites were rated great, and the user called the exchange very fruitful. The examples
 below are rewritten from this repository's benchmark runs, because the originals are private.
 
-None of this is applied yet. Ids are `R10-` because round 10 is still open.
+All five are applied. 4 was reworded as numbered steps in a section of their own (R10-closing-review). Ids are `R10-` because round 10 is still open.
 
 ## What the eleven hits had in common
 

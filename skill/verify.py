@@ -14,6 +14,7 @@ Usage:
     $ python3 verify.py src/                 # every .py below src/
     $ python3 verify.py src/loader.py src/report.py
     $ python3 verify.py . --no-fix           # report only, change nothing
+    $ python3 verify.py . --venv .lintenv    # a venv other than ~/.local/share/narrative/lintenv
 
 Exit codes:
     0  every tool passed
@@ -37,6 +38,8 @@ TOOLS = ('ruff', 'pylint', 'mypy', 'vermin')
 # agentverbs.py imports these, so they must be importable by the venv's interpreter
 PARSER_MODULES = ('spacy', 'en_core_web_md')
 PYTHON_FLOOR = '3.11'
+# the venv that the Setup step of SKILL.md creates, one per machine
+SHARED_VENV = Path.home() / '.local/share/narrative/lintenv'
 SKIPPED = frozenset({'.venv', 'venv', '.lintenv', '.git', 'build', 'dist', '__pycache__'})
 EXIT_SUCCESS = 0
 EXIT_FINDINGS = 1
@@ -51,7 +54,7 @@ def main() -> int:
     """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('paths', nargs='+', type=Path)
-    parser.add_argument('--venv', type=Path, default=Path('.lintenv'))
+    parser.add_argument('--venv', type=Path, default=SHARED_VENV)
     parser.add_argument('--config', type=Path, default=Path('pyproject.toml'))
     parser.add_argument('--no-fix', action='store_true', help='report only, do not rewrite files')
     args = parser.parse_args()
@@ -63,7 +66,7 @@ def main() -> int:
         install = f'uv pip install --python {args.venv}/bin/python -r {lock}'
         print(f'toolchain incomplete: {", ".join(toolchain.missing)} not found', file=sys.stderr)
         print(f'  looked in {args.venv / "bin"} and on PATH', file=sys.stderr)
-        print(f'  fix: uv venv {args.venv} && {install}', file=sys.stderr)
+        print(f'  fix: uv venv --python {PYTHON_FLOOR} {args.venv} && {install}', file=sys.stderr)
         return EXIT_NO_TOOLCHAIN
 
     # Presence is not enough. Every real project already has a pyproject.toml, so present-but-wrong
