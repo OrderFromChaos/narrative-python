@@ -142,15 +142,23 @@ python3 ~/.claude/skills/narrative/checks.py src/
 python3 ~/.claude/skills/narrative/checks.py src/ --select NAR001 --select NAR009
 ```
 
-The rest of the toolchain goes into a project-local environment, with the interpreter pinned.
-Without `--python`, `uv` uses the first interpreter in its search order, and `mypy` then checks your
-code against a different standard library.
+For the rest of the toolchain, I recommend a single environment so you don't have to recreate it for each project.
+
+Linux and macOS:
 
 ```bash
-uv venv .lintenv --python 3.11
-uv pip install --python .lintenv/bin/python -r ~/.claude/skills/narrative/requirements-lock.txt
-echo '.lintenv/' >> .gitignore
+uv venv ~/.local/share/narrative/lintenv --python 3.11
+uv pip install --python ~/.local/share/narrative/lintenv/bin/python -r ~/.claude/skills/narrative/requirements-lock.txt
 ```
+
+Windows (PowerShell):
+
+```powershell
+uv venv $env:LOCALAPPDATA\narrative\lintenv --python 3.11
+uv pip install --python $env:LOCALAPPDATA\narrative\lintenv\Scripts\python.exe -r $HOME\.claude\skills\narrative\requirements-lock.txt
+```
+
+When an update changes requirements-lock.txt, run the `uv pip install` line again. (`install.sh` only copies the new lock file.) On Windows, use `py` or `python` where the commands below say `python3`.
 
 | package | version | job |
 |---|---|---|

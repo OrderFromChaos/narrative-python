@@ -14,7 +14,7 @@ Usage:
     $ python3 verify.py src/                 # every .py below src/
     $ python3 verify.py src/loader.py src/report.py
     $ python3 verify.py . --no-fix           # report only, change nothing
-    $ python3 verify.py . --venv .lintenv    # a venv other than ~/.local/share/narrative/lintenv
+    $ python3 verify.py . --venv .lintenv    # a venv other than the shared one (SHARED_VENV)
 
 Exit codes:
     0  every tool passed
@@ -25,6 +25,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -38,8 +39,13 @@ TOOLS = ('ruff', 'pylint', 'mypy', 'vermin')
 # agentverbs.py imports these, so they must be importable by the venv's interpreter
 PARSER_MODULES = ('spacy', 'en_core_web_md')
 PYTHON_FLOOR = '3.11'
+# %LOCALAPPDATA% on Windows. $XDG_DATA_HOME, or ~/.local/share, on Linux and macOS
+DATA_HOME = Path(os.environ.get('LOCALAPPDATA') or os.environ.get('XDG_DATA_HOME') or Path.home() / '.local' / 'share')
 # the venv that the Setup step of SKILL.md creates, one per machine
-SHARED_VENV = Path.home() / '.local/share/narrative/lintenv'
+SHARED_VENV = DATA_HOME / 'narrative' / 'lintenv'
+# a Windows venv has its executables in Scripts, with an .exe suffix
+VENV_BIN = 'Scripts' if sys.platform == 'win32' else 'bin'
+VENV_PYTHON = 'python.exe' if sys.platform == 'win32' else 'python'
 SKIPPED = frozenset({'.venv', 'venv', '.lintenv', '.git', 'build', 'dist', '__pycache__'})
 EXIT_SUCCESS = 0
 EXIT_FINDINGS = 1
@@ -63,9 +69,9 @@ def main() -> int:
     toolchain = resolveToolchain(args.venv)
     if toolchain.missing:
         lock = Path(__file__).resolve().parent / 'requirements-lock.txt'
-        install = f'uv pip install --python {args.venv}/bin/python -r {lock}'
+        install = f'uv pip install --python {args.venv / VENV_BIN / VENV_PYTHON} -r {lock}'
         print(f'toolchain incomplete: {", ".join(toolchain.missing)} not found', file=sys.stderr)
-        print(f'  looked in {args.venv / "bin"} and on PATH', file=sys.stderr)
+        print(f'  looked in {args.venv / VENV_BIN} and on PATH', file=sys.stderr)
         print(f'  fix: uv venv --python {PYTHON_FLOOR} {args.venv} && {install}', file=sys.stderr)
         return EXIT_NO_TOOLCHAIN
 
@@ -199,9 +205,10 @@ def resolveToolchain(venv: Path) -> Toolchain:
     missing: list[str] = []
 
     for tool in TOOLS:
-        candidate = (venv / 'bin' / tool).resolve()
-        if candidate.is_file():
-            resolved[tool] = str(candidate)
+        # which() adds the .exe suffix on Windows
+        in_venv = shutil.which(tool, path=str(venv / VENV_BIN))
+        if in_venv:
+            resolved[tool] = str(Path(in_venv).resolve())
             continue
 
         on_path = shutil.which(tool)
@@ -212,7 +219,7 @@ def resolveToolchain(venv: Path) -> Toolchain:
         missing.append(tool)
 
     # not resolved. The symlink's target runs without the venv's packages
-    venv_python = (venv / 'bin' / 'python').absolute()
+    venv_python = (venv / VENV_BIN / VENV_PYTHON).absolute()
     python = str(venv_python) if venv_python.is_file() else sys.executable
     probe = 'import importlib.util, sys; sys.exit(any(importlib.util.find_spec(m) is None for m in sys.argv[1:]))'
     if run([python, '-c', probe, *PARSER_MODULES]).code != 0:

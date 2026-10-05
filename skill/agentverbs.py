@@ -1,4 +1,4 @@
-"""Flag comments and docstrings whose subject cannot act, and clauses with their subject cut.
+r"""Flag comments and docstrings whose subject cannot act, and clauses with their subject cut.
 
 NAR017 is an agent verb on a subject that cannot act. NAR020 is a clause with no subject before
 `, so`: `Named, so a recreated container gets it back`. The rewrite has a subject: `Named volumes
@@ -20,12 +20,12 @@ wrong on words that are both noun and verb (`a plan marks`):
 It imports spaCy and loads its `en_core_web_md` model, both pinned in requirements-lock.txt.
 verify.py runs it with the interpreter of the lint venv.
 
-Usage:
-    $ .lintenv/bin/python agentverbs.py src/
+Usage, with the shared lint venv of SKILL.md (Scripts\python.exe in place of bin/python on Windows):
+    $ ~/.local/share/narrative/lintenv/bin/python agentverbs.py src/
     src/join.py:73: NAR017 'period ranks': agent verb on a subject that cannot act
     src/store.py:12: NAR020 'Named': clause with no subject before ", so"
-    $ .lintenv/bin/python agentverbs.py --lines sample.txt
-    $ .lintenv/bin/python agentverbs.py --score gold.tsv
+    $ ~/.local/share/narrative/lintenv/bin/python agentverbs.py --lines sample.txt
+    $ ~/.local/share/narrative/lintenv/bin/python agentverbs.py --score gold.tsv
     precision 1.00, recall 0.91 (29 of 32 found, 0 false)
 
 A line with `# noqa: NAR017`, `# noqa: NAR020` or a bare `# noqa` is skipped for that code.
