@@ -692,9 +692,20 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
         One finding per rule and line.
     """
     WORDING = {
-        # matches `Q08`, `R10-fence-form`, `R2b-B5`, `V-03`. Rejects `Q8`  # noqa: NAR012
+        # matches:
+        # `Q08`  # noqa: NAR012
+        # `R10-fence-form`  # noqa: NAR012
+        # `R2b-B5`  # noqa: NAR012
+        # `V-03`  # noqa: NAR012
+        # rejects:
+        # `Q8`
         'NAR012': re.compile(r'\b(?:Q\d{2}|R\d{1,2}[a-z]?-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*|V-\d\d)\b'),
-        # matches `a -- b` and an em dash. Rejects `a-b`, `--flag`  # noqa: NAR013
+        # matches:
+        # `a -- b`  # noqa: NAR013
+        # an em dash
+        # rejects:
+        # `a-b`
+        # `--flag`
         'NAR013': re.compile(r'\s--\s|\u2014'),
         'NAR014': re.compile(r'\b(?:deliberately|on purpose|by design|intentionally)\b', re.IGNORECASE),
         'NAR015': re.compile(
@@ -706,7 +717,10 @@ def checkProseWording(tree: ast.Module, source: str, checked_file: Path) -> list
         'NAR018': re.compile(r"\b(?:its|their|his|her|our|your|\w+'s) own\b", re.IGNORECASE),
     }
 
-    # matches `a; b`. Rejects `a;b`
+    # matches:
+    # `a; b`
+    # rejects:
+    # `a;b`
     SEMICOLON = re.compile(r';(?:\s|$)')
     prose = [*commentLines(source), *docstringLines(tree)]
     findings: list[Finding] = []

@@ -120,7 +120,7 @@ sample loses its alignment:
 """                             """
 ```
 
-With one line of the body at the docstring's own column, the block is left alone.
+With one line of the body at the docstring's column, the block is left alone.
 `NAR011` checks this, with the same result as `ruff format` on every form tested. The forms are a module docstring
 whose body is all indented, a function docstring whose body is indented past the `def`, and an
 anchored block that ruff leaves alone (R9-08).
@@ -139,7 +139,7 @@ The autofix of `I001` in `ruff check` deletes the second one, because the isort 
 `ruff check --fix` silently undoes the rule every time (R3a-14).
 
 **Moving a constant inside a function takes two escapes.** An `ALL_CAPS` name on a function-local
-constant (R3a-12) trips ruff `N806` and pylint `C0103`, once per constant, which reaches double
+constant (R3a-12) trips ruff `N806` and pylint `C0103`, once per constant. The count reaches double
 figures in any file that follows the placement rule. Hence `N806` in the ignore list, and on the
 pylint side:
 
@@ -187,4 +187,4 @@ enforces the parentheses for the cases where merging is fine.
 with or without a trailing comma.
 
 The only escape is a `# fmt: off` / `# fmt: on` fence. Keep that fence for word-list-shaped
-literals where packing genuinely reads better (R2b-B2).
+literals where packing reads better (R2b-B2).

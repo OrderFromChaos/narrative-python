@@ -641,6 +641,15 @@ fields. None opens with `without` or contains `would`, and none joins clauses wi
 links. Check is_symlink() too`. Three repeat the skill's bool example nearly word for word
 (`bool subclasses int. Reject it too`, `… Test it first`). Review file: `cycles/newrules_review.md`.
 
+### Acceptance cycle
+
+P4, P6 and P9, tasks no rule of R10-rating14 was drawn from, each written by one agent with the skill
+after R10-rating14, R10-branch-comment and a self-consistency pass over the skill's own text. All
+three passed their fixture and `verify.py`. They wrote 22 `#` comments: 15 full-line, 7 trailing
+labels. Six are regex samples (R10-regex-sample). Two copy a skill example word for word: the
+NamedTuple fence and `isdigit() admits non-ASCII digits such as '²'. Check isascii() too`. Review
+file: `cycles/acceptance_review.md`.
+
 ## Open
 
 - Kinds against lists (R10-instruction-design): the cycles ran with kinds plus the gate and T

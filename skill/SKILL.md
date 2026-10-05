@@ -1,6 +1,6 @@
 ---
 name: narrative
-description: Write or review Python in the Narrative house style, with mixedCase functions, main() first with types last, parse-at-the-boundary dataclasses, no ORM that re-validates what the database checks, explicit global on mutation, exhaustive match without a fallback arm, and a verified ruff/pylint/mypy toolchain. Covers multi-module architecture too: which module may import which, when one file becomes several, what goes in a package __init__.py, where a shared type lives, and when to take or contain a third-party dependency. Use for any Python written in or for this codebase, when laying out modules or packages, and when reviewing a diff against this style.
+description: Write or review Python in the Narrative house style, with mixedCase functions, main() first with types last, parse-at-the-boundary dataclasses, no ORM that re-validates what the database checks, explicit global on mutation, exhaustive match without a fallback arm, and a verified ruff/pylint/mypy toolchain. Covers multi-module architecture too: which module may import which, when one file becomes several, what goes in a package __init__.py, where a shared type belongs, and when to take or contain a third-party dependency. Use for any Python written in or for this codebase, when laying out modules or packages, and when reviewing a diff against this style.
 ---
 
 # Narrative Python
@@ -22,13 +22,13 @@ with a `cast()` or a key lookup at every use. Typed attributes pass with neither
 docstrings apply to each module of a package exactly as they apply to a single-file program.
 
 `architecture.md` adds what happens **between** files: which module may import which, where a shared
-type lives, when one file becomes several, and what a third-party dependency may touch. Read it when
+type belongs, when one file becomes several, and what a third-party dependency may touch. Read it when
 the program spans more than one module or imports a third-party package. Skip it for a single-file
 program, where none of it applies.
 
 The reason for each rule is in its text, so read the rule and not the id after it. The ids are
 provenance. They resolve in `benchmark/decisions.jsonl` in the source repository,
-`github.com/OrderFromChaos/narrative-python`, which does not ship with the skill. **A rule with no
+`github.com/OrderFromChaos/narrative-python`. That repository does not ship with the skill. **A rule with no
 id and no linter behind it does not belong here.**
 
 ## File layout
@@ -68,7 +68,7 @@ class ConfigError(RuntimeError): ...
 class ScanHeader: ...
 ```
 
-- `main()` returns an exit code. Call it as `sys.exit(main())`. All executable code lives in
+- `main()` returns an exit code. Call it as `sys.exit(main())`. All executable code is in
   `main()`. (Q10)
 
 - Caller before callee throughout. At module level, do not *call or subclass* anything before its
@@ -77,7 +77,7 @@ class ScanHeader: ...
 
 - That is an **ordering** rule, not a placement ban. A constant whose value is an Enum member is
   legal in `### vocabulary` immediately after that Enum, and that is its only legal
-  module-level home. Do not contort around it. (R4-03)
+  module-level position. Do not contort around it. (R4-03)
 
 - Order constants by concern. Constants a dev would look for at the same moment go together. All the `_S`
   durations adjacent, then non-duration limits, then hosts, then wire literals. Type usually
@@ -86,7 +86,7 @@ class ScanHeader: ...
 - 120 columns. Absolute imports only. Single quotes (docstrings and multiline: double).
 
 - Separate logically self-contained blocks inside a function with **one blank line**. That is its
-  only meaning here. Deliberately grouped short guards stay grouped, and two adjacent two-line
+  only meaning here. Short guards written as a group stay grouped, and two adjacent two-line
   `if ...: raise` checks belong together. No blank line after a docstring. (R3a-01)
 
   **No tool checks this.**
@@ -103,9 +103,9 @@ class ScanHeader: ...
 
 - If a guard grows to three lines because it logs before raising, move the log call into a
   `reject*()` helper that logs and returns the exception. The guards are two lines again and group,
-  and the raise-site rule still holds. (R4-05)
+  and the raise-site rule still applies. (R4-05)
 
-- A `def` with >3 **positional** arguments puts each on its own line with a trailing comma, even
+- A `def` with >3 **positional** arguments puts each on a separate line with a trailing comma, even
   under 120 columns. **Calls are exempt.** A signature is read once and a call site is read
   everywhere, so the same rule applied to calls costs lines without buying clarity. (R2b-B1)
 
@@ -179,7 +179,7 @@ class ScanHeader: ...
   Dunder and protocol methods are named by the language.
 
 - **Do not restate a domain type in a parameter name**: `config: RebinConfig`, not
-  `rebin_config: RebinConfig`. The prefix repeats the type and adds nothing. (Q11)
+  `rebin_config: RebinConfig`. The prefix duplicates the type and adds nothing. (Q11)
 
 - **With a generic type, the parameter name is the only place the thing is named.** `Path`, `str`,
   `int`, `bytes`, `dict` and `object` constrain only a value's shape. Write
@@ -372,7 +372,7 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   a tuple of unrelated exception types. (Q19)
 
 - **Related means the handling is the same, not that the classes share a base.** Where two failures
-  genuinely produce one outcome, one `except (A, B)` arm is correct and two identical arms are the
+  produce one outcome, one `except (A, B)` arm is correct and two identical arms are the
   rote diffing banned by the top principle. But check the premise first. Two arms that look
   identical usually should not be. A timeout and an unreachable host are different facts and deserve
   different words, and writing the same string twice is how that gets lost. (R8-D24-resolved)
@@ -397,7 +397,7 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
   WARNING. An operator cannot act on line 4,812 of one file. An operator can act on "4,812 of
   10,000 lines rejected". (R4-02)
 
-- LBYL over EAFP. You know your own invariants, you do not know every exception an implementation
+- LBYL over EAFP. You know your invariants, you do not know every exception an implementation
   can raise. (Q22)
 
 - Degrade and report: process the whole batch, collect failures, log a summary, exit nonzero. Never
@@ -425,7 +425,7 @@ silently where a plain `Enum` makes the boundary explicit. Keep the plain `Enum`
 ## The module docstring
 
 **Every module opens with a docstring. Anything runnable has a usage example.** A reader meets it
-first, before `main()`, so it carries what the program is *for*, not how it works. (R5-02, NAR009)
+first, before `main()`, so it is about what the program is *for*, not how it works. (R5-02, NAR009)
 
 **Write for a professional developer who has the file open.** That reader knows the language and the
 vocabulary of the trade, so `API`, `idempotent` and `tuple` are the right words and a plain-English
@@ -536,7 +536,7 @@ The summary line is mandatory. **A body is not, and usually does not earn its pl
 - **Its negation would be a bug, an absurdity, or an implementation nobody would ship.** Negate the
   sentence and read it back. `it never holds a value that the file did not state` negates to a bug.
   `An empty line holds nothing` negates to an absurdity. `Other files are skipped, so the quota file
-  can share the directory` negates to a scanner that dies on a stray file, which nobody would ship.
+  can share the directory` negates to a scanner that dies on a stray file. Nobody would ship that scanner.
   All three are free sentences and all three go. **Assume the reader expects competent code, and
   document only the departures.**
 - **It is a language feature, explained.** `Such a field holds None` repeats what optional means.
@@ -660,9 +660,18 @@ fits.** (R10-cleanup-rewrite)
   look it up. State the intent, not the mechanism. (R10-Q42, R10-Q46)
   - `SIZE_PATTERN = re.compile(...)  # number, then an optional binary unit suffix`
   - `# fsum() for accurate floating point math`
-  - a regex gets a string it matches, and one it rejects where the boundary is unclear:
-    `# matches: search_v2, db-host. Rejects: x.y`. A developer can paste both into regex101.
-    (R10-regex-sample)
+  - a regex gets a string it matches, and one it rejects where the boundary is unclear. Put each
+    literal in backticks, one per line, so the match boundary is visible and a developer can paste
+    it into regex101. A description such as `any single character` stays plain.
+    (R10-regex-sample, R10-regex-literals)
+    ```python
+    # matches:
+    # `search_v2`
+    # `db-host`
+    # rejects:
+    # `x.y`
+    BARE_KEY = re.compile(r'[A-Za-z0-9_-]+')
+    ```
 - **Marker**: no test needed. (R10-candor, R10-Q03, R10-Q05, R10-Q36, R10-Q38, R6-12, R8-block-comments)
   - `FIXME:` incorrect behaviour, or behaviour that breaks soon after deploy. In reachable code it
     blocks the merge (`NAR010`). In code nothing calls, it is a warning to whoever wires that code
@@ -837,7 +846,7 @@ asyncio is the default for I/O-bound work. (R2-04)
 ## Testing
 
 - **Real dependencies**: a real socket on loopback, a real temp SQLite file, a real temp directory.
-  A test double is a last resort for something you genuinely cannot run. Flag each one as a known
+  A test double is a last resort for something you cannot run. Flag each one as a known
   gap. A fake transport produces tests that pass while production fails. (R2-02, Q16)
 
 - **Property-based tests (hypothesis) wherever there is an invariant**: round-trips, ordering,
@@ -849,11 +858,11 @@ asyncio is the default for I/O-bound work. (R2-04)
   camelCase spelling passes pylint, *and* the pytest default `python_functions = test*` still
   collects it.
 
-- Tests live in their own module, not in the program file. A `from hypothesis import given` at
+- Tests are in a separate module, not in the program file. A `from hypothesis import given` at
   module scope makes the program raise `ModuleNotFoundError` before it reaches `main()` on any
   machine without the test library.
 
-  Where a single file is genuinely required, put the tests behind `### tests` before the
+  Where a single file is required, put the tests behind `### tests` before the
   `### vocabulary` divider and import hypothesis lazily.
 
 ## Python 3.11 floor
@@ -884,7 +893,7 @@ Give it any path, and every Python file below it is checked.
 
 It resolves every tool to an absolute path and exits 2 if one is missing or if `pyproject.toml` is
 absent. **Do not replace it with a loop that greps tool output for findings.** A missing binary or a
-missing config then produces empty output, which reads as a pass.
+missing config then produces empty output, and empty output reads as a pass.
 
 It runs, in the order that converges: `ruff check --fix`, `ruff format`, `pylint`, `mypy --strict`,
 `checks.py`, `vermin`, `agentverbs.py`. A passing run ends with a list of every comment and

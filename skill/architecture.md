@@ -6,7 +6,7 @@ Read this when the program spans more than one module, or imports a third-party 
 it for a single-file program. None of it applies, and reading it is pure context cost.
 
 The reason for each rule is in its text. The ids are provenance and resolve in
-`benchmark/decisions.jsonl` in the source repository, which does not ship with the skill. A rule that
+`benchmark/decisions.jsonl` in the source repository. That repository does not ship with the skill. A rule that
 no tool can check is marked as such.
 
 ## The measure
@@ -34,11 +34,11 @@ diff does not need to know what the device is.
 
 Spend a named type or a file to delete a threaded parameter. Never the reverse.
 
-## Where a fact lives
+## Fact placement
 
 **Ask whose property the fact is, and put it in that thing's module.** (`R7-A05-property`)
 
-A per-vendor retry cap is a property of the manufacturer's networking stack, so it lives with the
+A per-vendor retry cap is a property of the manufacturer's networking stack, so it belongs with the
 vendor and not in a generic backoff module. A retention window is a property of the data, not of the
 scheduler that applies it. Four questions that look unrelated have their answer in this one rule:
 
@@ -46,7 +46,7 @@ scheduler that applies it. Four questions that look unrelated have their answer 
   (`R7-A01-revised`) A store module may import a config module rather than push a lookup onto every
   caller. **This outranks dependency direction.** The two rules collide often.
 
-- **An exception type lives in the shared vocabulary, not in the module that raises it.**
+- **An exception type belongs in the shared vocabulary, not in the module that raises it.**
   (`R7-A04-revised`) Any module may catch it, so it belongs to no one module. The alternative pays
   for a circular import.
 
@@ -108,26 +108,26 @@ reason. Layers inferred from current imports make every existing edge legal by c
 **A cycle is a wrong cut, not an import problem.** (`R7-A02`) Break it with a shared vocabulary
 module. Do not reach for `if TYPE_CHECKING`. It is cheap only because the future import is
 mandatory. Do not dissolve the shared type into primitives. **A callee that takes primitives
-pushes its own destructuring decision onto every caller.**
+pushes its destructuring decision onto every caller.**
 
 **Call a first-party module by name.** `from collector import store`, then `store.insertReading`.
 (`R7-B06`) `R3a-08` applies here too. Import the class, and keep the verb qualified.
 
 **The qualifier is not part of the function name.** `store.insertReading` reads well because
-`insertReading` reads well on its own. A module-qualified call invites a shorter and vaguer function
-name, which breaks `SKILL.md`'s naming rules. The name must make sense to a reader who has never
+`insertReading` reads well without the prefix. Behind a module qualifier, a shorter and vaguer function
+name looks fine. That name breaks `SKILL.md`'s naming rules. The name must make sense to a reader who has never
 opened the module. Note also that the import burns the identifier `store` at module scope, so a
 local of that type becomes `results_store: Store`. (`R9-03`, `R8-B06-Q11`)
 
 ## Where the cuts go
 
 **A coherent concern earns a module. Line count is not the criterion**, in either direction. A
-28-line concern earns its own file, and a 340-line file with six concerns in it becomes six.
+28-line concern earns a separate file, and a 340-line file with six concerns in it becomes six.
 (`R7-B01-B03-criterion`)
 
 **The test is whether you can name it without saying "and".** (`R8-D12-resolved`) `retention.py` is
 retention. `store.py` is storage. A `protocol.py` that also has `crc32Of` is "the wire format
-**and** checksums", so the checksum leaves and gets its own module. This is `R7-C05-naming` one
+**and** checksums", so the checksum leaves and gets a separate module. This is `R7-C05-naming` one
 level up. A group described only with "and" is two groups.
 
 **Split.** (`R7-B01`) Six modules of 40 to 90 lines beat one file of 340, because each module is a
@@ -159,7 +159,7 @@ underscore in that change. A module nothing can import has no public surface to 
 does not reach `__main__.py`, whose names stay bare.
 
 **`__all__` declares a package's exports.** (`R7-B05`) A library's `__init__.py` is a re-export façade
-with `__all__`, holding no state and no constants. An application package's `__init__.py` is empty.
+with `__all__`, and has no state and no constants. An application package's `__init__.py` is empty.
 
 **`main` is in `__main__.py`.** (`R7-B09`) Users type `python3 -m collector` and never see the dunder.
 Split the workflow out only when `main` grows long.
@@ -167,7 +167,7 @@ Split the workflow out only when `main` grows long.
 **The entry point has the list of modules and nothing about any of them.** (`R7-A05-entry`) Two
 files is the floor for adding a new subject: the new module, and the one line with its name.
 
-**The reading order lives in `__main__.py`.** (`R7-B01-map`) Its docstring is the program's purpose,
+**The reading order is in `__main__.py`.** (`R7-B01-map`) Its docstring is the program's purpose,
 then the modules in reading order. What every other module owes is `SKILL.md`'s rule, not a second
 one stated here. This cost is known and accepted. A reader arriving at one module from a stack trace sees that
 module and no map.
@@ -226,7 +226,7 @@ program, so unlike every other bundle it takes no class with behaviour around it
 **It travels as a module-level singleton, not as a parameter.** (`R8-D09-resolved`) Parse it once at
 import into a frozen record and import that name where it is needed. A frozen config has nothing to
 close, so the singleton rule above already allows it. Not allowed under that rule: a *hardcoded
-default* invented in a module, which belongs in the config file instead. The singleton is **assigned
+default* invented in a module. A default belongs in the config file. The singleton is **assigned
 once and never rebound.** A function that reassigns it mutates module state and owes a `global`, and
 fails `NAR001`.
 
