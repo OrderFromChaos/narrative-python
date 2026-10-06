@@ -97,28 +97,28 @@ runs of the shipped skill, one on each of ten tasks, with 95% CIs. Values indica
 
 | | Claude, no skill | human code | Claude, with the skill |
 |---|---|---|---|
-| comment blocks (n=) | 2,578 | 21,977 | 84 |
-| median words | 24 | 9 | 11 [10, 11] |
-| p90 words | 83 | 29 | 17 [15, 20] |
-| more than one sentence (%) | 45.0 | 14.8 | 8.3 [4.1, 16.2] |
-| `, not` contrast | 10.7 | 0.4 | 1.2 [0.2, 6.4] |
-| dash | 23.9 | 1.0 | 0.0 [0.0, 4.4] |
-| `every`, `never`, `whole`, `exactly` | 31.1 | 1.5 | 6.0 [2.6, 13.2] |
-| `the one` / `one place` | 2.2 | 0.1 | 1.2 [0.2, 6.4] |
-| `deliberately`, `on purpose`, `by design` | 2.1 | 0.1 | 0.0 [0.0, 4.4] |
-| `rather than` / `instead of` | 18.2 | 1.1 | 0.0 [0.0, 4.4] |
-| `, so` between clauses | 32.9 | 2.9 | 14.3 [8.4, 23.3] |
-| semicolon | 18.5 | 2.3 | 0.0 [0.0, 4.4] |
-| agent verb: `finds`, `knows`, `wants`, `decides`, `owns` | 2.3 | 0.3 | 0.0 [0.0, 4.4] |
-| container verb: `holds`, `carries`, `keeps`, `names` | 11.3 | 1.8 | 0.0 [0.0, 4.4] |
-| intensifier: `genuine`, `actually`, `really`, `truly` | 8.3 | 1.4 | 0.0 [0.0, 4.4] |
-| article before an identifier: `the foo()` | 2.8 | 0.5 | 0.0 [0.0, 4.4] |
-| `because` | 9.2 | 2.3 | 1.2 [0.2, 6.4] |
-| passive voice | 26.0 | 12.5 | 8.3 [4.1, 16.2] |
-| changelog: `now`, `no longer`, `used to` | 2.9 | 2.4 | 0.0 [0.0, 4.4] |
-| hedge: `usually`, `probably`, `might` | 0.3 | 2.0 | 0.0 [0.0, 4.4] |
-| first person: `we`, `our`, `I` | 2.0 | 16.4 | 0.0 [0.0, 4.4] |
-| `TODO`, `NOTE`, `FIXME` | 0.1 | 3.6 | 0.0 [0.0, 4.4] |
+| comment blocks (n=) | 2,578 | 21,977 | 108 |
+| median words | 24 | 9 | 11 [9, 13] |
+| p90 words | 83 | 29 | 19 [18, 27] |
+| more than one sentence (%) | 45.0 | 14.8 | 39.8 [31.1, 49.2] |
+| `, not` contrast | 10.7 | 0.4 | 0.0 [0.0, 3.4] |
+| dash | 23.9 | 1.0 | 0.0 [0.0, 3.4] |
+| `every`, `never`, `whole`, `exactly` | 31.1 | 1.5 | 3.7 [1.4, 9.1] |
+| `the one` / `one place` | 2.2 | 0.1 | 0.0 [0.0, 3.4] |
+| `deliberately`, `on purpose`, `by design` | 2.1 | 0.1 | 0.0 [0.0, 3.4] |
+| `rather than` / `instead of` | 18.2 | 1.1 | 0.0 [0.0, 3.4] |
+| `, so` between clauses | 32.9 | 2.9 | 2.8 [0.9, 7.9] |
+| semicolon | 18.5 | 2.3 | 0.9 [0.2, 5.1] |
+| agent verb: `finds`, `knows`, `wants`, `decides`, `owns` | 2.3 | 0.3 | 0.0 [0.0, 3.4] |
+| container verb: `holds`, `carries`, `keeps`, `names` | 11.3 | 1.8 | 0.0 [0.0, 3.4] |
+| intensifier: `genuine`, `actually`, `really`, `truly` | 8.3 | 1.4 | 0.0 [0.0, 3.4] |
+| article before an identifier: `the foo()` | 2.8 | 0.5 | 0.0 [0.0, 3.4] |
+| `because` | 9.2 | 2.3 | 0.0 [0.0, 3.4] |
+| passive voice | 26.0 | 12.5 | 8.3 [4.4, 15.1] |
+| changelog: `now`, `no longer`, `used to` | 2.9 | 2.4 | 0.0 [0.0, 3.4] |
+| hedge: `usually`, `probably`, `might` | 0.3 | 2.0 | 0.0 [0.0, 3.4] |
+| first person: `we`, `our`, `I` | 2.0 | 16.4 | 0.0 [0.0, 3.4] |
+| `TODO`, `NOTE`, `FIXME` | 0.0 | 3.6 | 0.0 [0.0, 3.4] |
 
 The skill brings most rows to the human rate or below.
 

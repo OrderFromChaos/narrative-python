@@ -650,6 +650,21 @@ labels. Six are regex samples (R10-regex-sample). Two copy a skill example word 
 NamedTuple fence and `isdigit() admits non-ASCII digits such as '²'. Check isascii() too`. Review
 file: `cycles/acceptance_review.md`.
 
+### Cycle 14
+
+Ten runs of `skill/` at commit 9efdfe9, one per task P1 to P10, with the prompts of cycle 13 and the
+shared venv. All ten passed their fixture and `verify.py`. P2, P3, P4, P5 and P10 wrote no test
+file. Four runs wrote a file outside their own directory and deleted it. The runs wrote 108 `#`
+comment blocks (P10: the 4 it added).
+
+43 of the 108 are more than one sentence, against 7 of 84 in cycle 13. Most take the form of a
+fact, then a command or a consequence (`sorted() is stable. Punches at one instant stay in read
+order`), as R10-period-join and R10-fence-fact specify. `, so` between clauses fell from 12
+blocks to 3. Eight blocks copy a skill example word for word: the NamedTuple fence four times,
+`bool subclasses Python int. Reject it too` three times, and the `read_bytes()` example of
+R10-fence-alternative once. The one semicolon is inside a regex sample. No block has a dash, an
+agent verb or a container verb. Review file: `cycles/cycle14_review.md`.
+
 ## Open
 
 - Kinds against lists (R10-instruction-design): the cycles ran with kinds plus the gate and T
