@@ -18,7 +18,7 @@ human-like comments.**
   experience, asking Claude to take the good parts of `/narrative` into another language works
   well.
 
-Rules come from 449 human-selected choices between real working programs.
+Rules come from 451 human-selected choices between real working programs.
 
 ⚠️ This skill has an opinionated ordering for code (`main()` first, then the steps it calls in call order, then the types). This does produce readable and pleasing code, but may lead to code differences between your PRs and the rest of your codebase. It will not force migrate the rest of your codebase to this style unless you tell it to.
 
@@ -57,31 +57,37 @@ def caption(card: Image.Image, title: str, subtitle: str) -> None:
 **With the skill:**
 
 ```python
-def caption(card: Image.Image, title: str, subtitle: str) -> None:
-    """Draw the title, the subtitle and an accent rule at the card's bottom left, over a dark scrim."""
+def drawCaption(card: Image.Image, title: str, subtitle: str) -> None:
+    """Draw the title, the subtitle and an accent rule over a dark scrim along the bottom of the card."""
     SCRIM_HEIGHT = 240
-    SCRIM_PEAK_ALPHA = 240  # 94% opaque at the card's bottom edge
+    # the scrim's bottom row is 94% opaque. The map shows through it
+    SCRIM_MAX_ALPHA = 240
+    # a steeper curve would leave the scrim faint behind the title
     SCRIM_EXPONENT = 1.15
     TEXT_LEFT = 48
-    TITLE_TOP = CARD_H - 118
+    TITLE_TOP = CARD_HEIGHT - 118
     TITLE_FONT_SIZE = 46
-    SUBTITLE_TOP = CARD_H - 58
+    SUBTITLE_TOP = CARD_HEIGHT - 58
     SUBTITLE_FONT_SIZE = 24
-    RULE_TOP = CARD_H - 140
-    RULE_WIDTH = 76
-    RULE_THICKNESS = 4
+    ACCENT_RULE_TOP = CARD_HEIGHT - 140
+    ACCENT_RULE_BOTTOM = CARD_HEIGHT - 136
+    ACCENT_RULE_WIDTH = 76
 
-    # without the scrim, light text is unreadable over snow or desert at the card's bottom edge
-    alphas = [int(SCRIM_PEAK_ALPHA * (y / (SCRIM_HEIGHT - 1)) ** SCRIM_EXPONENT) for y in range(SCRIM_HEIGHT)]
-    scrim_column = Image.new('L', (1, SCRIM_HEIGHT))
-    scrim_column.putdata(alphas)
-    scrim_mask = scrim_column.resize((CARD_W, SCRIM_HEIGHT))
-    card.paste(Image.new('RGB', scrim_mask.size, BG), (0, CARD_H - SCRIM_HEIGHT), scrim_mask)
+    # The caption sits over the terrain at the bottom of the crop, such as snow, desert or a roof.
+    # Without the scrim, light text over light terrain is unreadable.
+    ramp = Image.new('L', (1, SCRIM_HEIGHT))
+    ramp.putdata([int(SCRIM_MAX_ALPHA * (row / (SCRIM_HEIGHT - 1)) ** SCRIM_EXPONENT) for row in range(SCRIM_HEIGHT)])
+    scrim_mask = ramp.resize((CARD_WIDTH, SCRIM_HEIGHT))
+    scrim = Image.new('RGB', (CARD_WIDTH, SCRIM_HEIGHT), BACKGROUND_RGB)
+    card.paste(scrim, (0, CARD_HEIGHT - SCRIM_HEIGHT), scrim_mask)
 
+    title_font = loadFont('DejaVuSans-Bold.ttf', TITLE_FONT_SIZE)
+    subtitle_font = loadFont('DejaVuSans.ttf', SUBTITLE_FONT_SIZE)
     draw = ImageDraw.Draw(card)
-    draw.text((TEXT_LEFT, TITLE_TOP), title, font=_font('DejaVuSans-Bold.ttf', TITLE_FONT_SIZE), fill=FG)
-    draw.text((TEXT_LEFT, SUBTITLE_TOP), subtitle, font=_font('DejaVuSans.ttf', SUBTITLE_FONT_SIZE), fill=DIM)
-    draw.rectangle((TEXT_LEFT, RULE_TOP, TEXT_LEFT + RULE_WIDTH, RULE_TOP + RULE_THICKNESS), fill=ACCENT)
+    draw.text((TEXT_LEFT, TITLE_TOP), title, font=title_font, fill=TEXT_RGB)
+    draw.text((TEXT_LEFT, SUBTITLE_TOP), subtitle, font=subtitle_font, fill=DIM_TEXT_RGB)
+    accent_rule = (TEXT_LEFT, ACCENT_RULE_TOP, TEXT_LEFT + ACCENT_RULE_WIDTH, ACCENT_RULE_BOTTOM)
+    draw.rectangle(accent_rule, fill=ACCENT_RGB)
 ```
 
 ## Claude's comments, with and without the skill
@@ -241,7 +247,7 @@ After a passing run, `verify.py` prints every comment and docstring summary, so 
 | `skill/` | the nine files of the skill. `architecture.md` has the multi-module rules |
 | `install.sh` | the list of files in the skill, and the installer |
 | `verify_docs.py` | checks that every decision id and rule code in the documents exists |
-| `benchmark/decisions.jsonl` | all 449 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 451 decisions, each with its reasoning and evidence |
 | `benchmark/round1/` to `round10/` | the rounds that produced the decisions. `benchmark/README.md` describes each |
 | `benchmark/GAPS.md` | gaps found by writing real programs against the skill, and the rule each one became |
 | `validation/` | held-out tasks, in three arms each: no guidance, the earlier style doc, the skill |

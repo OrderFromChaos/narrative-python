@@ -243,10 +243,13 @@ stay at module level. (R3a-12)
   requires one, or for an argument echoed exactly as typed, named `raw_…`: `raw_input_dir`.
   (R3a-10, R10-path-type)
 
-- **Money is integer cents**, named `…_cents`. Parse to `int` at the input, format at the output.
-  A computation that yields fractions of a cent, such as rate × minutes × multiplier, stays in
-  integers or `Fraction` and rounds once, with the rounding mode explicit. No `float` or `Decimal`
-  arithmetic on amounts. (R10-money-cents)
+- **Money is exact.** Parse an amount with `Decimal(raw)` from the string, never through `float`.
+  `Decimal(0.1)` keeps the float's error. Round once, with the mode explicit:
+  `cents = int((Decimal(raw) * 100).to_integral_value(ROUND_HALF_UP))`. Without an explicit mode,
+  `Decimal` rounds half to even. A computation that yields fractions of a cent, such as
+  rate × minutes × multiplier, stays in `Decimal`, integers or `Fraction` until that one rounding.
+  Store and serialise integer cents, named `…_cents`. `json` and `sqlite3` reject a `Decimal`.
+  (R10-money-cents, R10-money-decimal)
 
 - **Dates and times use `pendulum`**, unless `datetime` is tightly integrated with the repository,
   so that removing it would be hard. Replace a small `datetime` use with `pendulum`. A library that
@@ -940,7 +943,10 @@ Take these steps in order before writing or rewording a comment. The kinds, the 
    insertion order becomes an explicit loop that counts periods. (R10-Q19, R10-footgun,
    R10-hard-comment)
 3. **Match a kind.** Write a comment only if it is one of the four **Comment kinds**, passes that
-   kind's test, and is not under **Never**. Deleting is a valid outcome of a rewrite.
+   kind's test, and is not under **Never**. Deleting is a valid outcome of a rewrite when the content
+   fails the test. When only the wording breaks a rule, rewrite the wording and keep the content:
+   `# without the lock, two writers interleave their lines` → `# two writers can interleave lines in
+   the log. The lock serializes them`. (R10-keep-content)
 4. **Set the depth and sentence form** by **Depth** and **Sentence form**.
 
 ### Verify
