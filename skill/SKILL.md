@@ -863,8 +863,11 @@ R10-depth-example, R10-period-join)
 - no semicolon and no dash. Write two sentences (R10-no-semicolon, `NAR013`)
 - a Fence is the fact the code depends on, and what it forces: `# bool subclasses Python int.
   Reject it too`, `# isdigit() admits non-ASCII digits such as '²'. Check isascii() too`. Write
-  `without X` or `X would` only when that fact can't be stated directly, as when it concerns code
-  the file doesn't run (R10-fence-form, R10-fence-fact):
+  `X would` only when X is an alternative the code does not use, such as `read_text()` when the code
+  calls `read_bytes()`. When the code under the comment does X, state the problem X is there for:
+  `# without the retry, the first request after idle time fails` → `# the endpoint drops the first
+  request after idle time. Retry once`. The `X would` form in full (R10-fence-form, R10-fence-fact,
+  R10-fence-alternative):
   ```python
   # Here read_bytes() is used. The alternative, read_text(), would turn \r\n and \r into \n, even
   # inside a quoted CSV field.

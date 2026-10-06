@@ -18,7 +18,7 @@ human-like comments.**
   experience, asking Claude to take the good parts of `/narrative` into another language works
   well.
 
-Rules come from 451 human-selected choices between real working programs.
+Rules come from 452 human-selected choices between real working programs.
 
 ⚠️ This skill has an opinionated ordering for code (`main()` first, then the steps it calls in call order, then the types). This does produce readable and pleasing code, but may lead to code differences between your PRs and the rest of your codebase. It will not force migrate the rest of your codebase to this style unless you tell it to.
 
@@ -247,7 +247,7 @@ After a passing run, `verify.py` prints every comment and docstring summary, so 
 | `skill/` | the nine files of the skill. `architecture.md` has the multi-module rules |
 | `install.sh` | the list of files in the skill, and the installer |
 | `verify_docs.py` | checks that every decision id and rule code in the documents exists |
-| `benchmark/decisions.jsonl` | all 451 decisions, each with its reasoning and evidence |
+| `benchmark/decisions.jsonl` | all 452 decisions, each with its reasoning and evidence |
 | `benchmark/round1/` to `round10/` | the rounds that produced the decisions. `benchmark/README.md` describes each |
 | `benchmark/GAPS.md` | gaps found by writing real programs against the skill, and the rule each one became |
 | `validation/` | held-out tasks, in three arms each: no guidance, the earlier style doc, the skill |
